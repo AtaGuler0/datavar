@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ConnectPanel } from "@/components/dashboard/connect-panel";
 import { CONTRIBUTOR_NAV } from "@/components/dashboard/nav-config";
 import { PageHeading } from "@/components/dashboard/primitives";
 
@@ -13,29 +14,8 @@ export default function DashboardOverview() {
         description="Everything here is keyed to your Stellar wallet — no email, no password. Connect one to load your sources, consent receipts and payouts."
       />
 
-      {/* The enterprise block, borrowed from the landing page: a dark panel
-          that states the one thing standing between you and your data. */}
-      <div className="mt-10 overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
-        <div className="flex flex-col gap-6 p-7 sm:flex-row sm:items-center sm:justify-between sm:p-9">
-          <div className="max-w-md">
-            <p className="eyebrow text-chalk-faint">Not connected</p>
-            <p className="mt-3 text-lg text-balance text-chalk">
-              Connect a Stellar wallet to sign in.
-            </p>
-            <p className="mt-2 text-sm text-pretty text-chalk-dim">
-              Your wallet is your identity and where payouts land. We&apos;re on
-              testnet — no real funds move yet.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-chalk px-5 py-3 text-sm font-medium text-ink-950 transition-colors hover:bg-paper disabled:cursor-not-allowed"
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-slate" />
-            Connect wallet
-          </button>
-        </div>
+      <div className="mt-10">
+        <ConnectPanel />
       </div>
 
       {/* Section index — the shell is navigable before any of it is wired. */}
