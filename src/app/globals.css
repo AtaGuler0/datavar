@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+@theme {
+  /* Light surfaces — warm white, never pure #fff */
+  --color-paper: #fbfaf9;
+  --color-paper-raised: #f5f3f1;
+  --color-paper-sunken: #edebe8;
+
+  /* Dark surfaces — the enterprise block */
+  --color-ink-950: #0b0d0f;
+  --color-ink-900: #101316;
+  --color-ink-850: #171b1f;
+  --color-ink-800: #1f242a;
+
+  /* Text on light */
+  --color-ink: #16192b;
+  --color-ink-dim: #565d70;
+  --color-ink-faint: #8b91a1;
+
+  /* Text on dark */
+  --color-chalk: #eceef0;
+  --color-chalk-dim: #a4abb4;
+  --color-chalk-faint: #6b727c;
+
+  /* Accent — restrained slate, not a signal colour */
+  --color-slate-deep: #2f3a55;
+  --color-slate: #3d4a6b;
+  --color-slate-soft: #6b7899;
+
+  /* Rules */
+  --color-rule: rgba(22, 25, 43, 0.1);
+  --color-rule-strong: rgba(22, 25, 43, 0.2);
+  --color-rule-dark: rgba(255, 255, 255, 0.09);
+  --color-rule-dark-strong: rgba(255, 255, 255, 0.16);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Anchor targets must clear the fixed 4rem header, or every in-page link
+   lands with the section heading hidden underneath it. */
+section[id] {
+  scroll-margin-top: 4.5rem;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: var(--color-slate);
+  color: var(--color-paper);
+}
+
+/* Tight optical tracking for large display type */
+.display {
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+/* Small caps label above every section heading */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Marquee travels exactly half its width: the list is rendered twice, so the
+   reset at -50% is invisible. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Scroll-reveal primitive — see components/reveal.tsx */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.6s var(--ease-out-soft),
+    transform 0.6s var(--ease-out-soft);
+}
+
+.reveal[data-visible="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
