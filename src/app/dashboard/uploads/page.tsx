@@ -1,4 +1,5 @@
 import { EmptyState, PageHeading } from "@/components/dashboard/primitives";
+import { WalletGate } from "@/components/dashboard/wallet-gate";
 
 export default function UploadsPage() {
   return (
@@ -8,10 +9,12 @@ export default function UploadsPage() {
         title="Direct uploads."
         description="Datasets you contribute by hand. Each file is hashed on your device before anything leaves, so the receipt can prove what you shared without exposing it."
       />
-      <EmptyState
-        title="The upload flow isn't built yet."
-        note="This is where you'll add a file, describe it, and mint the consent receipt that goes with it."
-      />
+      <WalletGate message="Connect your wallet to upload a dataset and mint its receipt.">
+        <EmptyState
+          title="The upload flow isn't built yet."
+          note="This is where you'll add a file, describe it, and mint the consent receipt that goes with it."
+        />
+      </WalletGate>
     </div>
   );
 }
