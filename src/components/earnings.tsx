@@ -241,7 +241,7 @@ export function Earnings() {
                     : "Rare data earns more than common data. A dashcam clip from a rainy roundabout is worth more to a robotics team than another hour of scrolling."}
                 </p>
                 <a
-                  href="#cta"
+                  href="#top"
                   className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-5 py-3 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
                 >
                   Claim your payout

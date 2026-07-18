@@ -124,13 +124,13 @@ export function Buyers() {
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <a
-                href="#cta"
+                href="#top"
                 className="inline-flex flex-1 items-center justify-center rounded-xl border border-rule-dark-strong bg-ink-900 px-5 py-3 text-sm font-medium text-chalk transition-colors hover:bg-ink-850"
               >
                 Talk to sales
               </a>
               <a
-                href="#cta"
+                href="#top"
                 className="inline-flex flex-1 items-center justify-center rounded-xl border border-rule-dark bg-transparent px-5 py-3 text-sm font-medium text-chalk-dim transition-colors hover:text-chalk"
               >
                 Read the docs

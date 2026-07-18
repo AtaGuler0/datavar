@@ -14,12 +14,9 @@ export function Hero() {
         className="absolute inset-x-0 top-0 -z-10 h-[68%] bg-gradient-to-b from-paper via-paper/92 to-transparent"
       />
 
-      {/* pb pushes the flex-centred copy up off the crowd's back row. Keep it
-          just large enough: the sub-heading must clear the heads, and anything
-          beyond that only strands the copy at the top of the fold. */}
-      <div className="mx-auto w-full max-w-4xl px-6 pt-4 pb-52 text-center">
+      <div className="mx-auto w-full max-w-4xl px-6 text-center">
         <a
-          href="#trust"
+          href="#how"
           className="group inline-flex items-center gap-2 rounded-full border border-rule bg-paper/70 px-3.5 py-1.5 text-xs text-ink-dim backdrop-blur-sm transition-colors hover:border-rule-strong hover:text-ink"
         >
           <span className="h-1 w-1 rounded-full bg-slate" />
@@ -48,7 +45,7 @@ export function Hero() {
 
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a
-            href="#cta"
+            href="#top"
             className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-6 py-3 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate sm:w-auto"
           >
             Become a contributor

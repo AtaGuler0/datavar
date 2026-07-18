@@ -7,7 +7,7 @@ const LINKS = [
   { href: "#how", label: "How it works" },
   { href: "#earnings", label: "Earnings" },
   { href: "#buyers", label: "For AI teams" },
-  { href: "#trust", label: "Consent" },
+  { href: "#faq", label: "FAQ" },
 ];
 
 export function SiteNav() {
@@ -62,7 +62,7 @@ export function SiteNav() {
             Buy data
           </a>
           <a
-            href="#cta"
+            href="#top"
             className="rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
           >
             Become a contributor
@@ -106,7 +106,7 @@ export function SiteNav() {
             ))}
           </div>
           <a
-            href="#cta"
+            href="#top"
             onClick={() => setOpen(false)}
             className="mt-8 block rounded-lg bg-slate-deep py-3.5 text-center font-medium text-paper"
           >
