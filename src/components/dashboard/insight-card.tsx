@@ -42,8 +42,8 @@ export function InsightCard({ datasets }: { datasets: Dataset[] }) {
           </p>
           <p className="mt-2 text-sm text-pretty text-ink-dim">
             It&apos;s the highest-paying category you haven&apos;t contributed
-            yet — a ${next[1].toFixed(2)}/mo median payout. One dataset there
-            lifts your projection.
+            yet, with a ${next[1].toFixed(2)}/mo median payout. One dataset
+            there lifts your projection.
           </p>
           <p className="mt-3 font-mono text-xs text-ink-faint">
             Projected impact: +${next[1].toFixed(2)} / mo · an estimate
@@ -55,7 +55,7 @@ export function InsightCard({ datasets }: { datasets: Dataset[] }) {
             Every category covered.
           </p>
           <p className="mt-2 text-sm text-pretty text-ink-dim">
-            From here, rare beats common — deeper history in the sources you
+            From here, rare beats common. Deeper history in the sources you
             already share earns more than another everyday one.
           </p>
         </>

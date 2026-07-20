@@ -34,9 +34,19 @@ export function WalletGate({
     <div className="mt-10 rounded-2xl border border-rule bg-paper px-6 py-14 text-center shadow-sm shadow-ink/[0.03]">
       <div
         aria-hidden="true"
-        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-rule bg-paper-raised/60"
+        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-rule bg-paper-raised/60 text-ink-dim"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-slate" />
+        <svg
+          viewBox="0 0 16 16"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          <rect x="2" y="4" width="12" height="9" rx="1.5" />
+          <path d="M2 6.5h9" strokeLinecap="round" />
+          <path d="M10.5 10h2" strokeLinecap="round" />
+        </svg>
       </div>
       <p className="mt-5 text-pretty text-ink-dim">
         {message ?? "Connect your wallet to see this."}
@@ -45,9 +55,8 @@ export function WalletGate({
         type="button"
         onClick={connect}
         disabled={status === "connecting"}
-        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-slate-deep px-5 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
+        className="mt-6 inline-flex items-center rounded-lg bg-slate-deep px-5 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-paper/70" />
         {status === "connecting" ? "Connecting…" : "Connect wallet"}
       </button>
     </div>

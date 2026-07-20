@@ -151,7 +151,7 @@ export function Overview() {
                 )}
               </>
             ) : (
-              "Everything here is keyed to your Stellar wallet — connect one to load your account."
+              "Everything here is keyed to your Stellar wallet. Connect one to load your account."
             )}
           </p>
         </div>
@@ -205,7 +205,7 @@ export function Overview() {
           <StatCard
             label="Projected payout"
             value={`$${stats.projected.toFixed(2)}`}
-            footnote="per month — an estimate, not a promise"
+            footnote="monthly estimate, not a promise"
           />
           <StatCard
             label="Datasets contributed"

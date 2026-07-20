@@ -81,9 +81,8 @@ function SidebarWallet() {
         type="button"
         onClick={connect}
         disabled={status === "connecting"}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-deep px-4 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
+        className="inline-flex w-full items-center justify-center rounded-xl bg-slate-deep px-4 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
       >
-        <span className="h-1.5 w-1.5 rounded-full bg-paper/70" />
         {status === "connecting" ? "Connecting…" : "Connect wallet"}
       </button>
     );
@@ -91,11 +90,8 @@ function SidebarWallet() {
 
   return (
     <div className="flex items-center justify-between gap-2 rounded-xl border border-rule bg-paper px-3 py-2.5">
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate" />
-        <span className="truncate font-mono text-xs tabular-nums text-ink">
-          {truncateAddress(address)}
-        </span>
+      <span className="truncate font-mono text-xs tabular-nums text-ink">
+        {truncateAddress(address)}
       </span>
       <button
         type="button"
@@ -128,7 +124,7 @@ export function SideNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
       <div className="px-6 pt-6">
         <Link href="/" aria-label="Datavar home">
           <Logo />
@@ -169,12 +165,11 @@ export function SideNav() {
 
       <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
         <div className="rounded-xl border border-rule bg-paper-raised/70 p-3.5">
-          <p className="flex items-center gap-1.5 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-ink-faint">
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-soft" />
+          <p className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-ink-faint">
             Stellar testnet
           </p>
           <p className="mt-1.5 text-xs text-pretty text-ink-dim">
-            No real funds move yet — payouts settle in test XLM.
+            No real funds move yet. Payouts settle in test XLM.
           </p>
         </div>
         <SidebarWallet />

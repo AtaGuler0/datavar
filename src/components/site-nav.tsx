@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Logo } from "./logo";
 
 const LINKS = [
@@ -61,12 +62,12 @@ export function SiteNav() {
           >
             Buy data
           </a>
-          <a
-            href="#top"
+          <Link
+            href="/dashboard"
             className="rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
           >
             Become a contributor
-          </a>
+          </Link>
         </div>
 
         <button
@@ -105,13 +106,13 @@ export function SiteNav() {
               </a>
             ))}
           </div>
-          <a
-            href="#top"
+          <Link
+            href="/dashboard"
             onClick={() => setOpen(false)}
             className="mt-8 block rounded-lg bg-slate-deep py-3.5 text-center font-medium text-paper"
           >
             Become a contributor
-          </a>
+          </Link>
         </div>
       )}
     </header>

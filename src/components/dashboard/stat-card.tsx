@@ -85,7 +85,7 @@ export function StatCard({
       {delta !== undefined && (
         <p className="mt-2.5 flex items-center gap-1.5 text-xs">
           {delta === null ? (
-            <span className="text-ink-faint">— {deltaLabel}</span>
+            <span className="text-ink-faint">No change {deltaLabel}</span>
           ) : delta === "new" ? (
             <>
               <span className="font-medium text-rise">New</span>

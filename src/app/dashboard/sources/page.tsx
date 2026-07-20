@@ -12,7 +12,7 @@ export default function SourcesPage() {
       <WalletGate message="Connect your wallet to link and manage your sources.">
         <EmptyState
           title="Source connections aren't wired up yet."
-          note="This is where you'll link browsing, health, purchases and media — each behind its own consent."
+          note="This is where you'll link browsing, health, purchases and media, each behind its own consent."
         />
       </WalletGate>
     </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CrowdField } from "./crowd-field";
 
 export function Hero() {
@@ -44,12 +45,12 @@ export function Hero() {
         </p>
 
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <a
-            href="#top"
+          <Link
+            href="/dashboard"
             className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-6 py-3 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate sm:w-auto"
           >
             Become a contributor
-          </a>
+          </Link>
           <a
             href="#buyers"
             className="group inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rule bg-paper-raised px-6 py-3 text-sm font-medium text-ink transition-colors duration-200 hover:bg-paper-sunken sm:w-auto"

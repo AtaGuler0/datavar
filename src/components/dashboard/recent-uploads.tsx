@@ -18,7 +18,7 @@ export function RecentUploads({ datasets }: { datasets: Dataset[] }) {
   if (rows.length === 0) {
     return (
       <p className="flex h-44 items-center justify-center rounded-xl border border-dashed border-rule-strong bg-paper-raised/50 text-center text-sm text-ink-dim">
-        Nothing yet — your first upload starts the ledger.
+        Nothing yet. Your first upload starts the ledger.
       </p>
     );
   }

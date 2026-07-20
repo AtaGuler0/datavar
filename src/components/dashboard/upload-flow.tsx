@@ -109,9 +109,8 @@ export function UploadFlow() {
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={hashing}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-rule-strong bg-paper-raised/40 px-6 py-8 text-sm text-ink-dim transition-colors hover:border-slate/40 hover:text-ink disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center rounded-xl border border-dashed border-rule-strong bg-paper-raised/40 px-6 py-8 text-sm text-ink-dim transition-colors hover:border-slate/40 hover:text-ink disabled:opacity-70"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-slate" />
                 {hashing ? "Hashing…" : "Choose a file"}
               </button>
             ) : (

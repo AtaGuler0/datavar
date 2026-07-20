@@ -29,7 +29,7 @@ export function ConnectPanel() {
               </p>
               <p className="mt-2 text-sm text-pretty text-chalk-dim">
                 Your sources, consent receipts and payouts are all keyed to this
-                wallet. We&apos;re on testnet — no real funds move yet.
+                wallet. We&apos;re on testnet, so no real funds move yet.
               </p>
             </>
           ) : (
@@ -39,7 +39,7 @@ export function ConnectPanel() {
               </p>
               <p className="mt-2 text-sm text-pretty text-chalk-dim">
                 Your wallet is your identity and where payouts land. We&apos;re
-                on testnet — no real funds move yet.
+                on testnet, so no real funds move yet.
               </p>
             </>
           )}
@@ -58,9 +58,8 @@ export function ConnectPanel() {
             type="button"
             onClick={connect}
             disabled={status === "connecting" || status === "loading"}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-chalk px-5 py-3 text-sm font-medium text-ink-950 transition-colors hover:bg-paper disabled:opacity-70"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-chalk px-5 py-3 text-sm font-medium text-ink-950 transition-colors hover:bg-paper disabled:opacity-70"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-slate" />
             {status === "connecting" ? "Connecting…" : "Connect wallet"}
           </button>
         )}
