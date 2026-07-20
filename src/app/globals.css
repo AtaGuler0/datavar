@@ -27,6 +27,11 @@
   --color-slate: #3d4a6b;
   --color-slate-soft: #6b7899;
 
+  /* Delta directions on stat tiles — muted and earthy, so movement informs
+     without shouting. Always paired with an arrow, never colour alone. */
+  --color-rise: #3f5f44;
+  --color-fall: #8f4437;
+
   /* Rules */
   --color-rule: rgba(22, 25, 43, 0.1);
   --color-rule-strong: rgba(22, 25, 43, 0.2);
