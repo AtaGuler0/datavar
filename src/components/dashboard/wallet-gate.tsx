@@ -31,10 +31,10 @@ export function WalletGate({
   }
 
   return (
-    <div className="mt-10 rounded-2xl border border-rule bg-paper-raised px-6 py-14 text-center">
+    <div className="mt-10 rounded-2xl border border-rule bg-paper px-6 py-14 text-center shadow-sm shadow-ink/[0.03]">
       <div
         aria-hidden="true"
-        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-rule bg-paper"
+        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-rule bg-paper-raised/60"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-slate" />
       </div>

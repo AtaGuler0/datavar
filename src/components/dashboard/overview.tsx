@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate } from "@/lib/format";
 import { truncateAddress } from "@/lib/stellar/config";
 import {
@@ -9,10 +10,13 @@ import {
   SOURCE_TYPES,
   type Dataset,
 } from "@/lib/supabase/datasets";
+import { SOURCE_RATES } from "@/lib/rates";
 import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
+import { InsightCard } from "./insight-card";
 import { CONTRIBUTOR_NAV } from "./nav-config";
 import { Card } from "./primitives";
+import { RecentUploads } from "./recent-uploads";
 import { SourceShare } from "./source-share";
 import { StatCard } from "./stat-card";
 import { useWallet } from "./wallet-provider";
@@ -23,22 +27,6 @@ type Period = (typeof PERIODS)[number];
 
 /** Trend resolution on the stat tiles, regardless of period length. */
 const SPARK_POINTS = 12;
-
-/**
- * Median monthly payout per source in USD — the same placeholder economics
- * the landing page's estimator quotes. An estimate, not a promise.
- */
-const SOURCE_RATES: Record<string, number> = {
-  browsing: 9.4,
-  purchases: 6.2,
-  health: 12.8,
-  location: 7.5,
-  media: 4.1,
-  voice: 8.9,
-  messaging: 5.3,
-  dashcam: 11.2,
-  other: 5.0,
-};
 
 const SECTIONS = CONTRIBUTOR_NAV.filter((s) => s.href !== "/dashboard");
 
@@ -55,16 +43,20 @@ function delta(cur: number, prev: number): number | "new" | null {
 function useGreeting() {
   const [greeting, setGreeting] = useState("Welcome back");
   useEffect(() => {
-    const h = new Date().getHours();
-    setGreeting(
-      h < 5
-        ? "Still up"
-        : h < 12
-          ? "Good morning"
-          : h < 18
-            ? "Good afternoon"
-            : "Good evening",
-    );
+    // Deferred to a frame: setState in an effect body cascades renders.
+    const raf = requestAnimationFrame(() => {
+      const h = new Date().getHours();
+      setGreeting(
+        h < 5
+          ? "Still up"
+          : h < 12
+            ? "Good morning"
+            : h < 18
+              ? "Good afternoon"
+              : "Good evening",
+      );
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
   return greeting;
 }
@@ -73,28 +65,33 @@ export function Overview() {
   const { address, status } = useWallet();
   const greeting = useGreeting();
   const [period, setPeriod] = useState<Period>(30);
-  const [datasets, setDatasets] = useState<Dataset[] | null>(null);
+
+  // Keyed by wallet so a disconnect or switch never shows another account's
+  // rows — deriving instead of resetting keeps the effect free of setState.
+  const [loaded, setLoaded] = useState<{
+    wallet: string;
+    rows: Dataset[];
+  } | null>(null);
 
   useEffect(() => {
-    if (!address) {
-      setDatasets(null);
-      return;
-    }
+    if (!address) return;
     let cancelled = false;
     listDatasets(address)
-      .then((d) => !cancelled && setDatasets(d))
-      .catch(() => !cancelled && setDatasets([]));
+      .then((rows) => !cancelled && setLoaded({ wallet: address, rows }))
+      .catch(() => !cancelled && setLoaded({ wallet: address, rows: [] }));
     return () => {
       cancelled = true;
     };
   }, [address]);
 
+  const datasets =
+    address && loaded?.wallet === address ? loaded.rows : null;
   const connected = status === "connected" && !!address;
 
   const stats = useMemo(() => {
     if (!datasets) return null;
 
-    const now = Date.now();
+    const now = SESSION_NOW;
     const between = (d: Dataset, from: number, to: number) => {
       const t = new Date(d.created_at).getTime();
       return t >= from && t < to;
@@ -249,8 +246,23 @@ export function Overview() {
         </div>
       )}
 
-      {/* Section index — the rest of the product, one card per room. */}
-      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+      {/* Bottom row — the ledger on the left, what to do next on the right. */}
+      {connected && datasets && (
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+          <Card
+            title="Recent uploads"
+            subtitle="Your latest contributions, newest first"
+          >
+            <RecentUploads datasets={datasets} />
+          </Card>
+          <InsightCard datasets={datasets} />
+        </div>
+      )}
+
+      {/* Section index — a map of the rooms, for before you've signed in.
+          Once connected, the rail and the cards above cover it. */}
+      {!connected && status !== "loading" && (
+        <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {SECTIONS.map((section) => (
           <Link
             key={section.href}
@@ -278,8 +290,9 @@ export function Overview() {
               </span>
             </span>
           </Link>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes } from "@/lib/format";
 import { sourceLabel, type Dataset } from "@/lib/supabase/datasets";
 import { FOLD_COLOR, SOURCE_COLORS } from "./chart-colors";
@@ -23,7 +24,7 @@ export function SourceShare({
   period: number;
 }) {
   const { rows, total } = useMemo(() => {
-    const cutoff = Date.now() - period * DAY;
+    const cutoff = SESSION_NOW - period * DAY;
     const inPeriod = datasets.filter(
       (d) => new Date(d.created_at).getTime() >= cutoff,
     );

@@ -81,7 +81,7 @@ export function EmptyState({
   note?: string;
 }) {
   return (
-    <div className="mt-10 rounded-2xl border border-dashed border-rule-strong bg-paper-raised/50 px-6 py-16 text-center">
+    <div className="mt-10 rounded-2xl border border-dashed border-rule-strong bg-paper/60 px-6 py-16 text-center">
       <p className="font-mono text-[0.6875rem] uppercase tracking-[0.14em] text-ink-faint">
         {label}
       </p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate } from "@/lib/format";
 import type { Dataset } from "@/lib/supabase/datasets";
 
@@ -25,7 +26,7 @@ export function ActivityChart({
   const { buckets, max, weekly } = useMemo(() => {
     const weekly = period === 90;
     const n = weekly ? 13 : period;
-    const now = Date.now();
+    const now = SESSION_NOW;
     const size = (period * DAY) / n;
     const buckets: Bucket[] = Array.from({ length: n }, (_, i) => {
       const from = now - period * DAY + i * size;

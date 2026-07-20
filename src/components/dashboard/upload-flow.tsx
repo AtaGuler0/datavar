@@ -84,7 +84,7 @@ export function UploadFlow() {
 
   return (
     <div className="mt-10 space-y-12">
-      <div className="overflow-hidden rounded-2xl border border-rule bg-paper-raised">
+      <div className="overflow-hidden rounded-2xl border border-rule bg-paper shadow-sm shadow-ink/[0.03]">
         <div className="border-b border-rule px-6 py-4">
           <p className="eyebrow text-ink-faint">Contribute a dataset</p>
         </div>
@@ -109,13 +109,13 @@ export function UploadFlow() {
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={hashing}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-rule-strong bg-paper px-6 py-8 text-sm text-ink-dim transition-colors hover:border-slate/40 hover:text-ink disabled:opacity-70"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-rule-strong bg-paper-raised/40 px-6 py-8 text-sm text-ink-dim transition-colors hover:border-slate/40 hover:text-ink disabled:opacity-70"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-slate" />
                 {hashing ? "Hashing…" : "Choose a file"}
               </button>
             ) : (
-              <div className="mt-3 rounded-xl border border-rule bg-paper p-4">
+              <div className="mt-3 rounded-xl border border-rule bg-paper-raised/50 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="truncate text-sm text-ink">
@@ -192,7 +192,7 @@ export function UploadFlow() {
           </div>
 
           {error && (
-            <p className="rounded-lg border border-rule bg-paper px-3.5 py-2.5 text-sm text-ink-dim">
+            <p className="rounded-lg border border-rule bg-paper-raised/60 px-3.5 py-2.5 text-sm text-ink-dim">
               {error}
             </p>
           )}
