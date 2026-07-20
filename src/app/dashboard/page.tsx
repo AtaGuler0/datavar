@@ -24,7 +24,7 @@ export default function DashboardOverview() {
           <Link
             key={section.href}
             href={section.href}
-            className="group flex items-start gap-4 rounded-xl border border-rule bg-paper-raised p-5 transition-colors hover:border-rule-strong hover:bg-paper-sunken"
+            className="group flex items-start gap-4 rounded-xl border border-rule bg-paper p-5 shadow-sm shadow-ink/[0.03] transition-colors hover:border-rule-strong"
           >
             <span className="mt-0.5 font-mono text-xs tabular-nums text-ink-faint">
               {section.index}

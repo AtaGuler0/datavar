@@ -14,11 +14,15 @@ export default function DashboardLayout({
 }) {
   return (
     <WalletProvider>
-      <div className="flex min-h-screen flex-col bg-paper">
-        <TopBar />
-        <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col md:flex-row md:px-6">
-          <SideNav />
-          <main className="flex-1 px-6 py-8 md:px-8 md:py-12">{children}</main>
+      <div className="flex min-h-screen bg-paper">
+        <SideNav />
+        {/* Content sits a shade below the rail and the cards, so the white
+            surfaces read as raised — the SaaS-dashboard depth cue. */}
+        <div className="flex min-w-0 flex-1 flex-col bg-paper-sunken/30">
+          <TopBar />
+          <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 sm:px-8 md:py-10">
+            {children}
+          </main>
         </div>
       </div>
     </WalletProvider>

@@ -28,6 +28,46 @@ export function PageHeading({
 }
 
 /**
+ * The dashboard's unit of surface: a raised paper panel. Give it a title and
+ * it grows the standard header row — small ink title, faint subtitle, and an
+ * optional action slot pinned to the right.
+ */
+export function Card({
+  title,
+  subtitle,
+  action,
+  className = "",
+  children,
+}: {
+  title?: string;
+  subtitle?: string;
+  action?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      className={`rounded-2xl border border-rule bg-paper shadow-sm shadow-ink/[0.03] ${className}`}
+    >
+      {(title || action) && (
+        <header className="flex items-start justify-between gap-4 px-5 pt-5">
+          <div>
+            {title && <h2 className="text-sm font-medium text-ink">{title}</h2>}
+            {subtitle && (
+              <p className="mt-0.5 text-xs text-ink-faint">{subtitle}</p>
+            )}
+          </div>
+          {action}
+        </header>
+      )}
+      <div className={title || action ? "px-5 pb-5 pt-4" : "p-5"}>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/**
  * Placeholder for a section that's been routed but not yet built out. Honest
  * about being empty rather than dressing up invented numbers.
  */
