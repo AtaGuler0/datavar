@@ -9,8 +9,11 @@ import {
   SOURCE_TYPES,
   type Dataset,
 } from "@/lib/supabase/datasets";
+import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
 import { CONTRIBUTOR_NAV } from "./nav-config";
+import { Card } from "./primitives";
+import { SourceShare } from "./source-share";
 import { StatCard } from "./stat-card";
 import { useWallet } from "./wallet-provider";
 
@@ -225,6 +228,24 @@ export function Overview() {
             value={`${stats.sources} of ${SOURCE_TYPES.length}`}
             footnote="source categories with at least one upload"
           />
+        </div>
+      )}
+
+      {/* The charts row — when over time on the left, from where on the right. */}
+      {connected && datasets && (
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+          <Card
+            title="Contributions over time"
+            subtitle={`Bytes contributed per ${period === 90 ? "week" : "day"}`}
+          >
+            <ActivityChart datasets={datasets} period={period} />
+          </Card>
+          <Card
+            title="Share by source"
+            subtitle={`Of data contributed, last ${period} days`}
+          >
+            <SourceShare datasets={datasets} period={period} />
+          </Card>
         </div>
       )}
 
