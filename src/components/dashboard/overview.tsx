@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SESSION_NOW } from "@/lib/clock";
-import { formatBytes, formatDate } from "@/lib/format";
+import { formatBytes, formatDate, percentDelta } from "@/lib/format";
 import { truncateAddress } from "@/lib/stellar/config";
 import {
   listDatasets,
@@ -15,6 +15,7 @@ import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
 import { InsightCard } from "./insight-card";
 import { CONTRIBUTOR_NAV } from "./nav-config";
+import { NetworkPanel } from "./network-panel";
 import { Card } from "./primitives";
 import { RecentUploads } from "./recent-uploads";
 import { SourceShare } from "./source-share";
@@ -29,12 +30,6 @@ type Period = (typeof PERIODS)[number];
 const SPARK_POINTS = 12;
 
 const SECTIONS = CONTRIBUTOR_NAV.filter((s) => s.href !== "/dashboard");
-
-/** Percent change, or "new" when there's no prior baseline to compare against. */
-function delta(cur: number, prev: number): number | "new" | null {
-  if (prev === 0) return cur === 0 ? null : "new";
-  return ((cur - prev) / prev) * 100;
-}
 
 /**
  * Time-of-day greeting, resolved only on the client — the page is prerendered,
@@ -132,14 +127,28 @@ export function Overview() {
 
   return (
     <div>
-      {/* Greeting row — identity on the left, period control on the right. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      {/* Greeting — the page's one h1, above both halves of the overview. */}
+      <div>
+        <p className="eyebrow text-ink-faint">Overview</p>
+        <h1 className="display mt-3 text-[1.75rem] font-medium text-ink sm:text-[2rem]">
+          {greeting}.
+        </h1>
+        <p className="mt-2.5 text-sm text-ink-dim">
+          Where the protocol stands today, and where your account sits in it.
+        </p>
+      </div>
+
+      {/* The general picture first: it needs no wallet, so it's the one thing
+          every visitor can read on arrival. */}
+      <div className="mt-9">
+        <NetworkPanel />
+      </div>
+
+      {/* Then the personal half — identity on the left, period control right. */}
+      <div className="mt-12 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
-          <p className="eyebrow text-ink-faint">Overview</p>
-          <h1 className="display mt-3 text-[1.75rem] font-medium text-ink sm:text-[2rem]">
-            {greeting}.
-          </h1>
-          <p className="mt-2.5 text-sm text-ink-dim">
+          <h2 className="text-sm font-medium text-ink">Your account</h2>
+          <p className="mt-1 text-sm text-ink-dim">
             {connected && stats ? (
               <>
                 <span className="font-mono text-xs tabular-nums">
@@ -179,7 +188,7 @@ export function Overview() {
 
       {/* Account state: KPIs when connected, the connect block when not. */}
       {status === "loading" ? (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
@@ -188,11 +197,11 @@ export function Overview() {
           ))}
         </div>
       ) : !connected ? (
-        <div className="mt-8">
+        <div className="mt-4">
           <ConnectPanel />
         </div>
       ) : stats === null ? (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
@@ -201,7 +210,7 @@ export function Overview() {
           ))}
         </div>
       ) : (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Projected payout"
             value={`$${stats.projected.toFixed(2)}`}
@@ -210,13 +219,13 @@ export function Overview() {
           <StatCard
             label="Datasets contributed"
             value={String(stats.curCount)}
-            delta={delta(stats.curCount, stats.prevCount)}
+            delta={percentDelta(stats.curCount, stats.prevCount)}
             deltaLabel={`vs previous ${period} days`}
           />
           <StatCard
             label="Data contributed"
             value={formatBytes(stats.curBytes)}
-            delta={delta(stats.curBytes, stats.prevBytes)}
+            delta={percentDelta(stats.curBytes, stats.prevBytes)}
             deltaLabel={`vs previous ${period} days`}
             spark={stats.spark}
           />

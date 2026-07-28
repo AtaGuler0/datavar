@@ -2,30 +2,45 @@
 
 import { useMemo, useState } from "react";
 import { SESSION_NOW } from "@/lib/clock";
-import { formatBytes, formatDate } from "@/lib/format";
-import type { Dataset } from "@/lib/supabase/datasets";
+import { formatBytes, formatDate, formatHour } from "@/lib/format";
 
 const DAY = 86_400_000;
 
 type Bucket = { from: number; to: number; bytes: number; count: number };
 
 /**
+ * All the chart needs of a contribution: when it landed and how big it was.
+ * Structural, so the same chart serves one wallet's rows and the network's.
+ */
+type Contribution = { created_at: string; byte_size: number };
+
+/** Bar grain by period length, so a long window never draws 400 hairlines. */
+function grainFor(period: number) {
+  if (period <= 2) return { unit: "hour", n: Math.round(period * 24) } as const;
+  if (period <= 31) return { unit: "day", n: Math.max(period, 1) } as const;
+  if (period <= 182) return { unit: "week", n: Math.ceil(period / 7) } as const;
+  return { unit: "month", n: Math.ceil(period / 30) } as const;
+}
+
+/**
  * Data contributed over the selected period as a single-series column chart —
- * one bar per day (per ~week at 90 days), in the brand slate. Identity by
- * source lives next door in the share card; this one only answers "when".
+ * one bar per day (per week or month over longer windows), in the brand
+ * slate. Identity by source lives next door in the share card; this one only
+ * answers "when".
  */
 export function ActivityChart({
   datasets,
   period,
+  emptyLabel,
 }: {
-  datasets: Dataset[];
+  datasets: readonly Contribution[];
   period: number;
+  emptyLabel?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
 
-  const { buckets, max, weekly } = useMemo(() => {
-    const weekly = period === 90;
-    const n = weekly ? 13 : period;
+  const { buckets, max, unit } = useMemo(() => {
+    const { unit, n } = grainFor(period);
     const now = SESSION_NOW;
     const size = (period * DAY) / n;
     const buckets: Bucket[] = Array.from({ length: n }, (_, i) => {
@@ -42,13 +57,13 @@ export function ActivityChart({
         count: inBucket.length,
       };
     });
-    return { buckets, max: Math.max(...buckets.map((b) => b.bytes)), weekly };
+    return { buckets, max: Math.max(...buckets.map((b) => b.bytes)), unit };
   }, [datasets, period]);
 
   if (max === 0) {
     return (
       <p className="flex h-44 items-center justify-center rounded-xl border border-dashed border-rule-strong bg-paper-raised/50 text-center text-sm text-ink-dim">
-        No uploads in the last {period} days.
+        {emptyLabel ?? `No uploads in the last ${period} days.`}
       </p>
     );
   }
@@ -113,8 +128,12 @@ export function ActivityChart({
             }}
           >
             <p className="font-mono text-[0.625rem] text-chalk-faint">
-              {formatDate(iso(hovered.from))}
-              {weekly && <> – {formatDate(iso(hovered.to - 1))}</>}
+              {unit === "hour"
+                ? formatHour(hovered.from)
+                : formatDate(iso(hovered.from))}
+              {(unit === "week" || unit === "month") && (
+                <> – {formatDate(iso(hovered.to - 1))}</>
+              )}
             </p>
             <p className="mt-1 font-medium text-chalk">
               {formatBytes(hovered.bytes)}
@@ -127,14 +146,18 @@ export function ActivityChart({
       </div>
 
       <div className="mt-2 flex justify-between font-mono text-[0.625rem] text-ink-faint">
-        <span>{formatDate(iso(buckets[0].from))}</span>
-        <span>Today</span>
+        <span>
+          {unit === "hour"
+            ? formatHour(buckets[0].from)
+            : formatDate(iso(buckets[0].from))}
+        </span>
+        <span>{unit === "hour" ? "Now" : "Today"}</span>
       </div>
 
       {/* The same numbers as text, for screen readers. */}
       <table className="sr-only">
         <caption>
-          Data contributed per {weekly ? "week" : "day"}, last {period} days
+          Data contributed per {unit}, last {period} days
         </caption>
         <thead>
           <tr>
@@ -146,7 +169,9 @@ export function ActivityChart({
         <tbody>
           {buckets.map((b, i) => (
             <tr key={i}>
-              <td>{formatDate(iso(b.from))}</td>
+              <td>
+                {unit === "hour" ? formatHour(b.from) : formatDate(iso(b.from))}
+              </td>
               <td>{formatBytes(b.bytes)}</td>
               <td>{b.count}</td>
             </tr>
