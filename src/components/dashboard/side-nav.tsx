@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "../logo";
+import { isAdminWallet } from "@/lib/admin";
 import { truncateAddress } from "@/lib/stellar/config";
 import { CONTRIBUTOR_NAV, isSectionActive } from "./nav-config";
 import { useWallet } from "./wallet-provider";
@@ -66,9 +67,10 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
 /**
  * The wallet as the account block at the foot of the rail — where a SaaS
  * dashboard puts its user avatar. Connected → address plus a leave button;
- * disconnected → the connect action itself.
+ * disconnected → the connect action itself. Shared with the admin rail, which
+ * signs in the same way.
  */
-function SidebarWallet() {
+export function SidebarWallet() {
   const { address, status, connect, disconnect } = useWallet();
 
   if (status === "loading") {
@@ -122,6 +124,7 @@ function SidebarWallet() {
  */
 export function SideNav() {
   const pathname = usePathname();
+  const { address } = useWallet();
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
@@ -164,6 +167,26 @@ export function SideNav() {
       </ul>
 
       <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
+        {/* The way through to the operator side, for the wallets that have
+            one. Everyone else never learns the panel exists. */}
+        {isAdminWallet(address) && (
+          <Link
+            href="/admin"
+            className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              className="h-4 w-4 shrink-0 text-ink-faint transition-colors group-hover:text-ink-dim"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path d="M2.5 13.5V9M6.5 13.5V5.5M10.5 13.5v-6M14 13.5V3" strokeLinecap="round" />
+            </svg>
+            Operator panel
+          </Link>
+        )}
         <div className="rounded-xl border border-rule bg-paper-raised/70 p-3.5">
           <p className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-ink-faint">
             Stellar testnet

@@ -1,4 +1,5 @@
-import { EmptyState, PageHeading } from "@/components/dashboard/primitives";
+import { EarningsPanel } from "@/components/dashboard/earnings-panel";
+import { PageHeading } from "@/components/dashboard/primitives";
 import { WalletGate } from "@/components/dashboard/wallet-gate";
 
 export default function EarningsPage() {
@@ -7,13 +8,10 @@ export default function EarningsPage() {
       <PageHeading
         eyebrow="04 · Earnings"
         title="Payouts."
-        description="What you've been paid and how it's settled. Rare, high-signal data earns more than common data, and you see the split per receipt."
+        description="What your data has sold for, and what's waiting to be claimed. Every claim settles as an XLM payment to the wallet you're signed in with."
       />
       <WalletGate message="Connect your wallet to see your payouts.">
-        <EmptyState
-          title="Earnings land here once payouts settle on-chain."
-          note="Paid in XLM on Stellar testnet for now. Instant, and yours to withdraw."
-        />
+        <EarningsPanel />
       </WalletGate>
     </div>
   );
