@@ -66,9 +66,10 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
 /**
  * The wallet as the account block at the foot of the rail — where a SaaS
  * dashboard puts its user avatar. Connected → address plus a leave button;
- * disconnected → the connect action itself.
+ * disconnected → the connect action itself. Shared with the admin rail, which
+ * signs in the same way.
  */
-function SidebarWallet() {
+export function SidebarWallet() {
   const { address, status, connect, disconnect } = useWallet();
 
   if (status === "loading") {
