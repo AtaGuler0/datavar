@@ -62,6 +62,22 @@ export async function listDatasets(wallet: string): Promise<Dataset[]> {
 }
 
 /**
+ * Every dataset on the protocol, newest first — the admin panel's inventory.
+ * Unlike the network view this keeps titles, because pricing a dataset means
+ * looking at what it actually is.
+ */
+export async function listAllDatasets(limit = 500): Promise<Dataset[]> {
+  const { data, error } = await supabase
+    .from("datasets")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
  * Uploads the file to storage under the wallet's folder, then records its
  * metadata. The storage path is namespaced by wallet so one contributor's
  * files never collide with another's.

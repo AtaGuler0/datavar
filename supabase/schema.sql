@@ -42,6 +42,60 @@ create policy "datasets insert (testnet)"
   with check (true);
 
 -- ---------------------------------------------------------------------------
+-- Table: sales
+--
+-- A dataset licensed to a buyer, and the payout the contributor can claim for
+-- it. Buyers are simulated for now — admins run sale rounds from the admin
+-- panel — but the claim itself is a real Stellar testnet payment, so every row
+-- that reaches 'claimed' carries a transaction hash you can look up on-chain.
+--
+-- Price is stroops (1 XLM = 10,000,000), never a float: money that has to
+-- match a Horizon operation to the last digit has no business being a double.
+-- ---------------------------------------------------------------------------
+create table if not exists public.sales (
+  id            uuid        primary key default gen_random_uuid(),
+  dataset_id    uuid        not null references public.datasets (id) on delete cascade,
+  owner_wallet  text        not null,
+  buyer         text        not null,
+  price_stroops bigint      not null check (price_stroops > 0),
+  -- unclaimed → claiming → claimed. 'claiming' is held only while a payout is
+  -- in flight; it's what keeps a double-clicked claim from paying twice.
+  status        text        not null default 'unclaimed'
+                            check (status in ('unclaimed', 'claiming', 'claimed')),
+  tx_hash       text,
+  claimed_at    timestamptz,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists sales_owner_idx
+  on public.sales (owner_wallet, created_at desc);
+
+create index if not exists sales_dataset_idx
+  on public.sales (dataset_id);
+
+alter table public.sales enable row level security;
+
+-- Same trusted-client posture as datasets: the anon role may read, insert and
+-- update. Payouts are still safe — the claim route is the only thing holding
+-- the treasury key, so a forged update can move a row's status but never money.
+drop policy if exists "sales read (testnet)"   on public.sales;
+drop policy if exists "sales insert (testnet)" on public.sales;
+drop policy if exists "sales update (testnet)" on public.sales;
+
+create policy "sales read (testnet)"
+  on public.sales for select
+  using (true);
+
+create policy "sales insert (testnet)"
+  on public.sales for insert
+  with check (true);
+
+create policy "sales update (testnet)"
+  on public.sales for update
+  using (true)
+  with check (true);
+
+-- ---------------------------------------------------------------------------
 -- Storage: private "datasets" bucket
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public)
