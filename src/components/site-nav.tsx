@@ -6,10 +6,10 @@ import { Logo } from "./logo";
 import { SectionLink } from "./section-link";
 
 const LINKS = [
-  { href: "#how", label: "How it works" },
-  { href: "#earnings", label: "Earnings" },
-  { href: "#buyers", label: "For AI teams" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#how", label: "How it works" },
+  { href: "/#earnings", label: "Earnings" },
+  { href: "/#buyers", label: "For AI teams" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
 export function SiteNav() {
@@ -47,6 +47,9 @@ export function SiteNav() {
           href="/"
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+            // Only a scroll when the top of this page is what "home" means.
+            // From the blog it has to be a real navigation.
+            if (window.location.pathname !== "/") return;
             e.preventDefault();
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
@@ -70,7 +73,7 @@ export function SiteNav() {
 
         <div className="hidden items-center gap-2 md:flex">
           <SectionLink
-            href="#buyers"
+            href="/#buyers"
             className="rounded-lg px-3.5 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
           >
             Buy data

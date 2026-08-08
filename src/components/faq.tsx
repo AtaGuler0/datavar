@@ -4,27 +4,27 @@ import { SectionHeading } from "./section-heading";
 const FAQS = [
   {
     q: "Are you selling my identity?",
-    a: "No. Identity is stripped when data is ingested and buyers receive pseudonymous records. They can license the fact that a 30-year-old in Berlin walked 8,000 steps; they cannot license you. Re-identification is contractually forbidden and technically monitored.",
+    a: "We never asked for it: there is no signup, no email and no name, just the Stellar wallet address you connect. What sits inside a file is yours to check before you send it, because we do not read it and we do not scrub it either.",
   },
   {
     q: "How much will I actually earn?",
-    a: "Most contributors land between $20 and $60 a month with three or four sources connected. Rare data pays far more: dashcam footage, clinical wearables, and low-resource languages are the current premiums. Anyone promising you thousands is lying.",
+    a: "Nothing yet, because nobody has bought anything. The sales you see come from a simulated buyer we run ourselves and settle in test XLM, so any figure we quoted today would be one we invented.",
   },
   {
     q: "What happens if I change my mind?",
-    a: "Revoke any consent from your dashboard and it stops immediately. Buyers are notified within 24 hours and are contractually required to delete the affected records. Data already used to train a shipped model can't be un-trained, which is why consent is scoped and expiring by default.",
+    a: "Revoking signs a transaction that marks the receipt withdrawn on Stellar, and after that anyone can ask the contract and be told no without coming through us. It cannot reach into a model that already trained on the data, which is why the contract refuses any consent without an end date in the future.",
   },
   {
     q: "Do I need a crypto wallet?",
-    a: "For now, yes. Your wallet is your account — there's no separate login — and payouts settle in XLM on Stellar, which is also what makes them cheap enough to pay out per sale. PayPal is planned so you won't have to, but it isn't live yet.",
+    a: "For now, yes: your wallet is your account, and payouts settle in XLM on Stellar, where a payment costs a fraction of a cent and a fifty cent payout is still worth sending. PayPal is planned but not live.",
   },
   {
     q: "How is this different from a data broker?",
-    a: "A broker takes data you never knowingly gave and sells it without paying you. We invert all three: you choose what leaves, you see who buys it, and you take a cut of every sale. If that sounds like a worse business, it is. For the broker.",
+    a: "A broker sells data you never knowingly handed over and keeps the money; here you choose what leaves, you see who licensed it, and you take a cut. Only the first of those is built so far, because the other two need buyers we do not have yet.",
   },
   {
-    q: "For buyers: why not just scrape?",
-    a: "Because you can't audit it, can't refresh it, can't commission what doesn't exist yet, and increasingly can't defend it. Datavar costs more per record than scraping and considerably less than discovery.",
+    q: "For AI teams: why not just scrape?",
+    a: "Scraped data has no answer to who agreed to it, while ours carries a receipt you can check against the ledger yourself, including whether it was withdrawn last week. That runs on testnet today with no catalogue or delivery yet, so if you want those sooner, tell us what you would actually pay for.",
   },
 ];
 
@@ -41,7 +41,12 @@ export function Faq() {
         <div className="space-y-px">
           {FAQS.map((faq, i) => (
             <Reveal key={faq.q} delay={i * 60}>
-              <details className="group border-t border-rule">
+              {/* A shared name makes these an exclusive group: opening one
+                  closes whichever was open. The browser does it, so there is
+                  no state to hold and no reason to make this a client
+                  component. Browsers without it fall back to letting several
+                  stand open, which is the old behaviour and not a broken one. */}
+              <details name="faq" className="group border-t border-rule">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[0.9375rem] font-medium text-ink transition-colors hover:text-slate [&::-webkit-details-marker]:hidden">
                   {faq.q}
                   <span
