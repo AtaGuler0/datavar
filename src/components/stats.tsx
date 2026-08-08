@@ -36,7 +36,7 @@ export function Stats({ stats }: { stats: ProtocolStats }) {
               {stats.units.length === 0 ? (
                 <p className="mt-6 max-w-sm text-sm text-pretty text-ink-dim">
                   Nothing has been contributed yet. This fills in as the
-                  protocol runs — one square per dataset, counted from the
+                  protocol runs, one square per dataset, counted from the
                   ledger rather than typed in.
                 </p>
               ) : (
