@@ -122,20 +122,13 @@ export function Buyers() {
               </pre>
             </div>
 
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#top"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-rule-dark-strong bg-ink-900 px-5 py-3 text-sm font-medium text-chalk transition-colors hover:bg-ink-850"
-              >
-                Talk to sales
-              </a>
-              <a
-                href="#top"
-                className="inline-flex flex-1 items-center justify-center rounded-xl border border-rule-dark bg-transparent px-5 py-3 text-sm font-medium text-chalk-dim transition-colors hover:text-chalk"
-              >
-                Read the docs
-              </a>
-            </div>
+            {/* "Talk to sales" is gone: there is no sales side to talk to
+                while the buyer product is unbuilt. The docs line stays as a
+                statement of what's next, and becomes a link the moment /docs
+                exists — one href, nothing else to change. */}
+            <p className="mt-4 font-mono text-[0.6875rem] tracking-[0.14em] text-chalk-faint uppercase">
+              Docs coming with the buyer release
+            </p>
           </Reveal>
         </div>
       </div>

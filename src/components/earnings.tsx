@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { formatXlm, STROOPS_PER_XLM } from "@/lib/stellar/config";
 import { Reveal } from "./reveal";
 import { SectionHeading } from "./section-heading";
@@ -128,8 +129,8 @@ export function Earnings({
           title="See what you're currently giving away for free."
           body={
             priced
-              ? "Pick the sources you'd be willing to share. Rates are what datasets in each category have actually settled for on testnet — an average of real sales, not a promise."
-              : "Pick the sources you'd be willing to share. Nothing has been licensed on testnet yet, so there are no averages to quote — these fill in from real sales as the protocol runs."
+              ? "Pick the sources you'd be willing to share. Rates are what datasets in each category have actually settled for on testnet. They are an average of real sales, not a promise."
+              : "Pick the sources you'd be willing to share. Nothing has been licensed on testnet yet, so there are no averages to quote. These fill in from real sales as the protocol runs."
           }
           align="center"
         />
@@ -285,12 +286,12 @@ export function Earnings({
                     ? "Share nothing and you earn nothing. That's exactly what you're doing today, just without the payout."
                     : "Rare data earns more than common data. A dashcam clip from a rainy roundabout is worth more to a robotics team than another hour of scrolling."}
                 </p>
-                <a
-                  href="#top"
+                <Link
+                  href="/dashboard"
                   className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-5 py-3 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
                 >
                   Claim your payout
-                </a>
+                </Link>
               </div>
             </div>
           </div>

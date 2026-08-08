@@ -37,9 +37,6 @@ export function SiteFooter() {
               people who produce the data should be the people who profit from
               it.
             </p>
-            <p className="mt-6 font-mono text-[0.6875rem] text-ink-faint">
-              SOC 2 Type II · GDPR · CCPA
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
@@ -49,14 +46,14 @@ export function SiteFooter() {
                   {column.title}
                 </h3>
                 <ul className="mt-4 space-y-2.5">
+                  {/* Not links. None of these pages exist yet, and an anchor
+                      that quietly scrolls you back to the top is a worse
+                      answer than one that never invited the click. They stay
+                      visible because the shape of the product is worth
+                      showing; they become links when they lead somewhere. */}
                   {column.links.map((link) => (
-                    <li key={link}>
-                      <a
-                        href="#top"
-                        className="text-sm text-ink-faint transition-colors hover:text-ink"
-                      >
-                        {link}
-                      </a>
+                    <li key={link} className="text-sm text-ink-faint">
+                      {link}
                     </li>
                   ))}
                 </ul>
@@ -67,18 +64,20 @@ export function SiteFooter() {
 
         <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-rule pt-8 sm:flex-row sm:items-center">
           <p className="font-mono text-xs text-ink-faint">
-            © {new Date().getFullYear()} Datavar Labs, Inc.
+            © {new Date().getFullYear()} Datavar Labs
           </p>
           <div className="flex items-center gap-6">
-            {["X", "LinkedIn", "GitHub"].map((social) => (
-              <a
-                key={social}
-                href="#top"
-                className="font-mono text-xs text-ink-faint transition-colors hover:text-ink"
-              >
-                {social}
-              </a>
-            ))}
+            {/* One entry, because one exists. The X and LinkedIn placeholders
+                are gone rather than parked here as dead text — an empty
+                account list says less than a real repository does. */}
+            <a
+              href="https://github.com/AtaGuler0/datavar"
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-xs text-ink-faint transition-colors hover:text-ink"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </div>
