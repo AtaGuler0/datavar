@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://datavar.ai"),
+  metadataBase: new URL("https://datavar.xyz"),
   title: {
     default: "Datavar: The consented data layer for AI",
     template: "%s · Datavar",
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     title: "Datavar: The consented data layer for AI",
     description:
       "Get paid for the data you already produce. License consented, auditable datasets from real people.",
-    url: "https://datavar.ai",
+    url: "https://datavar.xyz",
     siteName: "Datavar",
     type: "website",
   },

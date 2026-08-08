@@ -1,4 +1,4 @@
-# datavar.ai
+# datavar.xyz
 
 Your data already trains AI models. You just never see a cent of it.
 
@@ -50,7 +50,43 @@ payouts and the admin panel.
 
 Run `supabase/schema.sql` in the Supabase SQL editor to create the tables,
 policies and storage bucket. It's idempotent — re-run it after pulling changes
-that add to it.
+that add to it. Row-level security is on and keyed to the signed-in wallet, so
+the dashboard shows nothing until sign-in is configured (below).
+
+### Wallet sign-in
+
+Connecting a wallet only asks it what address it holds; anyone can claim any
+address. Signing in makes it prove it: the server issues a
+[SEP-10](https://stellar.org/protocol/sep-10) challenge — a transaction built
+on sequence 0, which no network will ever accept — the wallet signs it, and the
+server mints a session token carrying the proved address.
+
+That token is a JWT Supabase accepts, which is the point of it. Row-level
+security reads the wallet out of the token, so the database refuses to hand
+over someone else's rows rather than trusting this code to filter. A stranger
+holding the anon key reaches three aggregate views and nothing else: no dataset
+row, no sale row, no file.
+
+Two server-side secrets make it work:
+
+1. `STELLAR_AUTH_SECRET` — the key that signs challenges. Never funded, holds
+   nothing; generate one with `stellar keys generate datavar-auth` and read it
+   back with `stellar keys show datavar-auth`.
+2. `SUPABASE_JWT_SECRET` — Supabase → Project Settings → API Keys → JWT Keys,
+   listed as **Legacy JWT Secret** (older projects: Settings → API → JWT
+   Settings). It is the same secret that signs the anon key, so if the anon
+   key's header decodes to `HS256`, this is the one. Treat it like a password:
+   anyone holding it can mint a session for any wallet.
+
+   Should the project ever move to asymmetric signing keys and revoke the
+   legacy secret, this stops working — Supabase keeps the private half of an
+   asymmetric key. The migration is to publish a JWKS endpoint, register it
+   under Third-Party Auth, and sign with our own key in `src/lib/auth/jwt.ts`.
+
+Operators are named in `ADMIN_WALLETS`, server-side. The browser is told whether
+it is an operator, inside the signed token, and never gets to decide — and the
+same claim is checked again by row-level security on every query the panel
+makes.
 
 ### Payouts on testnet
 
@@ -63,8 +99,8 @@ payment. To turn it on:
    `STELLAR_TREASURY_SECRET`. The secret has no `NEXT_PUBLIC_` prefix on
    purpose: it stays on the server, and only `src/app/api/claims/route.ts`
    reads it.
-3. Put your own wallet address in `NEXT_PUBLIC_ADMIN_WALLETS` (comma-separated
-   for more than one) to get into `/admin`.
+3. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
+   than one) to get into `/admin`.
 4. Fund the treasury with friendbot — there's a button on the admin overview.
 
 Then sell a dataset from `/admin` (by hand on the Datasets page, or a random
@@ -72,10 +108,11 @@ round on the Sales page) and claim it from `/dashboard/earnings`. The claim
 returns a transaction hash that resolves on
 [stellar.expert](https://stellar.expert/explorer/testnet).
 
-A caveat worth naming: the admin allowlist ships to the browser and nothing is
-signed, so it hides the panel rather than defending it. Nothing behind it can
-move money — the treasury key is server-side — but it does write sale rows, and
-it needs a signed challenge before this is pointed at anything real.
+Claiming needs a signed-in wallet, and the wallet being paid is read out of the
+session rather than the request body — a stranger cannot force someone else's
+payout out early. Marking a sale settled needs a `settle` claim that only the
+payout route mints, for two minutes at a time, so a contributor cannot record
+their own payout as claimed with an invented hash.
 
 ## Stack
 
