@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
+import { Composer } from "./composer";
 import { Card } from "@/components/dashboard/primitives";
 import { formatDate } from "@/lib/format";
 import {
@@ -156,22 +157,26 @@ export function PostEditor() {
     }
   };
 
-  /** Uploads and hands back a URL. The caller decides where it goes: the
-   *  cover field, or pasted into the body as an image. */
-  const upload = async (file: File | undefined, into: "cover" | "body") => {
-    if (!file || busy) return;
-    setBusy(true);
+  /** The one upload path. The composer places what comes back at the caret;
+   *  the cover field puts it in its own slot. */
+  const uploadImage = async (file: File): Promise<string> => {
     setError(null);
     try {
-      const url = await uploadPostImage(file);
-      setDraft((d) =>
-        into === "cover"
-          ? { ...d, coverUrl: url }
-          : { ...d, body: `${d.body}\n\n![](${url})\n` },
-      );
-      setNote("Image uploaded.");
+      return await uploadPostImage(file);
     } catch {
       setError("Couldn't upload that image.");
+      throw new Error("upload failed");
+    }
+  };
+
+  const uploadCover = async (file: File | undefined) => {
+    if (!file || busy) return;
+    setBusy(true);
+    try {
+      const url = await uploadImage(file);
+      setDraft((d) => ({ ...d, coverUrl: url }));
+    } catch {
+      // uploadImage has already said what went wrong.
     } finally {
       setBusy(false);
     }
@@ -251,7 +256,7 @@ export function PostEditor() {
             onClick={() => setPreview((v) => !v)}
             className="shrink-0 rounded-lg border border-rule-strong px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-paper-raised"
           >
-            {preview ? "Write" : "Preview"}
+            {preview ? "Keep writing" : "Preview post"}
           </button>
         }
       >
@@ -322,31 +327,17 @@ export function PostEditor() {
               />
             </Field>
 
-            <Field
-              label="Body"
-              hint="Markdown: ## heading, **bold**, `code`, - list, > quote, ![alt](url)"
-            >
-              <textarea
+            <div>
+              <span className="mb-1.5 block text-xs font-medium text-ink">
+                Body
+              </span>
+              <Composer
                 value={draft.body}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, body: e.target.value }))
-                }
-                rows={18}
-                spellCheck
-                className={`${INPUT} font-mono text-xs leading-relaxed`}
+                onChange={(body) => setDraft((d) => ({ ...d, body }))}
+                onUpload={uploadImage}
+                busy={busy}
               />
-              <label className="mt-2 inline-flex">
-                <span className={`${UPLOAD} ${busy ? "opacity-50" : ""}`}>
-                  Add an image
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => upload(e.target.files?.[0], "body")}
-                />
-              </label>
-            </Field>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
               <Field label="Cover image" hint="Optional. Shown on the index and in link previews">
@@ -368,7 +359,7 @@ export function PostEditor() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => upload(e.target.files?.[0], "cover")}
+                  onChange={(e) => uploadCover(e.target.files?.[0])}
                 />
               </label>
             </div>
