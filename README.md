@@ -4,11 +4,30 @@ Your data already trains AI models. You just never see a cent of it.
 
 Datavar is our attempt to fix that. We are building a data protocol where people contribute data on their own terms and get paid when it gets used. Every record carries a signed consent receipt, so an AI team licensing a dataset knows exactly who agreed to what, for which purpose, and until when. Nothing in it is scraped or pulled from some legal gray area.
 
-The protocol itself is still in the works. What you're looking at is the landing page for [datavar.ai](https://datavar.ai), which explains the idea to both sides of the market: the people supplying data and the teams buying it.
+The first piece of that protocol is live on Stellar testnet: a Soroban contract
+that holds consent receipts as ledger state, in
+[`contracts/`](contracts/README.md). The demand side is still simulated — see
+the caveats below for exactly what is and isn't real.
 
 ## Why a protocol and not just a marketplace
 
 A marketplace can sell you a dataset. It can't prove consent, and it can't revoke access when consent expires. We want consent, licensing terms, and payouts to live at the record level, enforced by the protocol rather than by a PDF nobody reads. That's the part we think is actually hard, and the part worth building.
+
+## Consent receipts on Stellar
+
+A receipt says who allowed which dataset to be used by whom, for what purpose,
+and until when. It lives in contract state rather than in our database, which is
+the whole argument: a buyer can check a receipt without an account with us, and
+revoking one ends it somewhere we cannot quietly edit. Two rules are enforced by
+the contract rather than by policy — consent always has an end date, and only the
+contributor who granted it can withdraw it.
+
+Deploy your own or point at the existing testnet deployment, then set
+`NEXT_PUBLIC_CONSENT_CONTRACT_ID`. Grant and revoke from
+`/dashboard/consent`; the signature comes from the contributor's wallet, and
+nothing on the server can sign in their place. Full instructions, the contract's
+interface, and how to query it yourself are in
+[`contracts/README.md`](contracts/README.md).
 
 ## Running locally
 
