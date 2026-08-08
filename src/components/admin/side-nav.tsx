@@ -29,6 +29,12 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
         <path d="M8 4.9v.9M8 10.2v.9M9.6 6.7c-.3-.5-.9-.9-1.6-.9-.9 0-1.6.5-1.6 1.1 0 1.5 3.2.8 3.2 2.3 0 .6-.7 1.1-1.6 1.1-.7 0-1.3-.3-1.6-.8" strokeLinecap="round" />
       </>
     ),
+    "/admin/blog": (
+      <>
+        <path d="M3 2.5h6.5L13 6v7.5H3z" strokeLinejoin="round" />
+        <path d="M9.5 2.5V6H13M5.5 8.5h5M5.5 11h3.5" strokeLinecap="round" />
+      </>
+    ),
   };
 
   return (
