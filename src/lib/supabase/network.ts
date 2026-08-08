@@ -1,12 +1,18 @@
 import { supabase } from "./client";
 
 /**
- * A contribution as the network sees it: who, what kind, how big, when. No
- * titles, descriptions or storage paths — the protocol-wide view never needs
- * to know what's inside anyone's dataset, only that it exists.
+ * A contribution as the network sees it: what kind, how big, when, and whether
+ * it has sold. No titles, no storage paths, and no addresses — the
+ * protocol-wide view never needed to know whose dataset it was looking at, only
+ * that the contributions came from different people.
+ *
+ * `contributor_id` is a hash, enough to count distinct contributors and no
+ * more. It comes from the `network_activity` view rather than the table, which
+ * is why this works without a session: the view is the entire public surface,
+ * and row-level security keeps the table itself out of reach. See schema.sql.
  */
 export type NetworkRow = {
-  owner_wallet: string;
+  contributor_id: string;
   source_type: string;
   byte_size: number;
   created_at: string;
@@ -14,16 +20,16 @@ export type NetworkRow = {
 
 /**
  * Ceiling on rows pulled into the browser for the network view. Well above
- * the testnet's real volume; when the table outgrows it, these aggregates
- * move server-side (a Postgres view) rather than paging here.
+ * the testnet's real volume; when the table outgrows it, this bucketing moves
+ * into Postgres rather than paging here.
  */
 const MAX_ROWS = 10_000;
 
-/** Every contribution on the protocol, newest first. */
+/** Every contribution on the protocol, newest first, anonymised. */
 export async function listNetworkDatasets(): Promise<NetworkRow[]> {
   const { data, error } = await supabase
-    .from("datasets")
-    .select("owner_wallet, source_type, byte_size, created_at")
+    .from("network_activity")
+    .select("contributor_id, source_type, byte_size, created_at")
     .order("created_at", { ascending: false })
     .limit(MAX_ROWS);
 

@@ -51,8 +51,8 @@ export function NetworkPanel() {
     const at = (r: NetworkRow) => new Date(r.created_at).getTime();
     const bytes = (list: NetworkRow[]) =>
       list.reduce((sum, r) => sum + r.byte_size, 0);
-    const wallets = (list: NetworkRow[]) =>
-      new Set(list.map((r) => r.owner_wallet));
+    const contributors = (list: NetworkRow[]) =>
+      new Set(list.map((r) => r.contributor_id));
 
     // "All" is still a window — it just starts at the first contribution, so
     // every chart below can share one bucketing path.
@@ -69,26 +69,27 @@ export function NetworkPanel() {
         ? null
         : rows.filter((r) => at(r) >= from - days * DAY && at(r) < from);
 
-    // When each wallet first showed up — the basis for both the cumulative
-    // curve and the "contributors before this window" baseline.
+    // When each contributor first showed up — the basis for both the
+    // cumulative curve and the "contributors before this window" baseline.
     const firstSeen = new Map<string, number>();
     for (const r of rows) {
       const t = at(r);
-      const known = firstSeen.get(r.owner_wallet);
-      if (known === undefined || t < known) firstSeen.set(r.owner_wallet, t);
+      const known = firstSeen.get(r.contributor_id);
+      if (known === undefined || t < known) firstSeen.set(r.contributor_id, t);
     }
     const joinedBefore = [...firstSeen.values()].filter((t) => t < from).length;
 
-    // Monthly payout estimate: per wallet, the median rate of every source
-    // category it has contributed to. Same table the landing estimator quotes.
+    // Monthly payout estimate: per contributor, the median rate of every
+    // source category they've contributed to. Same table the landing
+    // estimator quotes.
     let pool = 0;
-    const byWallet = new Map<string, Set<string>>();
+    const byContributor = new Map<string, Set<string>>();
     for (const r of rows) {
-      const set = byWallet.get(r.owner_wallet) ?? new Set<string>();
+      const set = byContributor.get(r.contributor_id) ?? new Set<string>();
       set.add(r.source_type);
-      byWallet.set(r.owner_wallet, set);
+      byContributor.set(r.contributor_id, set);
     }
-    for (const sources of byWallet.values()) {
+    for (const sources of byContributor.values()) {
       for (const id of sources) pool += SOURCE_RATES[id] ?? 0;
     }
 
@@ -118,8 +119,8 @@ export function NetworkPanel() {
       newDatasets: cur.length,
       contributors: firstSeen.size,
       joinedBefore,
-      active: wallets(cur).size,
-      activePrev: prev && wallets(prev).size,
+      active: contributors(cur).size,
+      activePrev: prev && contributors(prev).size,
       avg: cur.length ? bytes(cur) / cur.length : 0,
       avgPrev: prev && prev.length ? bytes(prev) / prev.length : 0,
       sources: sources.size,

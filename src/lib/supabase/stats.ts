@@ -6,14 +6,11 @@ import { supabase } from "./client";
  * hand. When the protocol has done nothing, these are zeros, and the page says
  * zero.
  *
- * Only the columns needed to count are selected: the landing page has no
- * business pulling dataset titles into every visitor's browser.
+ * These read the aggregate views rather than the tables. Row-level security
+ * puts the tables out of reach without a session, and rightly so: a landing
+ * page has no business pulling anyone's dataset rows into a visitor's browser
+ * to count them. Postgres does the counting; four numbers come back.
  */
-
-/** Ceiling on rows read for the aggregates. Same posture as the network view:
- *  well above testnet volume, and the signal to move these into a Postgres
- *  view when it stops being. */
-const MAX_ROWS = 10_000;
 
 /** How many unit-chart dots the page will draw before it stops adding them. */
 const MAX_UNITS = 480;
@@ -54,68 +51,51 @@ export const EMPTY_STATS: ProtocolStats = {
   avgStroopsBySource: {},
 };
 
-type DatasetRow = { id: string; owner_wallet: string };
-type SaleRow = {
-  dataset_id: string;
-  price_stroops: number;
-  status: string;
-  datasets: { source_type: string } | null;
+type TotalsRow = {
+  contributors: number;
+  datasets: number;
+  paid_stroops: number;
+  payouts: number;
 };
 
+type RateRow = { source_type: string; avg_price_stroops: number };
+
+type UnitRow = { sold: boolean };
+
 export async function loadProtocolStats(): Promise<ProtocolStats> {
-  const [datasetsResult, salesResult] = await Promise.all([
+  const [totalsResult, ratesResult, unitsResult] = await Promise.all([
+    supabase.from("protocol_totals").select("*").maybeSingle(),
+    supabase.from("source_rates").select("source_type, avg_price_stroops"),
     supabase
-      .from("datasets")
-      .select("id, owner_wallet")
+      .from("network_activity")
+      .select("sold")
       .order("created_at", { ascending: true })
-      .limit(MAX_ROWS),
-    supabase
-      .from("sales")
-      .select("dataset_id, price_stroops, status, datasets (source_type)")
-      .limit(MAX_ROWS),
+      .limit(MAX_UNITS),
   ]);
 
-  if (datasetsResult.error) throw datasetsResult.error;
+  if (totalsResult.error) throw totalsResult.error;
 
-  // The two halves degrade separately on purpose. `sales` arrives later than
-  // `datasets` in schema.sql, so an environment that hasn't re-run the schema
-  // has contributions but no sales table — and a 404 there should cost the
-  // page its payout figures, not the contributor count it can still prove.
-  const datasets = (datasetsResult.data ?? []) as DatasetRow[];
-  const sales = salesResult.error
-    ? []
-    : ((salesResult.data ?? []) as unknown as SaleRow[]);
+  const totals = (totalsResult.data ?? null) as TotalsRow | null;
+  if (!totals) return EMPTY_STATS;
 
-  const claimed = sales.filter((s) => s.status === "claimed");
-  const soldDatasetIds = new Set(sales.map((s) => s.dataset_id));
-
-  // Averages come from every sale, not just claimed ones: the price is agreed
-  // when the sale is made, and whether the contributor has pressed claim yet
-  // says nothing about what the data was worth.
-  const bySource = new Map<string, { total: number; count: number }>();
-  for (const sale of sales) {
-    const source = sale.datasets?.source_type;
-    if (!source) continue;
-    const entry = bySource.get(source) ?? { total: 0, count: 0 };
-    entry.total += Number(sale.price_stroops);
-    entry.count += 1;
-    bySource.set(source, entry);
-  }
+  // The three degrade separately on purpose: a deployment that hasn't re-run
+  // schema.sql may have one view and not the others, and a missing rate table
+  // should cost the page its estimator, not the contributor count it can prove.
+  const rates = ratesResult.error ? [] : ((ratesResult.data ?? []) as RateRow[]);
+  const units = unitsResult.error ? [] : ((unitsResult.data ?? []) as UnitRow[]);
 
   const avgStroopsBySource: Record<string, number> = {};
-  for (const [source, { total, count }] of bySource) {
-    avgStroopsBySource[source] = Math.round(total / count);
+  for (const rate of rates) {
+    avgStroopsBySource[rate.source_type] = Number(rate.avg_price_stroops);
   }
 
   return {
-    contributors: new Set(datasets.map((d) => d.owner_wallet)).size,
-    datasets: datasets.length,
-    paidStroops: claimed.reduce((sum, s) => sum + Number(s.price_stroops), 0),
-    payouts: claimed.length,
-    units: datasets
-      .slice(0, MAX_UNITS)
-      .map((d) => ({ sold: soldDatasetIds.has(d.id) })),
-    unitsTruncated: datasets.length > MAX_UNITS,
+    contributors: Number(totals.contributors),
+    datasets: Number(totals.datasets),
+    paidStroops: Number(totals.paid_stroops),
+    payouts: Number(totals.payouts),
+    units: units.map((u) => ({ sold: u.sold })),
+    unitsTruncated: Number(totals.datasets) > MAX_UNITS,
     avgStroopsBySource,
   };
 }

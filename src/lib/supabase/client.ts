@@ -1,10 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
+import { currentToken } from "@/lib/auth/session-store";
 
 /**
- * Browser Supabase client — the data plane for files and their metadata.
- * The anon key is public by design; row-level security is what actually
- * protects the tables. There's no Supabase Auth session here: identity is the
- * connected Stellar wallet, carried on each row as `owner_wallet`.
+ * Supabase client — the data plane for files and their metadata.
+ *
+ * Identity is still the connected Stellar wallet rather than a Supabase Auth
+ * user, but it is no longer merely asserted: after the wallet signs a SEP-10
+ * challenge the server mints a token carrying its address, and this client
+ * sends that token on every request. Row-level security reads the address out
+ * of it, so the database — not this code — decides which rows come back.
+ *
+ * Signed out, the token callback returns null and the client falls back to the
+ * anon key, which now reaches only the public aggregate views. That is what the
+ * landing page and the server render with, and it is all a stranger gets.
  */
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -16,13 +24,23 @@ if (!url || !anonKey) {
 }
 
 export const supabase = createClient(url, anonKey, {
-  auth: {
-    // No user sessions — the wallet is the identity, so don't let the client
-    // try to persist or refresh a Supabase auth token that never exists.
-    persistSession: false,
-    autoRefreshToken: false,
-  },
+  // Called before every request, so a session that arrives, expires or is
+  // signed out takes effect on the next query without rebuilding the client.
+  // On the server there is no browser session and this is always null.
+  accessToken: async () => currentToken(),
 });
+
+/**
+ * A client bound to one caller's session token, for server routes acting on
+ * behalf of a contributor. The same row-level security applies to it as to the
+ * browser — a route holding a session cannot reach further than the wallet
+ * that session belongs to.
+ */
+export function supabaseForToken(token: string) {
+  return createClient(url!, anonKey!, {
+    accessToken: async () => token,
+  });
+}
 
 /** Storage bucket that holds the raw dataset files. Private; see schema SQL. */
 export const DATASETS_BUCKET = "datasets";
