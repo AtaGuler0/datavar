@@ -1,35 +1,42 @@
 import Link from "next/link";
 import { Logo } from "./logo";
+import { DOC_GROUPS, docHref } from "@/lib/docs";
 
-const COLUMNS = [
-  {
-    title: "Product",
-    links: ["How it works", "Earnings", "Data sources", "Payouts", "Security"],
-  },
-  {
-    title: "For AI teams",
-    links: ["Datasets", "Cohort builder", "API docs", "Pricing", "Talk to sales"],
-  },
-  {
-    title: "Company",
-    links: ["About", "Careers", "Blog", "Press", "Contact"],
-  },
-  {
-    title: "Legal",
-    links: [
-      "Privacy policy",
-      "Terms of service",
-      "Consent framework",
-      "Subprocessors",
-      "DPA",
-    ],
-  },
+/**
+ * Four columns of plans used to stand here — Careers, Pricing, DPA and the
+ * rest — none of them links, because none of those pages existed. Showing the
+ * shape of a company we aren't yet was the wrong trade: a reader can't tell a
+ * roadmap from a lie by looking at it.
+ *
+ * What replaced them is the documentation, which covers most of what those
+ * headings promised and, unlike them, exists. The columns are built from the
+ * docs index itself, so a page added there appears here without anyone
+ * remembering to.
+ */
+
+/** The docs groups worth surfacing in a footer, in order. Risk and status
+ *  earns its place: it's the page we'd rather a sceptic found first. */
+const FOOTER_GROUPS = ["Getting started", "Protocol", "Risk and status"];
+
+const COLUMNS = FOOTER_GROUPS.map((title) => {
+  const group = DOC_GROUPS.find((g) => g.title === title);
+  return {
+    title,
+    links:
+      group?.pages.map((page) => ({
+        label: page.title,
+        href: docHref(page.slug),
+      })) ?? [],
+  };
+});
+
+/** The rest of the site, for a reader who came here looking for the exits. */
+const ELSEWHERE = [
+  { label: "All documentation", href: "/docs" },
+  { label: "Blog", href: "/blog" },
+  { label: "Become a contributor", href: "/dashboard" },
+  { label: "For AI teams", href: "/docs/licensing" },
 ];
-
-/** Footer entries that have a destination. Everything else is a plan. */
-const LIVE: Record<string, string> = {
-  Blog: "/blog",
-};
 
 export function SiteFooter() {
   return (
@@ -43,38 +50,58 @@ export function SiteFooter() {
               people who produce the data should be the people who profit from
               it.
             </p>
+            <Link
+              href="/docs"
+              className="group mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-ink"
+            >
+              Read the docs
+              <svg
+                viewBox="0 0 16 16"
+                className="h-3 w-3 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d="M6 3l5 5-5 5" strokeLinecap="round" />
+              </svg>
+            </Link>
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {COLUMNS.map((column) => (
               <div key={column.title}>
-                <h3 className="text-xs font-medium text-ink">
-                  {column.title}
-                </h3>
+                <h3 className="text-xs font-medium text-ink">{column.title}</h3>
                 <ul className="mt-4 space-y-2.5">
-                  {/* Not links. None of these pages exist yet, and an anchor
-                      that quietly scrolls you back to the top is a worse
-                      answer than one that never invited the click. They stay
-                      visible because the shape of the product is worth
-                      showing; they become links when they lead somewhere. */}
                   {column.links.map((link) => (
-                    <li key={link}>
-                      {/* Only the ones that lead somewhere are links. */}
-                      {LIVE[link] ? (
-                        <Link
-                          href={LIVE[link]}
-                          className="text-sm text-ink-faint transition-colors hover:text-ink"
-                        >
-                          {link}
-                        </Link>
-                      ) : (
-                        <span className="text-sm text-ink-faint">{link}</span>
-                      )}
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="text-sm text-ink-faint transition-colors hover:text-ink"
+                      >
+                        {link.label}
+                      </Link>
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
+
+            <div>
+              <h3 className="text-xs font-medium text-ink">Elsewhere</h3>
+              <ul className="mt-4 space-y-2.5">
+                {ELSEWHERE.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-ink-faint transition-colors hover:text-ink"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
