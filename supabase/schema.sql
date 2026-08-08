@@ -93,6 +93,16 @@ create policy "datasets insert"
 -- No update or delete policy, so neither is possible for anyone. A contributed
 -- record's history is not something the contributor edits in place.
 
+-- Policies pick which rows come back; privileges decide whether the table can
+-- be addressed at all, and enabling RLS does not imply them. Without this the
+-- answer is "permission denied for table datasets" before a policy is ever
+-- consulted. Granted only what a policy could allow: no update, no delete.
+--
+-- anon is left off deliberately. Signed out there is no policy here that can
+-- pass, so the grant would buy nothing but a different error message — a
+-- stranger gets the aggregate views and that is the whole offer.
+grant select, insert on public.datasets to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Table: sales
 --
@@ -154,6 +164,11 @@ create policy "sales update"
   on public.sales for update
   using (public.can_settle() and owner_wallet = public.current_wallet())
   with check (public.can_settle() and owner_wallet = public.current_wallet());
+
+-- Update is in the grant because the payout route has to write the outcome;
+-- the policy above is what narrows it to the token that made the payment.
+-- Delete is in nobody's, so it is in no grant either.
+grant select, insert, update on public.sales to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Storage: private "datasets" bucket
@@ -336,6 +351,13 @@ create policy "posts update"
 create policy "posts delete"
   on public.posts for delete
   using (public.is_operator());
+
+-- Unlike the other two tables, anon belongs here: a published post is meant to
+-- be readable without a session, and the blog renders on the server with no
+-- token to send. The read policy still hides drafts. Writing is operators, who
+-- are signed in by definition.
+grant select on public.posts to anon, authenticated;
+grant insert, update, delete on public.posts to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Storage: public "post-images" bucket

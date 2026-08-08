@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-label="The four instalments of the sixty thousand dollar award we are asking for, ending at a mainnet launch.">
+  <style>
+    .bg { fill: #fbfaf9; }
+    .eyebrow { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.16em; fill: #8b91a1; }
+    .amt { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #16192b; }
+    .pct { font: 400 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #8b91a1; }
+    .h { font: 500 14px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #16192b; }
+    .p { font: 400 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #565d70; }
+    .here { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #8f4437; }
+    .rule { stroke: rgba(22,25,43,0.1); stroke-width: 1; }
+    .total { font: 500 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #565d70; }
+  </style>
+
+  <rect class="bg" width="960" height="300" />
+
+  <text class="eyebrow" x="60" y="42">STELLAR COMMUNITY FUND · BUILD AWARD</text>
+  <text class="total" x="900" y="42" text-anchor="end">$60,000 over five months</text>
+
+  <!-- not submitted marker -->
+  <text class="here" x="60" y="76">we are here, before any of it</text>
+  <line x1="52" y1="88" x2="52" y2="176" stroke="#8f4437" stroke-width="1.5" stroke-dasharray="4 4" />
+
+  <!-- the bar: 840px wide, split 10 / 20 / 30 / 40 with 2px gaps -->
+  <g>
+    <rect x="60"  y="126" width="82"  height="42" rx="4" fill="#8b95ad" />
+    <rect x="144" y="126" width="166" height="42" rx="4" fill="#6b7899" />
+    <rect x="312" y="126" width="250" height="42" rx="4" fill="#4a5878" />
+    <rect x="564" y="126" width="336" height="42" rx="4" fill="#2f3a55" />
+  </g>
+
+  <!-- amounts above -->
+  <g class="amt">
+    <text x="60" y="116">$6k</text>
+    <text x="144" y="116">$12k</text>
+    <text x="312" y="116">$18k</text>
+    <text x="564" y="116">$24k</text>
+  </g>
+  <g class="pct">
+    <text x="102" y="116">10%</text>
+    <text x="196" y="116">20%</text>
+    <text x="364" y="116">30%</text>
+    <text x="616" y="116">40%</text>
+  </g>
+
+  <!-- labels below -->
+  <g>
+    <text class="h" x="60" y="196">T0</text>
+    <text class="p" x="60" y="218">On being</text>
+    <text class="p" x="60" y="236">accepted.</text>
+  </g>
+  <g>
+    <text class="h" x="144" y="196">T1</text>
+    <text class="p" x="144" y="218">Consent ledger</text>
+    <text class="p" x="144" y="236">hardened and</text>
+    <text class="p" x="144" y="254">under CI.</text>
+  </g>
+  <g>
+    <text class="h" x="312" y="196">T2</text>
+    <text class="p" x="312" y="218">A buyer side that is not a simulation:</text>
+    <text class="p" x="312" y="236">catalogue, licence, revocation that</text>
+    <text class="p" x="312" y="254">actually closes access.</text>
+  </g>
+  <g>
+    <text class="h" x="564" y="196">T3</text>
+    <text class="p" x="564" y="218">Mainnet. Real money, real data, real consent.</text>
+    <text class="p" x="564" y="236">Required to be the last instalment by the</text>
+    <text class="p" x="564" y="254">fund's own rules, not by our choice.</text>
+  </g>
+
+  <line class="rule" x1="60" y1="278" x2="900" y2="278" />
+</svg>

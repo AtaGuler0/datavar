@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 290" role="img" aria-label="Five steps from a file on your device to a payout: hash, signed grant, ledger receipt, public check, payment.">
+  <style>
+    .bg { fill: #fbfaf9; }
+    .spine { stroke: rgba(22,25,43,0.2); stroke-width: 1; }
+    .num { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #fbfaf9; }
+    .h { font: 500 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #16192b; }
+    .p { font: 400 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #565d70; }
+    .foot { font: 400 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #8b91a1; }
+    .disc { fill: #3d4a6b; }
+    .disc-on { fill: #2f3a55; }
+  </style>
+
+  <rect class="bg" width="960" height="290" />
+
+  <line class="spine" x1="134" y1="60" x2="826" y2="60" />
+
+  <g>
+    <circle class="disc" cx="134" cy="60" r="15" />
+    <text class="num" x="134" y="65" text-anchor="middle">1</text>
+    <text class="h" x="52" y="112">Hash</text>
+    <text class="p" x="52" y="136">SHA-256, computed in</text>
+    <text class="p" x="52" y="156">your browser, before</text>
+    <text class="p" x="52" y="176">the file moves.</text>
+  </g>
+
+  <g>
+    <circle class="disc" cx="307" cy="60" r="15" />
+    <text class="num" x="307" y="65" text-anchor="middle">2</text>
+    <text class="h" x="225" y="112">Grant</text>
+    <text class="p" x="225" y="136">A named buyer, a stated</text>
+    <text class="p" x="225" y="156">purpose, an end date.</text>
+    <text class="p" x="225" y="176">Your wallet signs it.</text>
+  </g>
+
+  <g>
+    <circle class="disc-on" cx="480" cy="60" r="15" />
+    <text class="num" x="480" y="65" text-anchor="middle">3</text>
+    <text class="h" x="398" y="112">Receipt</text>
+    <text class="p" x="398" y="136">Soroban contract state</text>
+    <text class="p" x="398" y="156">on Stellar, rather than</text>
+    <text class="p" x="398" y="176">a row in our database.</text>
+  </g>
+
+  <g>
+    <circle class="disc" cx="653" cy="60" r="15" />
+    <text class="num" x="653" y="65" text-anchor="middle">4</text>
+    <text class="h" x="571" y="112">Check</text>
+    <text class="p" x="571" y="136">Anyone calls is_valid.</text>
+    <text class="p" x="571" y="156">No account with us,</text>
+    <text class="p" x="571" y="176">no API key, no asking.</text>
+  </g>
+
+  <g>
+    <circle class="disc" cx="826" cy="60" r="15" />
+    <text class="num" x="826" y="65" text-anchor="middle">5</text>
+    <text class="h" x="744" y="112">Payout</text>
+    <text class="p" x="744" y="136">XLM to your wallet,</text>
+    <text class="p" x="744" y="156">with a hash that</text>
+    <text class="p" x="744" y="176">resolves on an explorer.</text>
+  </g>
+
+  <line class="spine" x1="52" y1="216" x2="908" y2="216" />
+  <text class="foot" x="52" y="246">Two rules sit in the contract, not in a policy: consent always carries an end date,</text>
+  <text class="foot" x="52" y="266">and only the contributor who granted it can withdraw it.</text>
+</svg>

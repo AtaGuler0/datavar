@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-label="Content flows from people to a platform to an AI lab. Money flows back from the lab to the platform and stops before reaching the people.">
+  <style>
+    .bg { fill: #fbfaf9; }
+    .eyebrow { font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.16em; fill: #8b91a1; }
+    .node { font: 500 16px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #16192b; }
+    .sub { font: 400 12px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #8b91a1; }
+    .flow { font: 400 13px ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #565d70; }
+    .money { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #3d4a6b; }
+    .stop { font: 500 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #8f4437; }
+    .box { fill: #f5f3f1; stroke: rgba(22,25,43,0.2); stroke-width: 1; }
+    .arrow-grey { stroke: #8b91a1; stroke-width: 1.5; fill: none; }
+    .arrow-slate { stroke: #3d4a6b; stroke-width: 2; fill: none; }
+    .arrow-stop { stroke: #8f4437; stroke-width: 2; fill: none; stroke-dasharray: 5 5; }
+    .person { fill: #8b91a1; }
+  </style>
+
+  <defs>
+    <marker id="tipGrey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b91a1" />
+    </marker>
+    <marker id="tipSlate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3d4a6b" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="960" height="360" />
+
+  <text class="eyebrow" x="40" y="40">CONTENT</text>
+  <text class="eyebrow" x="40" y="330">MONEY</text>
+
+  <!-- People -->
+  <g>
+    <rect class="box" x="60" y="130" width="200" height="86" rx="10" />
+    <g class="person">
+      <circle cx="88" cy="152" r="4" /><circle cx="109" cy="152" r="4" /><circle cx="130" cy="152" r="4" />
+      <circle cx="151" cy="152" r="4" /><circle cx="172" cy="152" r="4" /><circle cx="193" cy="152" r="4" />
+      <circle cx="214" cy="152" r="4" /><circle cx="235" cy="152" r="4" />
+      <circle cx="88" cy="173" r="4" /><circle cx="109" cy="173" r="4" /><circle cx="130" cy="173" r="4" />
+      <circle cx="151" cy="173" r="4" /><circle cx="172" cy="173" r="4" /><circle cx="193" cy="173" r="4" />
+      <circle cx="214" cy="173" r="4" /><circle cx="235" cy="173" r="4" />
+      <circle cx="88" cy="194" r="4" /><circle cx="109" cy="194" r="4" /><circle cx="130" cy="194" r="4" />
+      <circle cx="151" cy="194" r="4" /><circle cx="172" cy="194" r="4" /><circle cx="193" cy="194" r="4" />
+      <circle cx="214" cy="194" r="4" /><circle cx="235" cy="194" r="4" />
+    </g>
+    <text class="node" x="160" y="244" text-anchor="middle">The people who wrote it</text>
+  </g>
+
+  <!-- Platform -->
+  <g>
+    <rect class="box" x="390" y="130" width="180" height="86" rx="10" />
+    <text class="node" x="480" y="170" text-anchor="middle">Platform</text>
+    <text class="sub" x="480" y="192" text-anchor="middle">holds the corpus</text>
+  </g>
+
+  <!-- Lab -->
+  <g>
+    <rect class="box" x="700" y="130" width="180" height="86" rx="10" />
+    <text class="node" x="790" y="170" text-anchor="middle">AI lab</text>
+    <text class="sub" x="790" y="192" text-anchor="middle">needs the corpus</text>
+  </g>
+
+  <!-- Content flows right -->
+  <path class="arrow-grey" marker-end="url(#tipGrey)" d="M270 100 H380" />
+  <path class="arrow-grey" marker-end="url(#tipGrey)" d="M580 100 H690" />
+  <text class="flow" x="325" y="88" text-anchor="middle">posts</text>
+  <text class="flow" x="635" y="88" text-anchor="middle">a licence</text>
+
+  <!-- Money flows left, then stops -->
+  <path class="arrow-slate" marker-end="url(#tipSlate)" d="M690 260 H580" />
+  <text class="money" x="635" y="284" text-anchor="middle">$60M a year</text>
+
+  <path class="arrow-stop" d="M380 260 H320" />
+  <line x1="316" y1="242" x2="316" y2="278" stroke="#8f4437" stroke-width="3" />
+  <text class="stop" x="300" y="284" text-anchor="end">stops here</text>
+</svg>
