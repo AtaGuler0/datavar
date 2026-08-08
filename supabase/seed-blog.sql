@@ -6,8 +6,7 @@
 --
 -- Posts are normally written in /admin/blog. These are seeded instead because
 -- they are part of the change they describe and belong in the same review as
--- the code. Their illustrations live in public/blog rather than the uploads
--- bucket for the same reason.
+-- the code.
 
 insert into public.posts
   (slug, title, excerpt, body, author, cover_url, cover_alt, published_at)
@@ -52,8 +51,8 @@ Pulling on one thread found others.
 No number appears on this site without something behind it, and no failure path invents one. Where a thing is not built, the page says it is not built. That reads worse today. It is the only version that survives being checked.
 $body$,
   'Datavar',
-  '/blog/numbers-before-after.png',
-  'The three figures that used to lead the landing page, beside what the database actually counts.',
+  null,
+  null,
   '2026-08-08T09:00:00Z'
 ), (
   'consent-is-a-contract-now',
@@ -107,11 +106,21 @@ $body$,
   'Anatomy of a consent receipt',
   'One receipt, field by field, and the three parties who can touch it. Every line of this is readable on testnet right now, by you, without asking us.',
   $body$
-We announced the consent contract last week without showing anyone what is actually in a receipt. This is that, field by field, using a real one from testnet rather than a diagram of an ideal one.
+We announced the consent contract last week without showing anyone what is actually in a receipt. This is that, field by field, using a real one from testnet rather than a description of an ideal one.
 
 ## Seven fields
 
-The cover above is receipt 3, read straight off the contract. Four of the fields are the terms, and three of them do work worth explaining.
+Receipt 3, read straight off the contract:
+
+- `id` is 3. Assigned by the contract, and what everything else quotes.
+- `contributor` is `GDBN…MI5H`. The only key that can withdraw this.
+- `buyer` is `GCCG…4XWA`. Named, not consulted: a grant needs one signature and it is not theirs.
+- `dataset_hash` is `ae52eb3727…`
+- `purpose` is "Speech model fine-tuning". Plain words, capped at 200 characters.
+- `expires_at` is 6 November 2026.
+- `revoked_at` is empty, so the consent stands.
+
+Three of those do work worth explaining.
 
 `dataset_hash` is a SHA-256 your browser computes before the file leaves your device. It is what the receipt commits to, which means the record can prove exactly which bytes were covered without anyone holding those bytes. If a buyer later shows up with a file, you can hash it and see whether it is the one you agreed to.
 
@@ -121,11 +130,13 @@ The cover above is receipt 3, read straight off the contract. Four of the fields
 
 ## Who can touch it
 
-![Three columns showing what a contributor, any reader, and an operator can each do with a receipt](/blog/receipt-permissions.png)
+Three parties, and the contract decides between them rather than our code.
 
-The middle column is the one that justifies the whole design. Reads take no account, no key and no request to us. A buyer deciding whether they may use a record calls `is_valid` and gets the same answer our own dashboard gets, from the same place, at the same moment.
+**The contributor** can `grant` and `revoke`, signing with their own key. What they cannot do is untrain a model, which is why every grant carries an end date.
 
-The right column is the one we would most like you to check rather than believe. The admin key upgrades the contract code. It does not grant, and it does not revoke. We tested that by signing a revocation of somebody else's receipt with it: the transaction failed on-chain and the consent stayed standing.
+**Anyone at all** can call `is_valid`, `receipt` and `receipts_of`. No account, no API key, no request to us. This is the part that justifies the whole design: a buyer deciding whether they may use a record gets the same answer our own dashboard gets, from the same place, at the same moment.
+
+**We, and operators** hold the admin key. It upgrades the contract code and does nothing else. That is the claim we would most like you to check rather than believe, so we checked it too: a revocation of somebody else's receipt, signed with the admin key, failed on-chain and the consent stayed standing.
 
 ## Doing it yourself
 
@@ -147,8 +158,8 @@ A receipt proves what was agreed. It does not prove what a buyer did afterwards,
 The buyer side is still simulated, and all of this is testnet. The contract is not.
 $body$,
   'Datavar',
-  '/blog/receipt-anatomy.png',
-  'Receipt 3 on testnet, with each of its seven fields and what the contract does with it.',
+  null,
+  null,
   '2026-08-08T18:00:00Z'
 )
 on conflict (slug) do update set
