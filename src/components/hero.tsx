@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CrowdField } from "./crowd-field";
+import { SectionLink } from "./section-link";
 
 export function Hero() {
   return (
@@ -16,7 +17,7 @@ export function Hero() {
       />
 
       <div className="mx-auto w-full max-w-4xl px-6 text-center">
-        <a
+        <SectionLink
           href="#how"
           className="group inline-flex items-center gap-2 rounded-full border border-rule bg-paper/70 px-3.5 py-1.5 text-xs text-ink-dim backdrop-blur-sm transition-colors hover:border-rule-strong hover:text-ink"
         >
@@ -31,7 +32,7 @@ export function Hero() {
           >
             <path d="M6 3l5 5-5 5" strokeLinecap="round" />
           </svg>
-        </a>
+        </SectionLink>
 
         <h1 className="display mt-7 text-[2.625rem] font-medium text-balance text-ink sm:text-6xl lg:text-[4.5rem]">
           Your data is already training AI.
@@ -51,7 +52,7 @@ export function Hero() {
           >
             Become a contributor
           </Link>
-          <a
+          <SectionLink
             href="#buyers"
             className="group inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rule bg-paper-raised px-6 py-3 text-sm font-medium text-ink transition-colors duration-200 hover:bg-paper-sunken sm:w-auto"
           >
@@ -65,7 +66,7 @@ export function Hero() {
             >
               <path d="M6 3l5 5-5 5" strokeLinecap="round" />
             </svg>
-          </a>
+          </SectionLink>
         </div>
       </div>
     </section>
