@@ -57,7 +57,7 @@ function useGreeting() {
 }
 
 export function Overview() {
-  const { address, status } = useWallet();
+  const { address, status, session } = useWallet();
   const greeting = useGreeting();
   const [period, setPeriod] = useState<Period>(30);
 
@@ -68,8 +68,13 @@ export function Overview() {
     rows: Dataset[];
   } | null>(null);
 
+  // Waits for the session, not just the address. Row-level security answers a
+  // sessionless read with zero rows rather than an error, so running this early
+  // would report "no datasets on file" — a confident wrong answer — and the
+  // token arriving later would not have refetched it.
+  const token = session?.token;
   useEffect(() => {
-    if (!address) return;
+    if (!address || !token) return;
     let cancelled = false;
     listDatasets(address)
       .then((rows) => !cancelled && setLoaded({ wallet: address, rows }))
@@ -77,11 +82,11 @@ export function Overview() {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, token]);
 
   const datasets =
-    address && loaded?.wallet === address ? loaded.rows : null;
-  const connected = status === "connected" && !!address;
+    address && token && loaded?.wallet === address ? loaded.rows : null;
+  const connected = status === "connected" && !!address && !!token;
 
   const stats = useMemo(() => {
     if (!datasets) return null;

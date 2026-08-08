@@ -22,7 +22,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "bytes": "8249318b7d71dd2db763950f98d35214e972e30089cec19f9da56e05d537bc41"
+                  "bytes": "1c1728f2e74b17e9733cb0e338011160a71f14de395844f7357928a2e2c7a89a"
                 },
                 {
                   "string": "LLM pre-training"
@@ -122,7 +122,7 @@
                       "symbol": "dataset_hash"
                     },
                     "val": {
-                      "bytes": "8249318b7d71dd2db763950f98d35214e972e30089cec19f9da56e05d537bc41"
+                      "bytes": "1c1728f2e74b17e9733cb0e338011160a71f14de395844f7357928a2e2c7a89a"
                     }
                   },
                   {

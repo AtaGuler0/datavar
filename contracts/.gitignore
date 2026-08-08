@@ -4,3 +4,8 @@ target
 # Local settings
 .soroban
 .stellar
+
+# Test snapshots are regenerated on every run and their contents are random
+# (BytesN::random, Address::generate), so tracking them means a dirty tree
+# after every `cargo test` and diffs that say nothing.
+test_snapshots
