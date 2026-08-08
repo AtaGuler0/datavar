@@ -83,17 +83,6 @@ body {
   text-transform: uppercase;
 }
 
-/* Marquee travels exactly half its width: the list is rendered twice, so the
-   reset at -50% is invisible. */
-@keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
 /* Scroll-reveal primitive — see components/reveal.tsx */
 .reveal {
   opacity: 0;

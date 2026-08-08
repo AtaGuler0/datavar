@@ -1,40 +1,29 @@
-const TEAMS = [
-  "Northwind AI",
-  "Halcyon Labs",
-  "Meridian Research",
-  "Kessler Institute",
-  "Vantage Robotics",
-  "Sable Health",
-  "Orbit Foundation",
-];
+/**
+ * The credential strip under the hero. This used to be a scrolling wall of
+ * client names, which claimed licensing relationships that don't exist. It now
+ * says the one thing about the team that is checkable: where they worked
+ * before. Two names don't need to scroll — a marquee with two items reads as a
+ * loading bug — so it sits still and centred.
+ */
+const PRIOR = ["io.net", "Hacken"];
 
 export function Marquee() {
   return (
     <section className="relative border-y border-rule bg-paper py-10">
-      <p className="mb-8 text-center font-mono text-[0.6875rem] tracking-[0.18em] text-ink-faint uppercase">
-        Datasets licensed by teams at
+      <p className="mb-6 text-center font-mono text-[0.6875rem] tracking-[0.18em] text-ink-faint uppercase">
+        Built by people previously at
       </p>
 
-      <div className="group relative overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_12%,#000_88%,transparent)]">
-        <div className="flex w-max animate-[marquee_38s_linear_infinite] group-hover:[animation-play-state:paused]">
-          {[0, 1].map((copy) => (
-            <ul
-              key={copy}
-              aria-hidden={copy === 1}
-              className="flex shrink-0 items-center"
-            >
-              {TEAMS.map((team) => (
-                <li
-                  key={team}
-                  className="px-9 text-lg font-medium whitespace-nowrap text-ink-faint transition-colors duration-300 hover:text-ink-dim"
-                >
-                  {team}
-                </li>
-              ))}
-            </ul>
-          ))}
-        </div>
-      </div>
+      <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-3">
+        {PRIOR.map((company) => (
+          <li
+            key={company}
+            className="text-lg font-medium whitespace-nowrap text-ink-faint transition-colors duration-300 hover:text-ink-dim"
+          >
+            {company}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
