@@ -10,7 +10,9 @@ import {
   StrKey,
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
-import { supabase } from "@/lib/supabase/client";
+import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
+import { readSession } from "@/lib/auth/session";
+import { supabaseForToken } from "@/lib/supabase/client";
 import {
   STELLAR,
   STROOPS_PER_XLM,
@@ -27,6 +29,16 @@ import type { Sale } from "@/lib/supabase/sales";
  * row first is what makes a double-clicked claim safe — the status moves to
  * 'claiming' under a conditional update, so the second request finds nothing
  * left to take. If the payment then fails the row goes back to 'unclaimed'.
+ *
+ * Who is claiming comes from the signed session, never from the request body.
+ * It used to come from the body, which meant a stranger could force someone
+ * else's payout out early — the money still went to its owner, but the timing
+ * was not the stranger's to choose.
+ *
+ * The row is then touched with a token minted here and good for two minutes,
+ * carrying the `settle` claim that the sales update policy requires. The
+ * session token a browser holds does not have it, so marking a payout claimed
+ * is something only this route can do — see can_settle() in schema.sql.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -39,11 +51,26 @@ export const runtime = "nodejs";
  */
 const NEW_ACCOUNT_RESERVE_STROOPS = 2 * STROOPS_PER_XLM;
 
+/** Long enough to submit a payment and record it; short enough to be useless
+ *  if it ever leaked. */
+const SETTLE_TTL_SECONDS = 120;
+
 function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
 export async function POST(request: Request) {
+  // Who is asking comes before what the server has configured: a stranger has
+  // no business learning whether payouts are set up here.
+  const session = readSession(request);
+  if (!session) {
+    return fail("Sign in with your wallet to claim a payout.", 401);
+  }
+  const wallet = session.wallet;
+  if (!StrKey.isValidEd25519PublicKey(wallet)) {
+    return fail("That session isn't for a Stellar address.", 400);
+  }
+
   const secret = process.env.STELLAR_TREASURY_SECRET;
   if (!secret) {
     return fail(
@@ -52,7 +79,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { saleId?: unknown; wallet?: unknown };
+  let body: { saleId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -60,12 +87,27 @@ export async function POST(request: Request) {
   }
 
   const saleId = typeof body.saleId === "string" ? body.saleId : null;
-  const wallet = typeof body.wallet === "string" ? body.wallet : null;
-  if (!saleId || !wallet) {
-    return fail("Both saleId and wallet are required.", 400);
+  if (!saleId) {
+    return fail("A saleId is required.", 400);
   }
-  if (!StrKey.isValidEd25519PublicKey(wallet)) {
-    return fail("That isn't a Stellar address.", 400);
+
+  let supabase;
+  try {
+    // Deliberately not session.admin: this token exists to settle one row, and
+    // an operator claiming their own payout has no reason to carry operator
+    // rights into it.
+    const { token } = issueToken({
+      wallet,
+      admin: false,
+      ttlSeconds: SETTLE_TTL_SECONDS,
+      settle: true,
+    });
+    supabase = supabaseForToken(token);
+  } catch (e) {
+    return fail(
+      e instanceof AuthConfigError ? e.message : "Couldn't authorise the payout.",
+      503,
+    );
   }
 
   // Claim the row before paying: only the request that flips unclaimed →

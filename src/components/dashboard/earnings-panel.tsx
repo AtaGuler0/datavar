@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { authHeaders } from "@/lib/auth/session-store";
 import { formatDate } from "@/lib/format";
 import {
   explorerTxUrl,
@@ -77,10 +78,12 @@ export function EarningsPanel() {
     setClaiming(sale.id);
     setError(null);
     try {
+      // The wallet being paid comes from the session, not from here — the
+      // route reads it out of the token and ignores anything we'd claim.
       const res = await fetch("/api/claims", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ saleId: sale.id, wallet: address }),
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ saleId: sale.id }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "The payout didn't go through.");

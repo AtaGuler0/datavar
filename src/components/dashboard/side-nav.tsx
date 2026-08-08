@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "../logo";
-import { isAdminWallet } from "@/lib/admin";
 import { truncateAddress } from "@/lib/stellar/config";
 import { CONTRIBUTOR_NAV, isSectionActive } from "./nav-config";
 import { useWallet } from "./wallet-provider";
@@ -124,7 +123,7 @@ export function SidebarWallet() {
  */
 export function SideNav() {
   const pathname = usePathname();
-  const { address } = useWallet();
+  const { session } = useWallet();
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
@@ -168,8 +167,9 @@ export function SideNav() {
 
       <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
         {/* The way through to the operator side, for the wallets that have
-            one. Everyone else never learns the panel exists. */}
-        {isAdminWallet(address) && (
+            one. Everyone else never learns the panel exists — and could not
+            get in if they did, since the claim comes from a signed session. */}
+        {session?.admin && (
           <Link
             href="/admin"
             className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
