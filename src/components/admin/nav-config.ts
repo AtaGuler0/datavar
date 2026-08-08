@@ -29,6 +29,12 @@ export const ADMIN_NAV: AdminSection[] = [
     index: "02",
     summary: "The full sale ledger and the payouts settled against it.",
   },
+  {
+    href: "/admin/blog",
+    label: "Blog",
+    index: "03",
+    summary: "Write and publish posts without waiting for a deploy.",
+  },
 ];
 
 /** Exact match for the root, prefix match for the deeper sections. */

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "./logo";
 
 const COLUMNS = [
@@ -24,6 +25,11 @@ const COLUMNS = [
     ],
   },
 ];
+
+/** Footer entries that have a destination. Everything else is a plan. */
+const LIVE: Record<string, string> = {
+  Blog: "/blog",
+};
 
 export function SiteFooter() {
   return (
@@ -52,8 +58,18 @@ export function SiteFooter() {
                       visible because the shape of the product is worth
                       showing; they become links when they lead somewhere. */}
                   {column.links.map((link) => (
-                    <li key={link} className="text-sm text-ink-faint">
-                      {link}
+                    <li key={link}>
+                      {/* Only the ones that lead somewhere are links. */}
+                      {LIVE[link] ? (
+                        <Link
+                          href={LIVE[link]}
+                          className="text-sm text-ink-faint transition-colors hover:text-ink"
+                        >
+                          {link}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-ink-faint">{link}</span>
+                      )}
                     </li>
                   ))}
                 </ul>
