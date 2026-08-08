@@ -70,14 +70,6 @@ export function SiteNav() {
               {link.label}
             </SectionLink>
           ))}
-          {/* A real route, so a real Link: it prefetches and navigates, which
-              SectionLink's fragment handling has nothing to offer. */}
-          <Link
-            href="/docs"
-            className="text-sm text-ink-dim transition-colors hover:text-ink"
-          >
-            Docs
-          </Link>
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -130,13 +122,6 @@ export function SiteNav() {
                 {link.label}
               </SectionLink>
             ))}
-            <Link
-              href="/docs"
-              onClick={() => setOpen(false)}
-              className="border-b border-rule py-4 text-lg text-ink"
-            >
-              Docs
-            </Link>
           </div>
           <Link
             href="/dashboard"

@@ -15,26 +15,35 @@ import { DOC_GROUPS, docHref } from "@/lib/docs";
  */
 
 /** The docs groups worth surfacing in a footer, in order. */
-const FOOTER_GROUPS = ["Getting started", "Contributing", "For AI teams"];
+const FOOTER_GROUPS = ["Getting started", "Contributing", "Enterprise"];
+
+/** Links that sit under a group heading without being docs pages themselves.
+ *  Keyed by group title, so renaming a group in `docs.ts` has to be mirrored
+ *  here — an unmatched key drops the link silently. */
+const EXTRA_LINKS: Record<string, { label: string; href: string }[]> = {
+  Enterprise: [{ label: "For AI teams", href: "/docs/licensing" }],
+};
 
 const COLUMNS = FOOTER_GROUPS.map((title) => {
   const group = DOC_GROUPS.find((g) => g.title === title);
   return {
     title,
-    links:
-      group?.pages.map((page) => ({
+    links: [
+      ...(group?.pages.map((page) => ({
         label: page.title,
         href: docHref(page.slug),
-      })) ?? [],
+      })) ?? []),
+      ...(EXTRA_LINKS[title] ?? []),
+    ],
   };
 });
 
-/** The rest of the site, for a reader who came here looking for the exits. */
+/** The rest of the site, for a reader who came here looking for the exits.
+ *  The docs index isn't listed here — "Read the docs" beside it already goes
+ *  there, and one column over the pages themselves are linked one by one. */
 const ELSEWHERE = [
-  { label: "All documentation", href: "/docs" },
   { label: "Blog", href: "/blog" },
   { label: "Become a contributor", href: "/dashboard" },
-  { label: "For AI teams", href: "/docs/licensing" },
 ];
 
 export function SiteFooter() {
@@ -72,8 +81,10 @@ export function SiteFooter() {
               <div key={column.title}>
                 <h3 className="text-xs font-medium text-ink">{column.title}</h3>
                 <ul className="mt-4 space-y-2.5">
+                  {/* Keyed on the label too: a column can carry two links to
+                      the same page under different names. */}
                   {column.links.map((link) => (
-                    <li key={link.href}>
+                    <li key={`${link.label}:${link.href}`}>
                       <Link
                         href={link.href}
                         className="text-sm text-ink-faint transition-colors hover:text-ink"

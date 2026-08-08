@@ -184,7 +184,7 @@ Rare data earns more than common data. The estimator on the home page quotes the
     ],
   },
   {
-    title: "For AI teams",
+    title: "Enterprise",
     pages: [
       {
         slug: "licensing",

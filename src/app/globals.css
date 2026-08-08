@@ -97,6 +97,23 @@ body {
   transform: none;
 }
 
+/* Arrival transition for a docs page — see components/docs/doc-article.tsx.
+   Reveal can't do this job: it waits for an intersection, and a page that is
+   already in view on arrival never gets one. This runs on mount instead.
+   Shorter and shallower than a scroll reveal on purpose — the reader asked
+   for this page, so the motion is there to show the swap, not to be noticed.
+   The reduced-motion block below collapses it to nothing. */
+@keyframes doc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.doc-enter {
+  animation: doc-enter 0.32s var(--ease-out-soft) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

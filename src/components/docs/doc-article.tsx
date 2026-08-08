@@ -13,7 +13,10 @@ export function DocArticle({ page }: { page: DocPage }) {
   const { prev, next } = docNeighbours(page.slug);
 
   return (
-    <article className="max-w-2xl py-12 md:py-16">
+    /* Keyed on the slug so moving between two docs pages remounts the article
+       and the animation runs again — without it React reuses the element and
+       only the text changes, which is the snap this is here to soften. */
+    <article key={page.slug} className="doc-enter max-w-2xl py-12 md:py-16">
       <header className="border-b border-rule pb-8">
         {group && <p className="eyebrow text-ink-faint">{group.title}</p>}
         <h1 className="display mt-3 text-[2rem] font-medium text-balance text-ink sm:text-[2.5rem]">
