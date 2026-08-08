@@ -8,9 +8,19 @@ export const STELLAR = {
   network: "TESTNET",
   networkPassphrase: "Test SDF Network ; September 2015",
   horizonUrl: "https://horizon-testnet.stellar.org",
+  sorobanRpcUrl: "https://soroban-testnet.stellar.org",
   friendbotUrl: "https://friendbot.stellar.org",
   explorerUrl: "https://stellar.expert/explorer/testnet",
 } as const;
+
+/**
+ * The consent receipt contract — where a grant stops being a row we own and
+ * becomes ledger state anyone can check. Public by nature: an address is meant
+ * to be read, and the whole argument for putting consent on-chain is that
+ * verifying it needs nobody's permission.
+ */
+export const CONSENT_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_CONSENT_CONTRACT_ID ?? "";
 
 /**
  * The account payouts are paid from. Public key only — it's an address, it's
@@ -45,6 +55,11 @@ export function explorerTxUrl(hash: string): string {
 /** An account on the public explorer. */
 export function explorerAccountUrl(address: string): string {
   return `${STELLAR.explorerUrl}/account/${address}`;
+}
+
+/** A contract on the public explorer — the "go check it yourself" link. */
+export function explorerContractUrl(contractId: string): string {
+  return `${STELLAR.explorerUrl}/contract/${contractId}`;
 }
 
 /** GABC…WXYZ — enough to recognise an address without spilling the whole key. */

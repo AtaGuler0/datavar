@@ -7,8 +7,21 @@ import { Marquee } from "@/components/marquee";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { Stats } from "@/components/stats";
+import { EMPTY_STATS, loadProtocolStats } from "@/lib/supabase/stats";
 
-export default function Home() {
+/**
+ * The landing page quotes live protocol numbers, so it can't be baked at build
+ * time and left there. Five minutes is long enough that a visitor spike costs
+ * one query, short enough that a contributor who just uploaded sees themselves
+ * counted.
+ */
+export const revalidate = 300;
+
+export default async function Home() {
+  // A landing page that 500s because the data plane blinked would be a poor
+  // trade for four numbers. Fall back to zeros — never to invented ones.
+  const stats = await loadProtocolStats().catch(() => EMPTY_STATS);
+
   return (
     <>
       <SiteNav />
@@ -16,9 +29,9 @@ export default function Home() {
         <Hero />
         <Marquee />
         <HowItWorks />
-        <Earnings />
+        <Earnings avgStroopsBySource={stats.avgStroopsBySource} />
         <Buyers />
-        <Stats />
+        <Stats stats={stats} />
         <Faq />
       </main>
       <SiteFooter />

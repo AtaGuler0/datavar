@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
+import { STELLAR } from "@/lib/stellar/config";
 import { WalletPicker } from "./wallet-picker";
 
 /**
@@ -30,6 +31,13 @@ type WalletContextValue = {
   status: WalletStatus;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  /**
+   * Hands unsigned XDR to the connected wallet and returns what comes back
+   * signed. The only path by which anything in this product is authorised by a
+   * contributor — the key stays in their extension, and the server never sees
+   * a transaction it could have signed itself.
+   */
+  signTransaction: (xdr: string) => Promise<string>;
 };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -161,8 +169,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setStatus("disconnected");
   }, []);
 
+  const signTransaction = useCallback(
+    async (xdr: string) => {
+      if (!address) throw new Error("Connect a wallet first.");
+      const kit = await loadKit();
+      const { signedTxXdr } = await kit.signTransaction(xdr, {
+        address,
+        networkPassphrase: STELLAR.networkPassphrase,
+      });
+      return signedTxXdr;
+    },
+    [address],
+  );
+
   return (
-    <WalletContext.Provider value={{ address, status, connect, disconnect }}>
+    <WalletContext.Provider
+      value={{ address, status, connect, disconnect, signTransaction }}
+    >
       {children}
       {pickerOpen && (
         <WalletPicker
