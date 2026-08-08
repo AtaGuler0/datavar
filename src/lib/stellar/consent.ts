@@ -3,6 +3,8 @@ import {
   Address,
   BASE_FEE,
   Contract,
+  FeeBumpTransaction,
+  Transaction,
   TransactionBuilder,
   contract,
   nativeToScVal,
@@ -244,6 +246,43 @@ export function buildRevoke(input: {
   ]);
 }
 
+/**
+ * Refuses to relay anything that isn't a call to the consent contract.
+ *
+ * Without this the submit route is an open transaction relay: it would happily
+ * broadcast any signed Stellar transaction, letting a stranger use this server
+ * to put arbitrary operations on the network from our address rather than
+ * theirs. Nothing is stolen by it — the signer still pays the fee — but it is
+ * our infrastructure, and a relay is not what we set out to run.
+ */
+function assertConsentCall(tx: Transaction | FeeBumpTransaction): void {
+  if ("innerTransaction" in tx) {
+    throw new ConsentError("Fee-bump transactions aren't accepted here.");
+  }
+  if (tx.operations.length !== 1) {
+    throw new ConsentError("That transaction does more than one thing.");
+  }
+
+  const operation = tx.operations[0];
+  if (operation.type !== "invokeHostFunction") {
+    throw new ConsentError("That isn't a contract call.");
+  }
+
+  const func = operation.func;
+  if (
+    func.switch() !== xdr.HostFunctionType.hostFunctionTypeInvokeContract()
+  ) {
+    throw new ConsentError("That isn't a contract invocation.");
+  }
+
+  const target = Address.fromScAddress(
+    func.invokeContract().contractAddress(),
+  ).toString();
+  if (target !== CONSENT_CONTRACT_ID) {
+    throw new ConsentError("That call isn't for the consent contract.");
+  }
+}
+
 /** How long to wait for a ledger to close on a submitted transaction. */
 const POLL_ATTEMPTS = 15;
 const POLL_INTERVAL_MS = 1_000;
@@ -273,6 +312,8 @@ export async function submit(signedXdr: string): Promise<string> {
   } catch {
     throw new ConsentError("That isn't a signed transaction.");
   }
+
+  assertConsentCall(tx);
 
   const sent = await rpcServer.sendTransaction(tx);
   if (sent.status === "ERROR" || sent.status === "DUPLICATE") {

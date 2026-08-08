@@ -1,4 +1,4 @@
-import { verifyToken, type SessionClaims } from "./jwt";
+import { AuthConfigError, verifyToken, type SessionClaims } from "./jwt";
 
 /**
  * Reading the session on a route. One helper, so no route invents its own idea
@@ -10,5 +10,13 @@ import { verifyToken, type SessionClaims } from "./jwt";
 export function readSession(request: Request): SessionClaims | null {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return null;
-  return verifyToken(header.slice(7).trim());
+  try {
+    return verifyToken(header.slice(7).trim());
+  } catch (e) {
+    // A server with no signing secret can verify nothing, so it has no
+    // sessions — which is "not signed in", not a crash. Anything else is a
+    // real fault and belongs upstairs.
+    if (e instanceof AuthConfigError) return null;
+    throw e;
+  }
 }
