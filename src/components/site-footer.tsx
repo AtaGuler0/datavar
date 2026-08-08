@@ -14,9 +14,8 @@ import { DOC_GROUPS, docHref } from "@/lib/docs";
  * remembering to.
  */
 
-/** The docs groups worth surfacing in a footer, in order. Risk and status
- *  earns its place: it's the page we'd rather a sceptic found first. */
-const FOOTER_GROUPS = ["Getting started", "Protocol", "Risk and status"];
+/** The docs groups worth surfacing in a footer, in order. */
+const FOOTER_GROUPS = ["Getting started", "Contributing", "For AI teams"];
 
 const COLUMNS = FOOTER_GROUPS.map((title) => {
   const group = DOC_GROUPS.find((g) => g.title === title);
