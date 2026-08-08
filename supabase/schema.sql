@@ -257,3 +257,116 @@ create view public.source_rates as
 grant select on public.network_activity to anon, authenticated;
 grant select on public.protocol_totals  to anon, authenticated;
 grant select on public.source_rates     to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Table: posts
+--
+-- The blog. Written in the operator panel rather than committed as files, so
+-- publishing does not need a deploy, and stored as markdown rather than HTML
+-- so nothing ever renders a string an author pasted in.
+--
+-- `published_at` carries three states in one column, which is why there is no
+-- boolean beside it: null is a draft, a past timestamp is live, and a future
+-- one is scheduled. Readers get the third for free.
+-- ---------------------------------------------------------------------------
+create table if not exists public.posts (
+  id            uuid        primary key default gen_random_uuid(),
+  slug          text        not null unique,
+  title         text        not null,
+  excerpt       text        not null,
+  body          text        not null,
+  author        text        not null default 'Datavar',
+  published_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+-- Added after the table existed, so this has to be conditional rather than
+-- part of the create above. A cover is optional: a post without one is a
+-- post, not a broken card.
+alter table public.posts add column if not exists cover_url text;
+alter table public.posts add column if not exists cover_alt text;
+
+create index if not exists posts_published_idx
+  on public.posts (published_at desc nulls last);
+
+-- Touching a row should record when, without every caller remembering to.
+create or replace function public.touch_updated_at()
+  returns trigger
+  language plpgsql
+  set search_path = ''
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists posts_touch_updated_at on public.posts;
+create trigger posts_touch_updated_at
+  before update on public.posts
+  for each row execute function public.touch_updated_at();
+
+alter table public.posts enable row level security;
+
+drop policy if exists "posts read"   on public.posts;
+drop policy if exists "posts insert" on public.posts;
+drop policy if exists "posts update" on public.posts;
+drop policy if exists "posts delete" on public.posts;
+
+-- A published post is public: no session, no anon key beyond the one the
+-- browser already has. Drafts and scheduled posts are visible to operators
+-- only, and the same policy is what keeps a draft out of the sitemap.
+create policy "posts read"
+  on public.posts for select
+  using (
+    (published_at is not null and published_at <= now())
+    or public.is_operator()
+  );
+
+create policy "posts insert"
+  on public.posts for insert
+  with check (public.is_operator());
+
+create policy "posts update"
+  on public.posts for update
+  using (public.is_operator())
+  with check (public.is_operator());
+
+create policy "posts delete"
+  on public.posts for delete
+  using (public.is_operator());
+
+-- ---------------------------------------------------------------------------
+-- Storage: public "post-images" bucket
+--
+-- Public on purpose, and the opposite of the datasets bucket in every way
+-- that matters. These are illustrations meant to be fetched by strangers from
+-- a link preview, so read is open to everyone; writing is operators only,
+-- because the alternative is an open file host with our name on it.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('post-images', 'post-images', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "post images read"   on storage.objects;
+drop policy if exists "post images write"  on storage.objects;
+drop policy if exists "post images update" on storage.objects;
+drop policy if exists "post images delete" on storage.objects;
+
+create policy "post images read"
+  on storage.objects for select
+  using (bucket_id = 'post-images');
+
+create policy "post images write"
+  on storage.objects for insert
+  with check (bucket_id = 'post-images' and public.is_operator());
+
+create policy "post images update"
+  on storage.objects for update
+  using (bucket_id = 'post-images' and public.is_operator())
+  with check (bucket_id = 'post-images' and public.is_operator());
+
+create policy "post images delete"
+  on storage.objects for delete
+  using (bucket_id = 'post-images' and public.is_operator());

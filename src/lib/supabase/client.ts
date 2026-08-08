@@ -44,3 +44,7 @@ export function supabaseForToken(token: string) {
 
 /** Storage bucket that holds the raw dataset files. Private; see schema SQL. */
 export const DATASETS_BUCKET = "datasets";
+
+/** Illustrations for blog posts. Public read, operator write, and the only
+ *  bucket in the product where that is the right way round. */
+export const POST_IMAGES_BUCKET = "post-images";
