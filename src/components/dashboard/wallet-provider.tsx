@@ -10,6 +10,13 @@ import {
   type ReactNode,
 } from "react";
 import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
+import {
+  clearSession,
+  getSession,
+  setSession,
+  subscribe,
+  type Session,
+} from "@/lib/auth/session-store";
 import { STELLAR } from "@/lib/stellar/config";
 import { WalletPicker } from "./wallet-picker";
 
@@ -22,15 +29,38 @@ import { WalletPicker } from "./wallet-picker";
  * while the picker UI is our own (wallet-picker.tsx) — the stock modal
  * neither matches the product nor belongs in its DOM. Loading the kit lazily
  * in the browser keeps this provider SSR-safe.
+ *
+ * Connecting and signing in are two different things, and the difference is
+ * the whole point. Connecting only asks the wallet what address it holds,
+ * which anyone can claim. Signing in makes it prove it: the server issues a
+ * SEP-10 challenge, the wallet signs it, and what comes back is a session the
+ * database will honour. Nothing that reads a contributor's own rows works
+ * without one, because row-level security refuses — which is the intended
+ * outcome, not a wrinkle to route around.
  */
 
-export type WalletStatus = "loading" | "disconnected" | "connecting" | "connected";
+export type WalletStatus =
+  | "loading"
+  | "disconnected"
+  | "connecting"
+  | "authenticating"
+  | "connected";
 
 type WalletContextValue = {
   address: string | null;
   status: WalletStatus;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  /**
+   * The proved session, or null while the wallet is merely connected. Its
+   * token is what the Supabase client and our own routes are shown.
+   */
+  session: Session | null;
+  /** Runs the SEP-10 handshake. Called automatically after connecting, and by
+   *  hand when a session has expired. */
+  signIn: () => Promise<void>;
+  /** Why the last sign-in attempt didn't produce a session. */
+  signInError: string | null;
   /**
    * Hands unsigned XDR to the connected wallet and returns what comes back
    * signed. The only path by which anything in this product is authorised by a
@@ -84,6 +114,8 @@ function loadKit() {
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<WalletStatus>("loading");
+  const [session, setSessionState] = useState<Session | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
 
   // Our picker's state: open/closed, the kit's wallet list, which wallet is
   // mid-handshake, and the last failure worth telling the user about.
@@ -95,19 +127,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Guards against a resolved promise calling setState after unmount.
   const mounted = useRef(true);
 
+  // The store is the source of truth for the token — the Supabase client reads
+  // it from outside React — so mirror it into state rather than duplicating it.
+  useEffect(() => subscribe(setSessionState), []);
+
   // On load, restore a previously connected wallet. The kit persists the
   // address in localStorage, so getAddress resolves without reopening a modal.
+  // A stored session survives the reload too, so the common case is no wallet
+  // prompt at all; one belonging to a different address is dropped, because a
+  // switched account must prove itself again.
   useEffect(() => {
     mounted.current = true;
     loadKit()
       .then((kit) => kit.getAddress())
       .then(({ address }) => {
         if (!mounted.current) return;
+        const stored = getSession();
+        if (stored && stored.wallet !== address) {
+          clearSession();
+        } else if (stored) {
+          setSessionState(stored);
+        }
         setAddress(address);
         setStatus("connected");
       })
       .catch(() => {
         if (!mounted.current) return;
+        clearSession();
         setStatus("disconnected");
       });
     return () => {
@@ -132,6 +178,64 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * The SEP-10 handshake: fetch a challenge for this address, have the wallet
+   * sign it, hand it back. What returns is a token carrying an address the
+   * server watched get proved, rather than one the browser asserted.
+   */
+  const authenticate = useCallback(async (target: string) => {
+    setStatus("authenticating");
+    setSignInError(null);
+    try {
+      const issued = await fetch(
+        `/api/auth/challenge?wallet=${encodeURIComponent(target)}`,
+      );
+      const challenge = await issued.json();
+      if (!issued.ok) {
+        throw new Error(challenge?.error ?? "Couldn't start sign-in.");
+      }
+
+      const kit = await loadKit();
+      const { signedTxXdr } = await kit.signTransaction(challenge.challenge, {
+        address: target,
+        networkPassphrase: challenge.networkPassphrase,
+      });
+
+      const created = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge: signedTxXdr }),
+      });
+      const result = await created.json();
+      if (!created.ok) {
+        throw new Error(result?.error ?? "Sign-in didn't complete.");
+      }
+
+      setSession({
+        token: result.token,
+        wallet: result.wallet,
+        admin: result.admin,
+        expiresAt: result.expiresAt,
+        adminListEmpty: result.adminListEmpty,
+      });
+    } catch (e) {
+      if (!mounted.current) return;
+      // Declining the signature is a decision, not a failure.
+      const message = e instanceof Error ? e.message : "";
+      setSignInError(
+        /reject|denied|declin|cancel/i.test(message)
+          ? "You declined the signature, so you're connected but not signed in."
+          : message || "Sign-in didn't complete.",
+      );
+    } finally {
+      if (mounted.current) setStatus("connected");
+    }
+  }, []);
+
+  const signIn = useCallback(async () => {
+    if (address) await authenticate(address);
+  }, [address, authenticate]);
+
   // The actual handshake, once a wallet is picked in our UI.
   const choose = useCallback(async (wallet: ISupportedWallet) => {
     setConnectingId(wallet.id);
@@ -144,6 +248,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAddress(address);
       setStatus("connected");
       setPickerOpen(false);
+      // Straight into signing in: connecting on its own reaches nothing, so
+      // stopping here would only mean a second click to reach the same place.
+      await authenticate(address);
     } catch {
       // Rejected in the extension, or it never answered — stay open so the
       // user can retry or pick another wallet.
@@ -153,7 +260,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } finally {
       if (mounted.current) setConnectingId(null);
     }
-  }, []);
+  }, [authenticate]);
 
   const closePicker = useCallback(() => {
     setPickerOpen(false);
@@ -165,7 +272,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(async () => {
     const kit = await loadKit();
     await kit.disconnect();
+    clearSession();
     setAddress(null);
+    setSignInError(null);
     setStatus("disconnected");
   }, []);
 
@@ -184,7 +293,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <WalletContext.Provider
-      value={{ address, status, connect, disconnect, signTransaction }}
+      value={{
+        address,
+        status,
+        connect,
+        disconnect,
+        signTransaction,
+        session,
+        signIn,
+        signInError,
+      }}
     >
       {children}
       {pickerOpen && (

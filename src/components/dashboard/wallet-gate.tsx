@@ -4,12 +4,18 @@ import type { ReactNode } from "react";
 import { useWallet } from "./wallet-provider";
 
 /**
- * Gates a section's content behind a connected wallet. The page heading stays
+ * Gates a section's content behind a signed-in wallet. The page heading stays
  * visible either way — you should always know where you are — but nothing that
- * depends on an identity renders until there is one.
+ * depends on an identity renders until there is a proved one.
  *
- * Disconnected → a quiet panel that names what's missing and offers to connect.
- * Loading      → a neutral skeleton so restored sessions don't flash the gate.
+ * Connected and signed in are separate states here because they are separate
+ * facts. A connected wallet has told us an address; a signed-in one has proved
+ * it holds the key, and only that gets a session the database will accept.
+ * Rendering the dashboard for a merely-connected wallet would show empty
+ * panels and blame the network for it.
+ *
+ * Loading and mid-signature both render the skeleton, so a restored session
+ * doesn't flash the gate on the way in.
  */
 export function WalletGate({
   children,
@@ -18,18 +24,54 @@ export function WalletGate({
   children: ReactNode;
   message?: string;
 }) {
-  const { status, connect } = useWallet();
+  const { status, session, connect, signIn, signInError } = useWallet();
 
-  if (status === "loading") {
+  if (status === "loading" || status === "authenticating") {
     return (
       <div className="mt-10 h-40 animate-pulse rounded-2xl border border-rule bg-paper-raised" />
     );
   }
 
-  if (status === "connected") {
+  if (status === "connected" && session) {
     return <>{children}</>;
   }
 
+  // Connected but unproved: the wallet is there, the signature isn't. Usually
+  // because it was declined, or because a session expired overnight.
+  if (status === "connected") {
+    return (
+      <Panel
+        message={
+          signInError ??
+          "One signature proves this wallet is yours. It's a Stellar challenge transaction that can never reach the network, and nothing else."
+        }
+        label="Sign in"
+        onClick={signIn}
+      />
+    );
+  }
+
+  return (
+    <Panel
+      message={message ?? "Connect your wallet to see this."}
+      label={status === "connecting" ? "Connecting…" : "Connect wallet"}
+      onClick={connect}
+      disabled={status === "connecting"}
+    />
+  );
+}
+
+function Panel({
+  message,
+  label,
+  onClick,
+  disabled,
+}: {
+  message: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="mt-10 rounded-2xl border border-rule bg-paper px-6 py-14 text-center shadow-sm shadow-ink/[0.03]">
       <div
@@ -48,16 +90,14 @@ export function WalletGate({
           <path d="M10.5 10h2" strokeLinecap="round" />
         </svg>
       </div>
-      <p className="mt-5 text-pretty text-ink-dim">
-        {message ?? "Connect your wallet to see this."}
-      </p>
+      <p className="mx-auto mt-5 max-w-sm text-pretty text-ink-dim">{message}</p>
       <button
         type="button"
-        onClick={connect}
-        disabled={status === "connecting"}
+        onClick={onClick}
+        disabled={disabled}
         className="mt-6 inline-flex items-center rounded-lg bg-slate-deep px-5 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
       >
-        {status === "connecting" ? "Connecting…" : "Connect wallet"}
+        {label}
       </button>
     </div>
   );
