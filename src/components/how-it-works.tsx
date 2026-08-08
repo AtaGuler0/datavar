@@ -16,9 +16,9 @@ const STEPS = [
   },
   {
     n: "03",
-    title: "Get paid every month",
-    body: "Rare, high-signal data earns more than common data. Take it as cash to your bank, or as stablecoin to your wallet. Your call, every payout.",
-    detail: ["Bank transfer", "PayPal", "USDC"],
+    title: "Get paid when it sells",
+    body: "Rare, high-signal data earns more than common data. Payouts settle in XLM straight to your wallet, with the transaction hash to check them against.",
+    detail: ["XLM payouts", "On-chain receipts", "PayPal soon"],
   },
 ];
 

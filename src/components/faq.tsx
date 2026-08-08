@@ -16,7 +16,7 @@ const FAQS = [
   },
   {
     q: "Do I need a crypto wallet?",
-    a: "No. Bank transfer and PayPal are the defaults, and most people never touch the crypto option. USDC exists because contributors in 41 countries can't all receive a US bank transfer. It's an on-ramp, not the point.",
+    a: "For now, yes. Your wallet is your account — there's no separate login — and payouts settle in XLM on Stellar, which is also what makes them cheap enough to pay out per sale. PayPal is planned so you won't have to, but it isn't live yet.",
   },
   {
     q: "How is this different from a data broker?",

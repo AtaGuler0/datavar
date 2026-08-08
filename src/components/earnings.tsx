@@ -1,25 +1,41 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { formatXlm, STROOPS_PER_XLM } from "@/lib/stellar/config";
 import { Reveal } from "./reveal";
 import { SectionHeading } from "./section-heading";
 
-/** Median monthly payout per source, in USD. Placeholder economics. */
+/**
+ * What a contributor might earn. The rates are not ours to invent: each one is
+ * the average price a dataset in that category has actually settled for on
+ * testnet, passed in from the sales table. A category nobody has licensed yet
+ * has no rate, and the estimator says so rather than filling the gap.
+ */
+
+/** Source categories, mirroring SOURCE_TYPES in lib/supabase/datasets. */
 const SOURCES = [
-  { id: "browsing", label: "Browsing & search", rate: 9.4, on: true },
-  { id: "purchases", label: "Purchase history", rate: 6.2, on: true },
-  { id: "health", label: "Health & wearables", rate: 12.8, on: false },
-  { id: "location", label: "Location trails", rate: 7.5, on: false },
-  { id: "media", label: "Streaming & media", rate: 4.1, on: true },
-  { id: "voice", label: "Voice samples", rate: 8.9, on: false },
-  { id: "messaging", label: "Messaging metadata", rate: 5.3, on: false },
-  { id: "dashcam", label: "Dashcam & camera", rate: 11.2, on: false },
+  { id: "browsing", label: "Browsing & search" },
+  { id: "purchases", label: "Purchase history" },
+  { id: "health", label: "Health & wearables" },
+  { id: "location", label: "Location trails" },
+  { id: "media", label: "Streaming & media" },
+  { id: "voice", label: "Voice samples" },
+  { id: "messaging", label: "Messaging metadata" },
+  { id: "dashcam", label: "Dashcam & camera" },
 ];
 
+/** Which checkboxes start ticked. A UI default, not a claim about anything. */
+const DEFAULT_ON = ["browsing", "purchases", "media"];
+
+/**
+ * How a payout can leave the protocol. XLM is the only one that exists — the
+ * claim route settles it on Stellar — so it is the only one that is selectable.
+ * PayPal is listed because it is planned, and marked so nobody reads it as
+ * shipped.
+ */
 const PAYOUTS = [
-  { id: "bank", label: "Bank transfer", note: "2–3 business days · free" },
-  { id: "paypal", label: "PayPal", note: "Instant · 1.5% fee" },
-  { id: "usdc", label: "USDC", note: "Instant · network fee" },
+  { id: "xlm", label: "XLM", note: "Instant · network fee", ready: true },
+  { id: "paypal", label: "PayPal", note: "Soon", ready: false },
 ];
 
 /** Eases a number toward its target so the total never snaps. */
@@ -68,27 +84,38 @@ function useTween(target: number) {
   return value;
 }
 
-export function Earnings() {
-  const [selected, setSelected] = useState<string[]>(
-    SOURCES.filter((s) => s.on).map((s) => s.id),
+export function Earnings({
+  avgStroopsBySource,
+}: {
+  avgStroopsBySource: Record<string, number>;
+}) {
+  const [selected, setSelected] = useState<string[]>(DEFAULT_ON);
+  const [datasetsEach, setDatasetsEach] = useState(1);
+  const [payout, setPayout] = useState("xlm");
+
+  /** True once anything at all has been licensed. Until then there is no
+   *  average to quote and the panel says that instead of showing a zero. */
+  const priced = Object.keys(avgStroopsBySource).length > 0;
+
+  const total = useMemo(
+    () =>
+      SOURCES.filter((s) => selected.includes(s.id)).reduce(
+        (sum, s) => sum + (avgStroopsBySource[s.id] ?? 0),
+        0,
+      ) * datasetsEach,
+    [selected, datasetsEach, avgStroopsBySource],
   );
-  const [volume, setVolume] = useState(100);
-  const [payout, setPayout] = useState("bank");
 
-  const monthly = useMemo(() => {
-    const base = SOURCES.filter((s) => selected.includes(s.id)).reduce(
-      (sum, s) => sum + s.rate,
-      0,
-    );
-    return base * (volume / 100);
-  }, [selected, volume]);
-
-  const shown = useTween(monthly);
+  const shown = useTween(total / STROOPS_PER_XLM);
 
   const toggle = (id: string) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
+
+  /** A source's average, or a dash when nothing in that category has sold. */
+  const rateLabel = (id: string) =>
+    avgStroopsBySource[id] ? `${formatXlm(avgStroopsBySource[id])} XLM` : "—";
 
   return (
     <section
@@ -99,7 +126,11 @@ export function Earnings() {
         <SectionHeading
           eyebrow="Earnings"
           title="See what you're currently giving away for free."
-          body="Pick the sources you'd be willing to share. These are median payouts from the last 90 days. An estimate, not a promise."
+          body={
+            priced
+              ? "Pick the sources you'd be willing to share. Rates are what datasets in each category have actually settled for on testnet — an average of real sales, not a promise."
+              : "Pick the sources you'd be willing to share. Nothing has been licensed on testnet yet, so there are no averages to quote — these fill in from real sales as the protocol runs."
+          }
           align="center"
         />
 
@@ -133,7 +164,7 @@ export function Earnings() {
                       />
                       <span className="flex-1 truncate">{source.label}</span>
                       <span className="font-mono text-[0.6875rem] text-ink-faint tabular-nums">
-                        ${source.rate.toFixed(2)}
+                        {rateLabel(source.id)}
                       </span>
                     </button>
                   );
@@ -143,43 +174,42 @@ export function Earnings() {
               <div className="mt-9">
                 <div className="flex items-baseline justify-between">
                   <label htmlFor="volume" className="eyebrow text-ink-faint">
-                    How much you&apos;re online
+                    Datasets per source
                   </label>
                   <span className="font-mono text-xs text-ink-dim">
-                    {volume < 80
-                      ? "Light"
-                      : volume > 130
-                        ? "Heavy"
-                        : "Average"}
+                    {datasetsEach}×
                   </span>
                 </div>
                 <input
                   id="volume"
                   type="range"
-                  min={50}
-                  max={160}
-                  step={5}
-                  value={volume}
-                  onChange={(e) => setVolume(Number(e.target.value))}
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={datasetsEach}
+                  onChange={(e) => setDatasetsEach(Number(e.target.value))}
                   className="mt-4 h-1 w-full cursor-pointer appearance-none rounded-full bg-paper-sunken accent-slate"
                 />
               </div>
 
               <div className="mt-9">
                 <p className="eyebrow text-ink-faint">Paid out as</p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {PAYOUTS.map((method) => {
                     const active = payout === method.id;
                     return (
                       <button
                         key={method.id}
                         type="button"
+                        disabled={!method.ready}
                         onClick={() => setPayout(method.id)}
                         aria-pressed={active}
                         className={`rounded-lg border p-3 text-left transition-colors duration-200 ${
-                          active
-                            ? "border-slate/35 bg-slate/8"
-                            : "border-rule bg-paper-raised hover:border-rule-strong"
+                          !method.ready
+                            ? "cursor-not-allowed border-rule bg-paper-raised opacity-55"
+                            : active
+                              ? "border-slate/35 bg-slate/8"
+                              : "border-rule bg-paper-raised hover:border-rule-strong"
                         }`}
                       >
                         <span
@@ -201,17 +231,30 @@ export function Earnings() {
             <div className="relative flex flex-col justify-between gap-8 bg-paper-raised p-7 sm:p-9">
               <div className="relative">
                 <p className="eyebrow text-ink-faint">Estimated payout</p>
-                <p className="display mt-4 text-5xl font-medium text-ink tabular-nums sm:text-6xl">
-                  <span className="text-ink-faint">$</span>
-                  {shown.toFixed(2)}
-                  <span className="ml-2 align-middle text-base font-normal text-ink-faint">
-                    /mo
-                  </span>
-                </p>
-                <p className="mt-4 font-mono text-xs text-ink-faint">
-                  ≈ ${(monthly * 12).toFixed(0)} a year · {selected.length}{" "}
-                  source{selected.length === 1 ? "" : "s"}
-                </p>
+                {priced ? (
+                  <>
+                    <p className="display mt-4 text-5xl font-medium text-ink tabular-nums sm:text-6xl">
+                      {shown.toFixed(2)}
+                      <span className="ml-2 align-middle text-base font-normal text-ink-faint">
+                        XLM
+                      </span>
+                    </p>
+                    <p className="mt-4 font-mono text-xs text-ink-faint">
+                      {selected.length} source
+                      {selected.length === 1 ? "" : "s"} · {datasetsEach}{" "}
+                      dataset{datasetsEach === 1 ? "" : "s"} each
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="display mt-4 text-5xl font-medium text-ink-faint tabular-nums sm:text-6xl">
+                      —
+                    </p>
+                    <p className="mt-4 font-mono text-xs text-ink-faint">
+                      no settled sales to average yet
+                    </p>
+                  </>
+                )}
 
                 {/* Itemised breakdown — shows the number is built, not invented. */}
                 <ul className="mt-8 space-y-px border-t border-rule">
@@ -227,7 +270,9 @@ export function Earnings() {
                         </span>
                       </span>
                       <span className="shrink-0 font-mono text-xs text-ink-faint tabular-nums">
-                        ${((s.rate * volume) / 100).toFixed(2)}
+                        {avgStroopsBySource[s.id]
+                          ? `${formatXlm(avgStroopsBySource[s.id] * datasetsEach)} XLM`
+                          : "—"}
                       </span>
                     </li>
                   ))}

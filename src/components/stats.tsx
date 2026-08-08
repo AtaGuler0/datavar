@@ -1,54 +1,79 @@
+import { formatXlm } from "@/lib/stellar/config";
+import type { ProtocolStats } from "@/lib/supabase/stats";
 import { Reveal } from "./reveal";
 
-const STATS = [
-  { value: "128,400", label: "contributors paid" },
-  { value: "$4.2M", label: "paid out to date" },
-  { value: "41", label: "countries" },
-  { value: "24h", label: "revocation propagation" },
-];
+/**
+ * Protocol numbers, counted from the tables rather than written down. Every
+ * value here is live testnet data, which currently means most of them are
+ * small — that is the honest state of the thing and the section says so
+ * instead of dressing it up.
+ */
+export function Stats({ stats }: { stats: ProtocolStats }) {
+  const count = (n: number) => n.toLocaleString("en-US");
 
-/** 1 dot = 1,000 contributors. The crowd again, now as a unit chart. */
-const DOTS = 128;
-const LIT = 41;
+  const metrics = [
+    { value: count(stats.contributors), label: "contributors" },
+    { value: count(stats.datasets), label: "datasets contributed" },
+    { value: `${formatXlm(stats.paidStroops)} XLM`, label: "paid out to date" },
+    { value: count(stats.payouts), label: "payouts settled on-chain" },
+  ];
 
-export function Stats() {
+  const sold = stats.units.filter((u) => u.sold).length;
+
   return (
     <section className="border-t border-rule bg-paper-raised">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <div className="grid gap-12 lg:grid-cols-[1fr_1.1fr] lg:items-center lg:gap-20">
           <Reveal>
             <div>
-              <p className="eyebrow text-ink-faint">The crowd, so far</p>
-              <div
-                className="mt-6 flex flex-wrap gap-[7px]"
-                role="img"
-                aria-label="Unit chart: 128 dots, one per thousand contributors, of which 41 are highlighted."
-              >
-                {Array.from({ length: DOTS }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-[7px] w-[7px] ${
-                      i < LIT ? "bg-slate" : "bg-ink/15"
-                    }`}
-                  />
-                ))}
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="eyebrow text-ink-faint">The protocol, so far</p>
+                <span className="rounded-full border border-rule px-2 py-0.5 font-mono text-[0.625rem] tracking-[0.14em] text-ink-faint uppercase">
+                  Testnet · live
+                </span>
               </div>
-              <p className="mt-6 font-mono text-[0.6875rem] text-ink-faint">
-                <span className="mr-1.5 inline-block h-[7px] w-[7px] bg-slate align-middle" />
-                1 dot = 1,000 contributors · accent = earning this month
-              </p>
+
+              {stats.units.length === 0 ? (
+                <p className="mt-6 max-w-sm text-sm text-pretty text-ink-dim">
+                  Nothing has been contributed yet. This fills in as the
+                  protocol runs — one square per dataset, counted from the
+                  ledger rather than typed in.
+                </p>
+              ) : (
+                <>
+                  <div
+                    className="mt-6 flex flex-wrap gap-[7px]"
+                    role="img"
+                    aria-label={`Unit chart: ${stats.units.length} squares, one per contributed dataset, of which ${sold} have been licensed.`}
+                  >
+                    {stats.units.map((unit, i) => (
+                      <span
+                        key={i}
+                        className={`h-[7px] w-[7px] ${
+                          unit.sold ? "bg-slate" : "bg-ink/15"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-6 font-mono text-[0.6875rem] text-ink-faint">
+                    <span className="mr-1.5 inline-block h-[7px] w-[7px] bg-slate align-middle" />
+                    1 square = 1 dataset · accent = licensed at least once
+                    {stats.unitsTruncated ? " · first 480 shown" : ""}
+                  </p>
+                </>
+              )}
             </div>
           </Reveal>
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-rule bg-rule">
-            {STATS.map((stat, i) => (
-              <Reveal key={stat.label} delay={i * 70}>
+            {metrics.map((metric, i) => (
+              <Reveal key={metric.label} delay={i * 70}>
                 {/* col-reverse: term before definition in the DOM (valid <dl>),
                     value above label on screen. */}
                 <div className="flex h-full flex-col-reverse gap-2 bg-paper p-6">
-                  <dt className="text-sm text-ink-faint">{stat.label}</dt>
+                  <dt className="text-sm text-ink-faint">{metric.label}</dt>
                   <dd className="display text-3xl font-medium text-ink tabular-nums sm:text-4xl">
-                    {stat.value}
+                    {metric.value}
                   </dd>
                 </div>
               </Reveal>
