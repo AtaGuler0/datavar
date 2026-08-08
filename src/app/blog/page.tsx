@@ -26,7 +26,10 @@ export default async function BlogIndex() {
   const posts = await listPosts().catch((): PostSummary[] => []);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
+    /* Asymmetric on purpose: the shell already reserves pt-16 for the fixed
+       nav, so a symmetric py-32 stacked on top of it left the title floating
+       in a screen of nothing. The bottom keeps its room. */
+    <div className="mx-auto max-w-6xl px-6 pt-12 pb-24 sm:pt-16 sm:pb-32">
       <SectionHeading
         eyebrow="Blog"
         title="What we're building, and what we got wrong."

@@ -46,7 +46,8 @@ export default async function PostPage({ params }: Props) {
   const status = postStatus(post);
 
   return (
-    <article className="mx-auto max-w-3xl px-6 py-24 sm:py-32">
+    /* Same top spacing as the blog index — see the note there. */
+    <article className="mx-auto max-w-3xl px-6 pt-12 pb-24 sm:pt-16 sm:pb-32">
       <Link
         href="/blog"
         className="font-mono text-[0.6875rem] tracking-[0.14em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
