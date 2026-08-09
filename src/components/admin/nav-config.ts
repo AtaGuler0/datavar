@@ -35,6 +35,12 @@ export const ADMIN_NAV: AdminSection[] = [
     index: "03",
     summary: "Write and publish posts without waiting for a deploy.",
   },
+  {
+    href: "/admin/demo",
+    label: "Demo data",
+    index: "04",
+    summary: "Fill an empty protocol with plausible contributions.",
+  },
 ];
 
 /** Exact match for the root, prefix match for the deeper sections. */

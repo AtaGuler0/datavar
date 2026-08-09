@@ -35,6 +35,13 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
         <path d="M9.5 2.5V6H13M5.5 8.5h5M5.5 11h3.5" strokeLinecap="round" />
       </>
     ),
+    // A flask: the one section that makes things up, and looks like it.
+    "/admin/demo": (
+      <>
+        <path d="M6.5 2.5v4L3.2 12a1.5 1.5 0 001.3 2.2h7a1.5 1.5 0 001.3-2.2L9.5 6.5v-4" strokeLinejoin="round" />
+        <path d="M5.5 2.5h5M4.8 10h6.4" strokeLinecap="round" />
+      </>
+    ),
   };
 
   return (

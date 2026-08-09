@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { authHeaders } from "@/lib/auth/session-store";
 import { formatBytes, formatCount, formatDate } from "@/lib/format";
 import {
   buildLifecycles,
@@ -240,8 +241,10 @@ function LifecycleRow({
     try {
       const res = await fetch("/api/claims", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ saleId: nextSale.id, wallet: address }),
+        // The claim route reads the wallet from the session, not the body —
+        // without the header it is an anonymous request and rightly refused.
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ saleId: nextSale.id }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "The payout didn't go through.");
@@ -254,7 +257,13 @@ function LifecycleRow({
   };
 
   return (
-    <li className="rounded-xl border border-rule bg-paper p-4 shadow-sm shadow-ink/[0.03] sm:p-5">
+    // Anchored so the consent and earnings ledgers can point back at the exact
+    // dataset a row is about. scroll-mt clears the dashboard's sticky top bar,
+    // or the heading lands underneath it.
+    <li
+      id={`dataset-${dataset.id}`}
+      className="scroll-mt-24 rounded-xl border border-rule bg-paper p-4 shadow-sm shadow-ink/[0.03] target:border-slate/50 target:ring-2 target:ring-slate/15 sm:p-5"
+    >
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-ink">{dataset.title}</p>
