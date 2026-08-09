@@ -22,7 +22,10 @@ const VALUE = [
 
 export function Buyers() {
   return (
-    <section id="buyers" className="bg-ink-950">
+    /* data-nav-tone: the header reads this to invert itself while this block
+       is behind it — see components/site-nav.tsx. Any other dark-on-light
+       section only has to carry the same attribute. */
+    <section id="buyers" data-nav-tone="dark" className="bg-ink-950">
       <div className="mx-auto max-w-6xl px-6 py-28 sm:py-36">
         <SectionHeading
           tone="dark"

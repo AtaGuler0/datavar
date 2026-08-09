@@ -68,9 +68,14 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
 
     if (token.startsWith("`")) {
       out.push(
+        // A code span is one unbreakable word as far as line breaking is
+        // concerned, so a contract address or a long identifier used to push
+        // the whole document wider than the screen — 106px of sideways scroll
+        // on a 390px phone, from one token. Anywhere is the right rule here:
+        // there is no syllable in a hash worth protecting.
         <code
           key={key}
-          className="rounded bg-paper-sunken px-1.5 py-0.5 font-mono text-[0.85em] text-ink"
+          className="rounded bg-paper-sunken px-1.5 py-0.5 font-mono text-[0.85em] text-ink [overflow-wrap:anywhere]"
         >
           {token.slice(1, -1)}
         </code>,
@@ -240,14 +245,17 @@ export function Markdown({ source }: { source: string }) {
 
           case "paragraph":
             return (
-              <p key={key} className="text-pretty text-ink-dim">
+              // break-words rather than the anywhere above: prose should only
+              // break a word when it genuinely cannot fit, which is what a
+              // pasted URL in a sentence does.
+              <p key={key} className="text-pretty break-words text-ink-dim">
                 {inline(block.text, key)}
               </p>
             );
 
           case "list": {
             const items = block.items.map((item, j) => (
-              <li key={`${key}-${j}`} className="text-pretty text-ink-dim">
+              <li key={`${key}-${j}`} className="text-pretty break-words text-ink-dim">
                 {inline(item, `${key}-${j}`)}
               </li>
             ));
@@ -266,7 +274,7 @@ export function Markdown({ source }: { source: string }) {
             return (
               <blockquote
                 key={key}
-                className="border-l-2 border-rule-strong pl-5 text-pretty text-ink"
+                className="border-l-2 border-rule-strong pl-5 text-pretty break-words text-ink"
               >
                 {inline(block.text, key)}
               </blockquote>

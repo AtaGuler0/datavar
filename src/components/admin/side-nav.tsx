@@ -122,32 +122,78 @@ export function AdminSideNav() {
   );
 }
 
-/** The same links as a strip for small screens, inside the admin top bar. */
-export function AdminMobileNav() {
+/**
+ * The rail as a sheet for small screens — the operator twin of the
+ * contributor's MobileMenu, and a sibling of the top bar for the same reason:
+ * a backdrop-filter above a fixed element steals its containing block.
+ */
+export function AdminMobileMenu({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname();
 
   return (
-    <nav className="border-t border-rule">
-      <ul className="flex gap-1 overflow-x-auto px-4 py-2.5">
+    <div
+      id="admin-menu"
+      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-paper px-4 pt-4 pb-8 md:hidden"
+    >
+      <p className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
+        Operator
+      </p>
+      <ul className="mt-2 flex flex-col gap-1">
         {ADMIN_NAV.map((section) => {
           const active = isAdminSectionActive(section.href, pathname);
           return (
             <li key={section.href}>
               <Link
                 href={section.href}
+                onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? "bg-ink-950 font-medium text-chalk"
-                    : "text-ink-dim hover:text-ink"
+                className={`flex items-start gap-3 rounded-xl px-3 py-3.5 transition-colors ${
+                  active ? "bg-ink-950" : "hover:bg-paper-sunken/60"
                 }`}
               >
-                {section.label}
+                <SectionIcon
+                  href={section.href}
+                  className={`mt-0.5 ${active ? "text-chalk-dim" : "text-ink-faint"}`}
+                />
+                <span className="min-w-0">
+                  <span
+                    className={`block text-base font-medium ${
+                      active ? "text-chalk" : "text-ink"
+                    }`}
+                  >
+                    {section.label}
+                  </span>
+                  <span
+                    className={`mt-0.5 block text-xs text-pretty ${
+                      active ? "text-chalk-dim" : "text-ink-faint"
+                    }`}
+                  >
+                    {section.summary}
+                  </span>
+                </span>
               </Link>
             </li>
           );
         })}
       </ul>
-    </nav>
+
+      <Link
+        href="/dashboard"
+        onClick={onNavigate}
+        className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3.5 text-base text-ink-dim transition-colors hover:bg-paper-sunken/60"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          className="h-4 w-4 shrink-0 text-ink-faint"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Contributor view
+      </Link>
+    </div>
   );
 }

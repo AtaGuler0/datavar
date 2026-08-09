@@ -202,34 +202,94 @@ export function SideNav() {
 }
 
 /**
- * The same links as a horizontal strip for small screens, rendered inside the
- * mobile top bar. Active treatment matches the rail's pill.
+ * The rail's contents as a full-height sheet, for the phone. Rendered as a
+ * sibling of the top bar rather than inside it, so no backdrop-filter above it
+ * can steal the containing block a fixed element needs.
+ *
+ * It carries what the rail carries and the old horizontal strip could not: the
+ * section summaries, the operator link for the wallets that have one, and the
+ * testnet notice. The wallet stays in the bar, where it is reachable without
+ * opening anything.
  */
-export function MobileNav() {
+export function MobileMenu({ onNavigate }: { onNavigate: () => void }) {
   const pathname = usePathname();
+  const { session } = useWallet();
 
   return (
-    <nav className="border-t border-rule">
-      <ul className="flex gap-1 overflow-x-auto px-4 py-2.5">
+    <div
+      id="dashboard-menu"
+      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-paper px-4 pt-4 pb-8 md:hidden"
+    >
+      <p className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
+        Contributor
+      </p>
+      <ul className="mt-2 flex flex-col gap-1">
         {CONTRIBUTOR_NAV.map((section) => {
           const active = isSectionActive(section.href, pathname);
           return (
             <li key={section.href}>
               <Link
                 href={section.href}
+                onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? "bg-ink-950 font-medium text-chalk"
-                    : "text-ink-dim hover:text-ink"
+                className={`flex items-start gap-3 rounded-xl px-3 py-3.5 transition-colors ${
+                  active ? "bg-ink-950" : "hover:bg-paper-sunken/60"
                 }`}
               >
-                {section.label}
+                <SectionIcon
+                  href={section.href}
+                  className={`mt-0.5 ${active ? "text-chalk-dim" : "text-ink-faint"}`}
+                />
+                <span className="min-w-0">
+                  <span
+                    className={`block text-base font-medium ${
+                      active ? "text-chalk" : "text-ink"
+                    }`}
+                  >
+                    {section.label}
+                  </span>
+                  <span
+                    className={`mt-0.5 block text-xs text-pretty ${
+                      active ? "text-chalk-dim" : "text-ink-faint"
+                    }`}
+                  >
+                    {section.summary}
+                  </span>
+                </span>
               </Link>
             </li>
           );
         })}
       </ul>
-    </nav>
+
+      {session?.admin && (
+        <Link
+          href="/admin"
+          onClick={onNavigate}
+          className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3.5 text-base text-ink-dim transition-colors hover:bg-paper-sunken/60"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="h-4 w-4 shrink-0 text-ink-faint"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
+            <path d="M2.5 13.5V9M6.5 13.5V5.5M10.5 13.5v-6M14 13.5V3" strokeLinecap="round" />
+          </svg>
+          Operator panel
+        </Link>
+      )}
+
+      <div className="mt-4 rounded-xl border border-rule bg-paper-raised/70 p-3.5">
+        <p className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-ink-faint">
+          Stellar testnet
+        </p>
+        <p className="mt-1.5 text-xs text-pretty text-ink-dim">
+          No real funds move yet. Payouts settle in test XLM.
+        </p>
+      </div>
+    </div>
   );
 }
