@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { formatBytes } from "@/lib/format";
 import { listDatasets, sourceLabel, type Dataset } from "@/lib/supabase/datasets";
@@ -31,8 +31,23 @@ function isoDateIn(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
+export function ConsentGrantForm({
+  onGranted,
+  fixed,
+  bare = false,
+}: {
+  onGranted: () => void;
+  /** Grant for this dataset only — the picker disappears and the form is
+   *  already about the row it was opened from. */
+  fixed?: Dataset;
+  /** Drop the Card chrome, for when this renders inside another surface. */
+  bare?: boolean;
+}) {
   const { address, signTransaction } = useWallet();
+  // Ids have to be unique per instance: the data page can mount this inside a
+  // row while the consent page has its own, and a duplicated htmlFor points a
+  // label at the wrong field.
+  const uid = useId();
 
   const [datasets, setDatasets] = useState<Dataset[] | null>(null);
   const [datasetId, setDatasetId] = useState("");
@@ -49,7 +64,8 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) return;
+    // Nothing to pick from when the caller already named the dataset.
+    if (!address || fixed) return;
     let cancelled = false;
     listDatasets(address)
       .then((rows) => !cancelled && setDatasets(rows))
@@ -57,9 +73,9 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, fixed]);
 
-  const dataset = datasets?.find((d) => d.id === datasetId) ?? null;
+  const dataset = fixed ?? datasets?.find((d) => d.id === datasetId) ?? null;
   const busy = step !== "idle";
 
   const submit = async (event: React.FormEvent) => {
@@ -113,7 +129,7 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
     }
   };
 
-  if (datasets !== null && datasets.length === 0) {
+  if (!fixed && datasets !== null && datasets.length === 0) {
     return (
       <Card title="Grant consent" subtitle="Nothing to grant consent for yet">
         <div className="flex flex-col items-center rounded-xl border border-dashed border-rule-strong bg-paper-raised/50 px-6 py-10 text-center">
@@ -122,7 +138,7 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
             dataset first.
           </p>
           <Link
-            href="/dashboard/uploads"
+            href="/dashboard/data"
             className="mt-5 inline-flex items-center rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
           >
             Upload a dataset
@@ -132,47 +148,56 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
     );
   }
 
-  return (
-    <Card
-      title="Grant consent"
-      subtitle="Sign a receipt for one dataset, one buyer, one purpose"
-    >
+  const form = (
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Dataset" htmlFor="consent-dataset">
-          <select
-            id="consent-dataset"
-            value={datasetId}
-            onChange={(e) => setDatasetId(e.target.value)}
-            disabled={busy || datasets === null}
-            required
-            className="w-full rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-rule-strong disabled:opacity-50"
+        {/* When the caller fixed the dataset, the hash is the only part worth
+            restating — it is what the receipt commits to, and the row above
+            already said which dataset this is. */}
+        {fixed ? (
+          <p
+            className="truncate font-mono text-[0.6875rem] text-ink-faint"
+            title={fixed.sha256}
           >
-            <option value="">
-              {datasets === null ? "Loading your datasets…" : "Pick a dataset"}
-            </option>
-            {datasets?.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.title} · {sourceLabel(d.source_type)} · {formatBytes(d.byte_size)}
-              </option>
-            ))}
-          </select>
-          {dataset && (
-            <p
-              className="mt-1.5 truncate font-mono text-[0.6875rem] text-ink-faint"
-              title={dataset.sha256}
+            sha256 {fixed.sha256}
+          </p>
+        ) : (
+          <Field label="Dataset" htmlFor={`consent-dataset-${uid}`}>
+            <select
+              id={`consent-dataset-${uid}`}
+              value={datasetId}
+              onChange={(e) => setDatasetId(e.target.value)}
+              disabled={busy || datasets === null}
+              required
+              className="w-full rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-rule-strong disabled:opacity-50"
             >
-              sha256 {dataset.sha256}
-            </p>
-          )}
-        </Field>
+              <option value="">
+                {datasets === null ? "Loading your datasets…" : "Pick a dataset"}
+              </option>
+              {datasets?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title} · {sourceLabel(d.source_type)} ·{" "}
+                  {formatBytes(d.byte_size)}
+                </option>
+              ))}
+            </select>
+            {dataset && (
+              <p
+                className="mt-1.5 truncate font-mono text-[0.6875rem] text-ink-faint"
+                title={dataset.sha256}
+              >
+                sha256 {dataset.sha256}
+              </p>
+            )}
+          </Field>
+        )}
 
         <Field
           label="Buyer"
-          htmlFor="consent-buyer"
+          htmlFor={`consent-buyer-${uid}`}
           hint="The Stellar address allowed to use it"
         >
           <input
-            id="consent-buyer"
+            id={`consent-buyer-${uid}`}
             value={buyer}
             onChange={(e) => setBuyer(e.target.value)}
             placeholder="G…"
@@ -185,11 +210,11 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
 
         <Field
           label="Purpose"
-          htmlFor="consent-purpose"
+          htmlFor={`consent-purpose-${uid}`}
           hint={`What they may use it for · ${purpose.length}/${MAX_PURPOSE_LEN}`}
         >
           <input
-            id="consent-purpose"
+            id={`consent-purpose-${uid}`}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value.slice(0, MAX_PURPOSE_LEN))}
             placeholder="LLM pre-training"
@@ -201,11 +226,11 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
 
         <Field
           label="Ends"
-          htmlFor="consent-expires"
+          htmlFor={`consent-expires-${uid}`}
           hint="Consent always has an end date"
         >
           <input
-            id="consent-expires"
+            id={`consent-expires-${uid}`}
             type="date"
             value={expires}
             min={isoDateIn(1)}
@@ -233,6 +258,16 @@ export function ConsentGrantForm({ onGranted }: { onGranted: () => void }) {
           {step === "idle" && "Sign the receipt"}
         </button>
       </form>
+  );
+
+  if (bare) return form;
+
+  return (
+    <Card
+      title="Grant consent"
+      subtitle="Sign a receipt for one dataset, one buyer, one purpose"
+    >
+      {form}
     </Card>
   );
 }

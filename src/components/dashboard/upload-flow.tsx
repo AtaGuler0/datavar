@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { formatBytes } from "@/lib/format";
 import {
   createDataset,
@@ -9,14 +9,22 @@ import {
   type Dataset,
   type SourceTypeId,
 } from "@/lib/supabase/datasets";
-import { DatasetList } from "./dataset-list";
 import { useWallet } from "./wallet-provider";
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — plenty for a testnet demo.
 
 type Staged = { file: File; sha256: string };
 
-export function UploadFlow() {
+/**
+ * The upload form on its own, without a list under it. The merged data page
+ * owns the list there — every dataset shown with its consent and payouts — so
+ * the form has to be usable apart from the one it used to carry.
+ */
+export function UploadCard({
+  onUploaded,
+}: {
+  onUploaded: (dataset: Dataset) => void;
+}) {
   const { address } = useWallet();
 
   const [staged, setStaged] = useState<Staged | null>(null);
@@ -27,8 +35,6 @@ export function UploadFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The list is owned here so a successful upload can prepend without a refetch.
-  const [datasets, setDatasets] = useState<Dataset[] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const reset = () => {
@@ -71,7 +77,7 @@ export function UploadFlow() {
         description,
         file: staged.file,
       });
-      setDatasets((prev) => [created, ...(prev ?? [])]);
+      onUploaded(created);
       reset();
     } catch (e) {
       setError(
@@ -83,13 +89,12 @@ export function UploadFlow() {
   };
 
   return (
-    <div className="mt-10 space-y-12">
-      <div className="overflow-hidden rounded-2xl border border-rule bg-paper shadow-sm shadow-ink/[0.03]">
-        <div className="border-b border-rule px-6 py-4">
-          <p className="eyebrow text-ink-faint">Contribute a dataset</p>
-        </div>
+    <div className="overflow-hidden rounded-2xl border border-rule bg-paper shadow-sm shadow-ink/[0.03]">
+      <div className="border-b border-rule px-6 py-4">
+        <p className="eyebrow text-ink-faint">Contribute a dataset</p>
+      </div>
 
-        <div className="space-y-7 p-6 sm:p-7">
+      <div className="space-y-7 p-6 sm:p-7">
           {/* File + on-device hash */}
           <div>
             <label className="text-sm font-medium text-ink">File</label>
@@ -209,51 +214,7 @@ export function UploadFlow() {
               {submitting ? "Uploading…" : "Upload dataset"}
             </button>
           </div>
-        </div>
       </div>
-
-      <UploadedSection
-        datasets={datasets}
-        setDatasets={setDatasets}
-        wallet={address}
-      />
-    </div>
-  );
-}
-
-/** Loads the wallet's datasets once, then reflects local additions. */
-function UploadedSection({
-  datasets,
-  setDatasets,
-  wallet,
-}: {
-  datasets: Dataset[] | null;
-  setDatasets: (d: Dataset[]) => void;
-  wallet: string | null;
-}) {
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!wallet || datasets !== null) return;
-    let active = true;
-    import("@/lib/supabase/datasets").then(({ listDatasets }) =>
-      listDatasets(wallet)
-        .then((rows) => active && setDatasets(rows))
-        .catch(() => active && setError("Couldn't load your datasets.")),
-    );
-    return () => {
-      active = false;
-    };
-  }, [wallet, datasets, setDatasets]);
-
-  return (
-    <div>
-      <p className="eyebrow text-ink-faint">Your datasets</p>
-      {error ? (
-        <p className="mt-4 text-sm text-ink-dim">{error}</p>
-      ) : (
-        <DatasetList datasets={datasets} />
-      )}
     </div>
   );
 }

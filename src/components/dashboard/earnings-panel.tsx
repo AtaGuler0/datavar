@@ -196,7 +196,7 @@ function EmptySales() {
         your datasets.
       </p>
       <Link
-        href="/dashboard/uploads"
+        href="/dashboard/data"
         className="mt-5 inline-flex items-center rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
       >
         Upload a dataset

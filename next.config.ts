@@ -22,6 +22,18 @@ const nextConfig: NextConfig = {
         ]
       : [],
   },
+
+  /**
+   * Sources and Uploads merged into one section. Both old paths were linkable
+   * and both are in people's history, so they move rather than 404 —
+   * permanently, because the merge is not something we intend to undo.
+   */
+  async redirects() {
+    return [
+      { source: "/dashboard/sources", destination: "/dashboard/data", permanent: true },
+      { source: "/dashboard/uploads", destination: "/dashboard/data", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

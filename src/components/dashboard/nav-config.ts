@@ -17,28 +17,26 @@ export const CONTRIBUTOR_NAV: DashboardSection[] = [
     index: "00",
     summary: "Where your data, consent and payouts stand this month.",
   },
+  // Sources and Uploads used to be two sections. They were one thing seen
+  // twice: a dataset arrives, gets consented to, gets licensed, gets paid for.
+  // Splitting the arrival from the consent left the step that actually blocks
+  // earnings — a dataset nobody may license — visible from neither.
   {
-    href: "/dashboard/sources",
-    label: "Sources",
+    href: "/dashboard/data",
+    label: "Your data",
     index: "01",
-    summary: "The accounts, devices and files you've connected.",
-  },
-  {
-    href: "/dashboard/uploads",
-    label: "Uploads",
-    index: "02",
-    summary: "Datasets you contribute directly, hashed before they leave.",
+    summary: "Everything you've contributed, and what each dataset needs next.",
   },
   {
     href: "/dashboard/consent",
     label: "Consent",
-    index: "03",
+    index: "02",
     summary: "Every signed receipt, who holds it, and when it expires.",
   },
   {
     href: "/dashboard/earnings",
     label: "Earnings",
-    index: "04",
+    index: "03",
     summary: "What you've been paid, and how you're paid out.",
   },
 ];

@@ -22,17 +22,13 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
         <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
       </>
     ),
-    "/dashboard/sources": (
+    // The cylinder the Sources section used to carry: this is the data itself
+    // now, however it arrived.
+    "/dashboard/data": (
       <>
         <ellipse cx="8" cy="4" rx="5" ry="2" />
         <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4" />
         <path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" />
-      </>
-    ),
-    "/dashboard/uploads": (
-      <>
-        <path d="M8 10V3.5M5 6l3-2.5L11 6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M3 10.5v1.5a1.5 1.5 0 001.5 1.5h7a1.5 1.5 0 001.5-1.5v-1.5" strokeLinecap="round" />
       </>
     ),
     "/dashboard/consent": (

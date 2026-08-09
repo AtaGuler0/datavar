@@ -74,10 +74,10 @@ export function RecentUploads({ datasets }: { datasets: Dataset[] }) {
 
       <div className="mt-1 border-t border-rule pt-3.5">
         <Link
-          href="/dashboard/uploads"
+          href="/dashboard/data"
           className="group inline-flex items-center gap-1.5 text-sm font-medium text-ink"
         >
-          View all uploads
+          View all your data
           <svg
             viewBox="0 0 16 16"
             className="h-3 w-3 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5"
