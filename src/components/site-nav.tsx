@@ -145,6 +145,18 @@ export function SiteNav() {
                 {link.label}
               </SectionLink>
             ))}
+            {/* A route rather than a fragment, so a real Link: it prefetches
+                and navigates, which SectionLink's scroll handling can't do. */}
+            <Link
+              href="/protocol"
+              className={`text-sm transition-colors duration-300 ${
+                inverted
+                  ? "text-chalk-dim hover:text-chalk"
+                  : "text-ink-dim hover:text-ink"
+              }`}
+            >
+              Protocol
+            </Link>
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
@@ -217,6 +229,13 @@ export function SiteNav() {
                 {link.label}
               </SectionLink>
             ))}
+            <Link
+              href="/protocol"
+              onClick={() => setOpen(false)}
+              className="border-b border-rule py-4 text-lg text-ink"
+            >
+              Protocol
+            </Link>
           </div>
           <Link
             href="/dashboard"

@@ -42,6 +42,7 @@ const COLUMNS = FOOTER_GROUPS.map((title) => {
  *  The docs index isn't listed here — "Read the docs" beside it already goes
  *  there, and one column over the pages themselves are linked one by one. */
 const ELSEWHERE = [
+  { label: "Protocol", href: "/protocol" },
   { label: "Blog", href: "/blog" },
   { label: "Become a contributor", href: "/dashboard" },
 ];
