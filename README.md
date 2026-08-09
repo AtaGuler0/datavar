@@ -24,7 +24,7 @@ contributor who granted it can withdraw it.
 
 Deploy your own or point at the existing testnet deployment, then set
 `NEXT_PUBLIC_CONSENT_CONTRACT_ID`. Grant and revoke from
-`/dashboard/consent`; the signature comes from the contributor's wallet, and
+`/dashboard/data`; the signature comes from the contributor's wallet, and
 nothing on the server can sign in their place. Full instructions, the contract's
 interface, and how to query it yourself are in
 [`contracts/README.md`](contracts/README.md).

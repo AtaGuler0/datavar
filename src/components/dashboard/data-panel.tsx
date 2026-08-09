@@ -17,10 +17,25 @@ import {
 } from "@/lib/supabase/datasets";
 import { listSalesForWallet, type Sale } from "@/lib/supabase/sales";
 import { ConsentGrantForm } from "./consent-grant-form";
+import { ConsentView } from "./consent-view";
 import { LifecycleStrip } from "./lifecycle-strip";
 import { Card } from "./primitives";
 import { UploadCard } from "./upload-flow";
 import { useWallet } from "./wallet-provider";
+
+/**
+ * Two ways of reading the same rows. Consent used to be a section of its own,
+ * which meant the rail offered three doors into one object — the dataset, its
+ * receipts, its payouts — and never said which was the way in. A receipt
+ * always belongs to a dataset, so it belongs here, as a view rather than a
+ * destination.
+ */
+const VIEWS = [
+  { id: "datasets", label: "Datasets" },
+  { id: "consent", label: "Consent" },
+] as const;
+
+type ViewId = (typeof VIEWS)[number]["id"];
 
 /**
  * Everything a contributor has given the protocol, on one page.
@@ -43,6 +58,29 @@ export function DataPanel() {
   const [failed, setFailed] = useState(false);
   /** The contract can be unreachable while the rest of the page is fine. */
   const [consentDown, setConsentDown] = useState(false);
+  // `#consent` opens the ledger directly — that is where /dashboard/consent
+  // now lands, so an old bookmark still arrives at what it asked for. Any
+  // other hash is a dataset anchor, which means the other view.
+  //
+  // Read during the first render rather than in an effect: this component sits
+  // behind WalletGate, which renders a skeleton until a wallet resolves, so it
+  // never renders on the server and has no prerender to disagree with.
+  const [view, setView] = useState<ViewId>(() =>
+    typeof window !== "undefined" && window.location.hash === "#consent"
+      ? "consent"
+      : "datasets",
+  );
+
+  const show = (next: ViewId) => {
+    setView(next);
+    // replaceState rather than assigning the hash: setting it would scroll the
+    // page to an element that may not be rendered in the view being opened.
+    window.history.replaceState(
+      null,
+      "",
+      next === "consent" ? "#consent" : window.location.pathname,
+    );
+  };
 
   const read = useCallback(async (wallet: string) => {
     const [datasets, sales, receipts] = await Promise.all([
@@ -97,6 +135,16 @@ export function DataPanel() {
       state ? buildLifecycles(state.datasets, state.receipts, state.sales) : null,
     [state],
   );
+
+  /** sha256 → the dataset it belongs to, so a receipt can name what it covers.
+   *  Hex from two systems, compared in one case. */
+  const datasetsByHash = useMemo(() => {
+    const map = new Map<string, Dataset>();
+    for (const d of state?.datasets ?? []) {
+      map.set(d.sha256.trim().toLowerCase(), d);
+    }
+    return map;
+  }, [state]);
 
   if (failed) {
     return (
@@ -153,6 +201,68 @@ export function DataPanel() {
         />
       </div>
 
+      {/* The two readings of the same rows. Same pill group the period toggles
+          use, so a view switch reads as a view switch everywhere. */}
+      <div className="flex items-center justify-between gap-4 pt-2">
+        <div className="flex items-center rounded-full border border-rule bg-paper p-0.5 shadow-sm shadow-ink/[0.03]">
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => show(v.id)}
+              aria-pressed={v.id === view}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                v.id === view
+                  ? "bg-ink-950 text-chalk"
+                  : "text-ink-dim hover:text-ink"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        {view === "consent" && (
+          <p className="text-xs text-ink-faint">
+            {state?.receipts.length ?? 0} on the ledger
+          </p>
+        )}
+      </div>
+
+      {view === "consent" ? (
+        <ConsentView
+          receipts={state?.receipts ?? []}
+          datasetsByHash={datasetsByHash}
+          onChanged={refresh}
+        />
+      ) : (
+        <DatasetsView
+          items={items}
+          address={address}
+          consentDown={consentDown}
+          onUploaded={onUploaded}
+          onChanged={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The datasets themselves: contribute one, then everything you have. */
+function DatasetsView({
+  items,
+  address,
+  consentDown,
+  onUploaded,
+  onChanged,
+}: {
+  items: DatasetLifecycle[];
+  address: string | null;
+  consentDown: boolean;
+  onUploaded: (dataset: Dataset) => void;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-3">
       <UploadCard onUploaded={onUploaded} />
 
       {consentDown && (
@@ -181,7 +291,7 @@ export function DataPanel() {
               <LifecycleRow
                 key={item.dataset.id}
                 item={item}
-                onChanged={refresh}
+                onChanged={onChanged}
               />
             ))}
           </ul>

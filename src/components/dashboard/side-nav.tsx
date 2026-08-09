@@ -31,12 +31,6 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
         <path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2" />
       </>
     ),
-    "/dashboard/consent": (
-      <>
-        <path d="M8 2l4.5 1.8V8c0 2.7-1.9 4.4-4.5 5.5C5.4 12.4 3.5 10.7 3.5 8V3.8L8 2z" strokeLinejoin="round" />
-        <path d="M6.2 8l1.3 1.3L10 6.6" strokeLinecap="round" strokeLinejoin="round" />
-      </>
-    ),
     "/dashboard/earnings": (
       <>
         <circle cx="8" cy="8" r="5.5" />

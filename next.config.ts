@@ -32,6 +32,9 @@ const nextConfig: NextConfig = {
     return [
       { source: "/dashboard/sources", destination: "/dashboard/data", permanent: true },
       { source: "/dashboard/uploads", destination: "/dashboard/data", permanent: true },
+      // Consent became a view of the data page rather than a section: a
+      // receipt always belongs to a dataset, so the ledger lives with them.
+      { source: "/dashboard/consent", destination: "/dashboard/data#consent", permanent: true },
     ];
   },
 };

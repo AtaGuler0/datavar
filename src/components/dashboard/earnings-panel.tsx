@@ -233,12 +233,23 @@ function SalesTable({
           {sales.map((sale) => (
             <tr key={sale.id} className="border-t border-rule">
               <td className="max-w-56 py-3 pr-4">
-                <span className="block truncate font-medium text-ink">
-                  {sale.datasets?.title ?? "Deleted dataset"}
-                </span>
-                {sale.datasets && (
-                  <span className="mt-0.5 block truncate text-xs text-ink-faint">
-                    {sourceLabel(sale.datasets.source_type)}
+                {/* Back to the dataset this payout came from — the same row
+                    that offered the consent it was licensed under. */}
+                {sale.datasets ? (
+                  <Link
+                    href={`/dashboard/data#dataset-${sale.dataset_id}`}
+                    className="group block min-w-0"
+                  >
+                    <span className="block truncate font-medium text-ink transition-colors group-hover:text-slate">
+                      {sale.datasets.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-ink-faint">
+                      {sourceLabel(sale.datasets.source_type)}
+                    </span>
+                  </Link>
+                ) : (
+                  <span className="block truncate font-medium text-ink">
+                    Deleted dataset
                   </span>
                 )}
               </td>

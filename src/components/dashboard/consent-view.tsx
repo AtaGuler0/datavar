@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { formatDate } from "@/lib/format";
 import {
   CONSENT_CONTRACT_ID,
@@ -8,72 +9,50 @@ import {
   truncateAddress,
 } from "@/lib/stellar/config";
 import type { ConsentReceipt, ReceiptStatus } from "@/lib/stellar/consent";
+import type { Dataset } from "@/lib/supabase/datasets";
 import { ConsentGrantForm } from "./consent-grant-form";
 import { Card } from "./primitives";
 import { StatCard } from "./stat-card";
 import { useWallet } from "./wallet-provider";
 
 /**
- * The consent ledger. Every row here is contract state on Stellar testnet, not
- * a row in our database — which is the only reason the page is worth anything:
- * a buyer can check the same receipt without our permission, and revoking one
- * ends it in a place we cannot quietly edit.
+ * The consent ledger, as a view of the data page rather than a section of its
+ * own.
+ *
+ * Every row here is contract state on Stellar, not a row in our database —
+ * which is the only reason it is worth anything: a buyer can check the same
+ * receipt without our permission, and revoking one ends it somewhere we cannot
+ * quietly edit.
+ *
+ * It takes its rows rather than fetching them. A receipt belongs to a dataset,
+ * and the page that lists the datasets has already read both — loading them
+ * again here would be a second answer to the same question, free to disagree
+ * with the first.
  */
-export function ConsentPanel() {
+export function ConsentView({
+  receipts,
+  datasetsByHash,
+  onChanged,
+}: {
+  receipts: ConsentReceipt[];
+  datasetsByHash: Map<string, Dataset>;
+  onChanged: () => void;
+}) {
   const { address, signTransaction } = useWallet();
 
-  const [loaded, setLoaded] = useState<{
-    wallet: string;
-    receipts: ConsentReceipt[];
-  } | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (wallet: string) => {
-    const res = await fetch(`/api/consent?wallet=${wallet}`);
-    const body = await res.json();
-    if (!res.ok) throw new Error(body?.error ?? "Couldn't read your receipts.");
-    return body.receipts as ConsentReceipt[];
-  }, []);
-
-  useEffect(() => {
-    if (!address) return;
-    let cancelled = false;
-    load(address)
-      .then((receipts) => {
-        if (cancelled) return;
-        setLoaded({ wallet: address, receipts });
-        setFailed(null);
-      })
-      .catch((e) => !cancelled && setFailed(e.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [address, load]);
-
-  const refresh = useCallback(() => {
-    if (!address) return;
-    load(address)
-      .then((receipts) => setLoaded({ wallet: address, receipts }))
-      .catch((e) => setError(e.message));
-  }, [address, load]);
-
-  // Keyed by wallet, like the rest of the dashboard — a switched account never
-  // shows the previous one's receipts while the new ones load.
-  const receipts =
-    address && loaded?.wallet === address ? loaded.receipts : null;
-
-  const totals = useMemo(() => {
-    if (!receipts) return null;
-    return {
+  const totals = useMemo(
+    () => ({
       active: receipts.filter((r) => r.status === "active").length,
       revoked: receipts.filter((r) => r.status === "revoked").length,
       buyers: new Set(
         receipts.filter((r) => r.status === "active").map((r) => r.buyer),
       ).size,
-    };
-  }, [receipts]);
+    }),
+    [receipts],
+  );
 
   const revoke = async (receipt: ConsentReceipt) => {
     if (!address || revoking) return;
@@ -100,10 +79,13 @@ export function ConsentPanel() {
         body: JSON.stringify({ xdr: signed }),
       });
       const result = await sent.json();
-      if (!sent.ok) throw new Error(result?.error ?? "The revocation didn't land.");
+      if (!sent.ok) {
+        throw new Error(result?.error ?? "The revocation didn't land.");
+      }
 
-      refresh();
+      onChanged();
     } catch (e) {
+      // A wallet rejection is a decision, not a failure.
       const message = e instanceof Error ? e.message : "";
       setError(
         /reject|denied|declin|cancel/i.test(message)
@@ -115,32 +97,8 @@ export function ConsentPanel() {
     }
   };
 
-  if (failed) {
-    return (
-      <div className="mt-10 rounded-2xl border border-dashed border-rule-strong bg-paper/60 px-6 py-12 text-center">
-        <p className="text-sm text-ink-dim">{failed}</p>
-      </div>
-    );
-  }
-
-  if (!receipts || !totals) {
-    return (
-      <div className="mt-10 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-28 animate-pulse rounded-2xl border border-rule bg-paper-raised"
-            />
-          ))}
-        </div>
-        <div className="h-64 animate-pulse rounded-2xl border border-rule bg-paper-raised" />
-      </div>
-    );
-  }
-
   return (
-    <div className="mt-10">
+    <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
           label="Consent standing"
@@ -164,12 +122,12 @@ export function ConsentPanel() {
       </div>
 
       {error && (
-        <p className="mt-3 rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink-dim">
+        <p className="rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink-dim">
           {error}
         </p>
       )}
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Card
           title="Receipts"
           subtitle="What you've allowed, to whom, and until when"
@@ -181,14 +139,15 @@ export function ConsentPanel() {
         >
           {receipts.length === 0 ? (
             <div className="rounded-xl border border-dashed border-rule-strong bg-paper-raised/50 px-6 py-12 text-center">
-              <p className="text-sm text-ink-dim">
-                No consent granted yet. Sign one and it appears here — and on the
-                ledger — at the same moment.
+              <p className="text-sm text-pretty text-ink-dim">
+                No consent granted yet. Sign one and it appears here — and on
+                the ledger — at the same moment.
               </p>
             </div>
           ) : (
             <ReceiptTable
               receipts={receipts}
+              datasetsByHash={datasetsByHash}
               revokingId={revoking}
               busy={!!revoking}
               onRevoke={revoke}
@@ -196,11 +155,11 @@ export function ConsentPanel() {
           )}
         </Card>
 
-        <ConsentGrantForm onGranted={refresh} />
+        <ConsentGrantForm onGranted={onChanged} />
       </div>
 
       {CONSENT_CONTRACT_ID && (
-        <p className="mt-4 text-xs text-pretty text-ink-faint">
+        <p className="text-xs text-pretty text-ink-faint">
           Every receipt above is state in{" "}
           <a
             href={explorerContractUrl(CONSENT_CONTRACT_ID)}
@@ -220,11 +179,13 @@ export function ConsentPanel() {
 
 function ReceiptTable({
   receipts,
+  datasetsByHash,
   revokingId,
   busy,
   onRevoke,
 }: {
   receipts: ConsentReceipt[];
+  datasetsByHash: Map<string, Dataset>;
   revokingId: string | null;
   busy: boolean;
   onRevoke: (receipt: ConsentReceipt) => void;
@@ -258,11 +219,11 @@ function ReceiptTable({
               >
                 {truncateAddress(receipt.buyer, 4, 4)}
               </td>
-              <td
-                className="py-3 pr-4 font-mono text-xs whitespace-nowrap text-ink-dim"
-                title={`sha256 ${receipt.datasetHash}`}
-              >
-                {receipt.datasetHash.slice(0, 10)}…
+              <td className="max-w-40 py-3 pr-4">
+                <DatasetCell
+                  hash={receipt.datasetHash}
+                  dataset={datasetsByHash.get(receipt.datasetHash.toLowerCase())}
+                />
               </td>
               <td className="py-3 pr-4 text-right font-mono text-xs tabular-nums whitespace-nowrap text-ink-dim">
                 {formatDate(isoOf(receipt.expiresAt))}
@@ -284,9 +245,45 @@ function ReceiptTable({
 }
 
 /**
- * A standing receipt offers the only action on this page. An ended one — by
- * withdrawal or by expiry — says which, because the difference matters to both
- * sides afterwards.
+ * Which dataset a receipt is about. The hash is what the contract holds, so it
+ * stays available on hover — but a contributor thinks in titles, and the row it
+ * came from is one click away.
+ *
+ * A receipt whose dataset isn't in the list is not an error: the grant is
+ * ledger state and outlives our row, so the hash alone is the honest answer.
+ */
+function DatasetCell({ hash, dataset }: { hash: string; dataset?: Dataset }) {
+  if (!dataset) {
+    return (
+      <span
+        className="font-mono text-xs whitespace-nowrap text-ink-dim"
+        title={`sha256 ${hash}`}
+      >
+        {hash.slice(0, 10)}…
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={`/dashboard/data#dataset-${dataset.id}`}
+      title={`sha256 ${hash}`}
+      className="group block min-w-0"
+    >
+      <span className="block truncate text-sm text-ink transition-colors group-hover:text-slate">
+        {dataset.title}
+      </span>
+      <span className="mt-0.5 block font-mono text-[0.625rem] text-ink-faint">
+        {hash.slice(0, 10)}…
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * A standing receipt offers the only action here. An ended one — by withdrawal
+ * or by expiry — says which, because the difference matters to both sides
+ * afterwards.
  */
 function StatusCell({
   receipt,
@@ -330,13 +327,12 @@ function StatusTag({
   status: ReceiptStatus;
   at: number | null;
 }) {
-  const label = status === "revoked" ? "Revoked" : "Expired";
   return (
     <span
       className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-ink-faint"
       title={at ? `on ${formatDate(isoOf(at))}` : undefined}
     >
-      {label}
+      {status === "revoked" ? "Revoked" : "Expired"}
     </span>
   );
 }

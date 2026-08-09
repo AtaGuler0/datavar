@@ -28,15 +28,9 @@ export const CONTRIBUTOR_NAV: DashboardSection[] = [
     summary: "Everything you've contributed, and what each dataset needs next.",
   },
   {
-    href: "/dashboard/consent",
-    label: "Consent",
-    index: "02",
-    summary: "Every signed receipt, who holds it, and when it expires.",
-  },
-  {
     href: "/dashboard/earnings",
     label: "Earnings",
-    index: "03",
+    index: "02",
     summary: "What you've been paid, and how you're paid out.",
   },
 ];
