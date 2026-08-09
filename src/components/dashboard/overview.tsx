@@ -15,7 +15,6 @@ import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
 import { InsightCard } from "./insight-card";
 import { CONTRIBUTOR_NAV } from "./nav-config";
-import { NetworkPanel } from "./network-panel";
 import { Card } from "./primitives";
 import { RecentUploads } from "./recent-uploads";
 import { SourceShare } from "./source-share";
@@ -132,28 +131,17 @@ export function Overview() {
 
   return (
     <div>
-      {/* Greeting — the page's one h1, above both halves of the overview. */}
-      <div>
-        <p className="eyebrow text-ink-faint">Overview</p>
-        <h1 className="display mt-3 text-[1.75rem] font-medium text-ink sm:text-[2rem]">
-          {greeting}.
-        </h1>
-        <p className="mt-2.5 text-sm text-ink-dim">
-          Where the protocol stands today, and where your account sits in it.
-        </p>
-      </div>
-
-      {/* The general picture first: it needs no wallet, so it's the one thing
-          every visitor can read on arrival. */}
-      <div className="mt-9">
-        <NetworkPanel />
-      </div>
-
-      {/* Then the personal half — identity on the left, period control right. */}
-      <div className="mt-12 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      {/* Greeting and account identity in one block. This page is your account
+          now — the protocol-wide view moved to /protocol, because arriving at
+          your own dashboard and scrolling into someone else's numbers made
+          neither half legible. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
-          <h2 className="text-sm font-medium text-ink">Your account</h2>
-          <p className="mt-1 text-sm text-ink-dim">
+          <p className="eyebrow text-ink-faint">Overview</p>
+          <h1 className="display mt-3 text-[1.75rem] font-medium text-ink sm:text-[2rem]">
+            {greeting}.
+          </h1>
+          <p className="mt-2.5 text-sm text-ink-dim">
             {connected && stats ? (
               <>
                 <span className="font-mono text-xs tabular-nums">
@@ -307,6 +295,19 @@ export function Overview() {
           ))}
         </div>
       )}
+
+      {/* The way out to the protocol-wide view, which used to be the top half
+          of this page. A line, not a panel: it is context, not your account. */}
+      <p className="mt-8 border-t border-rule pt-6 text-sm text-ink-dim">
+        Everything contributed across Datavar is counted on the{" "}
+        <Link
+          href="/protocol"
+          className="text-ink underline decoration-rule-strong underline-offset-2 transition-colors hover:decoration-ink"
+        >
+          protocol page
+        </Link>
+        , no wallet required.
+      </p>
     </div>
   );
 }

@@ -132,15 +132,9 @@ export function NetworkPanel() {
 
   return (
     <section>
-      {/* Section header — what this block covers, and over what window. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <div>
-          <h2 className="text-sm font-medium text-ink">Across the protocol</h2>
-          <p className="mt-1 text-sm text-ink-dim">
-            Every contribution on Datavar, no wallet required to look.
-          </p>
-        </div>
-
+      {/* The window control only. The page that hosts this owns the heading —
+          it is the whole subject there, not a block within something else. */}
+      <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-4">
         <div className="flex items-center rounded-full border border-rule bg-paper p-0.5 shadow-sm shadow-ink/[0.03]">
           {PERIODS.map((p) => (
             <button
