@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { LinkProgress } from "@/components/link-progress";
 import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { formatDate } from "@/lib/format";
@@ -47,13 +48,16 @@ export default async function BlogIndex() {
               <article className="border-b border-rule">
                 <Link
                   href={`/blog/${post.slug}`}
-                  className="group flex flex-col gap-2 py-8 sm:flex-row sm:items-baseline sm:gap-10"
+                  className="group relative flex flex-col gap-2 py-8 transition-opacity active:opacity-70 sm:flex-row sm:items-baseline sm:gap-10"
                 >
+                  <LinkProgress />
                   <time
                     dateTime={post.published_at ?? undefined}
                     className="shrink-0 font-mono text-xs text-ink-faint tabular-nums sm:w-28"
                   >
-                    {post.published_at ? formatDate(post.published_at) : "Draft"}
+                    {post.published_at
+                      ? formatDate(post.published_at)
+                      : "Draft"}
                   </time>
                   <div className="max-w-2xl flex-1">
                     <h2 className="display text-xl font-medium text-balance text-ink transition-colors group-hover:text-slate sm:text-2xl">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CrowdField } from "./crowd-field";
+import { PendingDot } from "./link-progress";
 import { SectionLink } from "./section-link";
 
 export function Hero() {
@@ -17,12 +18,14 @@ export function Hero() {
       />
 
       <div className="mx-auto w-full max-w-4xl px-6 text-center">
-        <SectionLink
-          href="#how"
-          className="group inline-flex items-center gap-2 rounded-full border border-rule bg-paper/70 px-3.5 py-1.5 text-xs text-ink-dim backdrop-blur-sm transition-colors hover:border-rule-strong hover:text-ink"
+        {/* Points at the post that makes the case for the whole thing, so the
+            first line on the page is an argument rather than a feature. */}
+        <Link
+          href="/blog/data-got-expensive-the-people-who-make-it-still-get-nothing"
+          className="group inline-flex items-center gap-2 rounded-full border border-rule bg-paper/70 px-3.5 py-1.5 text-xs text-ink-dim backdrop-blur-sm transition-[color,border-color,transform] duration-200 hover:border-rule-strong hover:text-ink active:scale-[0.98]"
         >
-          <span className="h-1 w-1 rounded-full bg-slate" />
-          Every record carries a signed consent receipt
+          <PendingDot className="h-1 w-1 rounded-full bg-slate" />
+          Data got expensive. Its makers still get nothing.
           <svg
             viewBox="0 0 16 16"
             className="h-3 w-3 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5"
@@ -32,7 +35,7 @@ export function Hero() {
           >
             <path d="M6 3l5 5-5 5" strokeLinecap="round" />
           </svg>
-        </SectionLink>
+        </Link>
 
         <h1 className="display mt-7 text-[2.625rem] font-medium text-balance text-ink sm:text-6xl lg:text-[4.5rem]">
           Your data is already training AI.
