@@ -4,13 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate, percentDelta } from "@/lib/format";
-import { truncateAddress } from "@/lib/stellar/config";
+import { formatXlm, truncateAddress } from "@/lib/stellar/config";
 import {
   listDatasets,
   SOURCE_TYPES,
   type Dataset,
 } from "@/lib/supabase/datasets";
-import { SOURCE_RATES } from "@/lib/rates";
+import {
+  listSalesForWallet,
+  totalStroops,
+  type SaleWithDataset,
+} from "@/lib/supabase/sales";
 import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
 import { InsightCard } from "./insight-card";
@@ -65,6 +69,7 @@ export function Overview() {
   const [loaded, setLoaded] = useState<{
     wallet: string;
     rows: Dataset[];
+    sales: SaleWithDataset[];
   } | null>(null);
 
   // Waits for the session, not just the address. Row-level security answers a
@@ -75,20 +80,28 @@ export function Overview() {
   useEffect(() => {
     if (!address || !token) return;
     let cancelled = false;
-    listDatasets(address)
-      .then((rows) => !cancelled && setLoaded({ wallet: address, rows }))
-      .catch(() => !cancelled && setLoaded({ wallet: address, rows: [] }));
+    // Datasets and their sales land together: the payout tile reads the same
+    // ledger the earnings page does, so one arriving without the other would
+    // put a stale total next to fresh uploads. Either half failing degrades to
+    // empty rather than taking the page down.
+    Promise.all([
+      listDatasets(address).catch(() => [] as Dataset[]),
+      listSalesForWallet(address).catch(() => [] as SaleWithDataset[]),
+    ]).then(
+      ([rows, sales]) => !cancelled && setLoaded({ wallet: address, rows, sales }),
+    );
     return () => {
       cancelled = true;
     };
   }, [address, token]);
 
-  const datasets =
-    address && token && loaded?.wallet === address ? loaded.rows : null;
+  const current = address && token && loaded?.wallet === address ? loaded : null;
+  const datasets = current?.rows ?? null;
+  const sales = current?.sales ?? null;
   const connected = status === "connected" && !!address && !!token;
 
   const stats = useMemo(() => {
-    if (!datasets) return null;
+    if (!datasets || !sales) return null;
 
     const now = SESSION_NOW;
     const between = (d: Dataset, from: number, to: number) => {
@@ -104,9 +117,12 @@ export function Overview() {
     );
 
     const sources = new Set(datasets.map((d) => d.source_type));
-    const projected = [...sources].reduce(
-      (sum, id) => sum + (SOURCE_RATES[id] ?? 0),
-      0,
+
+    // What the data actually earned, straight off the sales ledger — the same
+    // stroops the earnings page claims against, not a rate-card estimate.
+    const earned = totalStroops(sales);
+    const claimable = totalStroops(
+      sales.filter((s) => s.status === "unclaimed"),
     );
 
     // Daily-ish buckets for the trend line: the period split into 12 slices.
@@ -124,10 +140,12 @@ export function Overview() {
       curBytes: bytes(cur),
       prevBytes: bytes(prev),
       sources: sources.size,
-      projected,
+      earned,
+      claimable,
+      salesCount: sales.length,
       spark,
     };
-  }, [datasets, period]);
+  }, [datasets, sales, period]);
 
   return (
     <div>
@@ -205,9 +223,15 @@ export function Overview() {
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Projected payout"
-            value={`$${stats.projected.toFixed(2)}`}
-            footnote="monthly estimate, not a promise"
+            label="Earned"
+            value={`${formatXlm(stats.earned)} XLM`}
+            footnote={
+              stats.salesCount === 0
+                ? "nothing sold yet"
+                : stats.claimable > 0
+                  ? `${formatXlm(stats.claimable)} XLM waiting to be claimed`
+                  : `across ${stats.salesCount} sale${stats.salesCount === 1 ? "" : "s"}, all paid out`
+            }
           />
           <StatCard
             label="Datasets contributed"
