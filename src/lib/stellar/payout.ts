@@ -4,7 +4,6 @@ import { PAYOUT_CONTRACT_ID } from "./config";
 import {
   addressArg,
   buildInvocation,
-  invokeAsServer,
   simulate,
   SorobanError,
   submitSigned,
@@ -17,13 +16,15 @@ import {
  * What changed when this contract arrived: a payout is no longer a payment our
  * server decides to send. Test XLM sits in the contract, the server can only
  * say *this wallet is owed this much*, and the contributor's own signature is
- * what moves the money out. This module never signs a claim — it builds one for
- * the wallet to sign, and relays the result.
+ * what moves the money out.
  *
- * The one thing it does sign is `credit`, with the operator key. That call
- * cannot pay anyone; it only assigns money already in the vault. The key that
- * signs it holds no funds — enough test XLM for fees and nothing else — so
- * there is no balance on this server for anyone to reach.
+ * This module signs nothing at all. It builds transactions for a wallet to sign
+ * and relays what comes back — a contributor's claim, and now an operator's
+ * credit too. Crediting used to be signed here with a key in the environment,
+ * which meant a deployment could not credit anything until someone put a secret
+ * on the server, and a leaked server leaked a role. The role now lives where the
+ * other two already did: in a wallet, held by a person, named on-chain by the
+ * contract itself.
  *
  * Funding the vault is not here either. Money goes in from outside, by whoever
  * chooses to put it there; the server has no way to move it in or out.
@@ -37,6 +38,8 @@ const PAYOUT_ERRORS: ErrorTable = {
   4: "There's nothing waiting to be claimed.",
   5: "Too many sales to credit in one transaction.",
   6: "That test XLM is already owed to contributors.",
+  7: "That wallet isn't one the vault credits for.",
+  8: "The vault already has as many operators as it takes.",
 };
 
 /** Sales credited in one transaction. The contract's own ceiling is 50. */
@@ -142,26 +145,30 @@ function creditArg(entry: CreditEntry): xdr.ScVal {
 }
 
 /**
- * Records a batch of sales as owed. Signed with the operator key, which is the
- * only thing this server's key can do to the vault: it cannot pay a
- * contributor, cannot pay itself, and cannot take a credit back.
+ * Prepares a batch of sales to be recorded as owed. Returns unsigned XDR for
+ * the operator's wallet to sign — the contract checks that signature against
+ * the address it holds as operator, so this is authorised by a person's key
+ * rather than by our say-so.
  *
- * All or nothing on the contract's side — a batch that fails leaves no partial
- * state, so the caller can safely rebuild and retry it.
+ * All or nothing on the contract's side: a batch that fails leaves no partial
+ * state, so a caller can rebuild and retry it. A sale already recorded is
+ * refused by reference, which is what stops a retry from paying twice.
  */
-export function creditSales(
-  secret: string,
+export function buildCredit(
+  signer: string,
   entries: CreditEntry[],
 ): Promise<string> {
   if (entries.length === 0 || entries.length > CREDIT_BATCH) {
     throw new SorobanError(`Credit between 1 and ${CREDIT_BATCH} sales at once.`);
   }
 
-  return invokeAsServer(
-    secret,
+  return buildInvocation(
+    signer,
     contractId(),
     "credit_many",
-    [xdr.ScVal.scvVec(entries.map(creditArg))],
+    // The signer names itself: the contract keeps a set of operators rather
+    // than one, and asks whether the address that signed is in it.
+    [addressArg(signer), xdr.ScVal.scvVec(entries.map(creditArg))],
     PAYOUT_ERRORS,
   );
 }
@@ -181,7 +188,54 @@ export function buildClaim(wallet: string): Promise<string> {
   );
 }
 
-/** Relays a claim the contributor's wallet signed, and waits for it to land. */
-export function submitClaim(signedXdr: string): Promise<string> {
+/**
+ * Prepares letting another wallet credit. Only the contract's admin can sign
+ * it, and the contract enforces that — this exists so the people running the
+ * product can be given the role from the panel rather than from a terminal.
+ */
+export function buildAddOperator(
+  admin: string,
+  operator: string,
+): Promise<string> {
+  return buildInvocation(
+    admin,
+    contractId(),
+    "add_operator",
+    [addressArg(operator)],
+    PAYOUT_ERRORS,
+  );
+}
+
+/** Prepares taking the role back — someone leaving, or a key being retired. */
+export function buildRemoveOperator(
+  admin: string,
+  operator: string,
+): Promise<string> {
+  return buildInvocation(
+    admin,
+    contractId(),
+    "remove_operator",
+    [addressArg(operator)],
+    PAYOUT_ERRORS,
+  );
+}
+
+/** Every address the contract lets credit sales. */
+export async function readOperators(): Promise<string[]> {
+  return (await read("operators")) as string[];
+}
+
+/** The address that can hand out the operator role and withdraw the surplus. */
+export async function readAdmin(): Promise<string> {
+  return (await read("admin")) as string;
+}
+
+/**
+ * Relays a signed call to the vault and waits for it to land. One function for
+ * every call this product makes — a claim, a credit, a role change — because
+ * the server's part in all three is identical: check where it points, send it,
+ * report the hash. It signs none of them.
+ */
+export function submitToVault(signedXdr: string): Promise<string> {
   return submitSigned(signedXdr, contractId(), PAYOUT_ERRORS);
 }

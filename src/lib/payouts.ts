@@ -21,41 +21,110 @@ import { authHeaders } from "@/lib/auth/session-store";
 export type CreditResult = {
   /** Sales written into the contract by this run. */
   credited: number;
+  /** One per signed batch. */
+  hashes: string[];
+  /** Sales our copy had wrong, put right without a signature. */
+  reconciled: number;
   /** Set when the ledger and our copy of it didn't both land. */
   warning?: string;
 };
 
 /**
- * Writes every sale that isn't in the payout contract yet into it.
+ * A credit signs one batch at a time and the caller comes back for the next, so
+ * a large queue can't ask for an unbounded number of wallet prompts in one go.
+ * The contract's own ceiling is what makes batches exist.
+ */
+const MAX_BATCHES = 8;
+
+async function post(body: unknown, fallback: string) {
+  const res = await fetch("/api/payouts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(parsed?.error ?? fallback);
+  return parsed;
+}
+
+/**
+ * Writes every sale that isn't in the payout contract yet into it, signed by
+ * the operator's own wallet.
  *
  * Called the moment a sale is recorded rather than left to a button someone
  * remembers to press: until this runs the money is still ours, the contributor
  * sees a payout they cannot take, and nothing in the interface explains why.
  * Crediting is idempotent — the contract refuses a sale it has already seen, and
- * the route reconciles that — so running it per sale costs a transaction and
- * risks nothing.
+ * the server reconciles that before asking for a signature — so running it per
+ * sale costs a transaction and risks nothing.
  *
- * Needs an operator session. Throws with the server's own message, which the
- * caller should report *beside* the sale rather than instead of it: the sale is
- * recorded either way, and a failed credit is a retry, not a lost sale.
+ * Needs an operator session *and* the wallet the contract names as operator.
+ * Throws with the server's own message, which the caller should report *beside*
+ * the sale rather than instead of it: the sale is recorded either way, and a
+ * failed credit is a retry, not a lost sale.
  */
-export async function creditPending(): Promise<CreditResult> {
-  const res = await fetch("/api/payouts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ action: "credit" }),
-  });
-  const body = await res.json().catch(() => null);
+export async function creditPending(
+  signTransaction: (xdr: string) => Promise<string>,
+): Promise<CreditResult> {
+  let credited = 0;
+  let reconciled = 0;
+  let warning: string | undefined;
+  const hashes: string[] = [];
 
-  if (!res.ok) {
-    throw new Error(body?.error ?? "The payouts couldn't be credited.");
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    const built = await post(
+      { action: "build" },
+      "The payouts couldn't be prepared.",
+    );
+    reconciled += Number(built?.reconciled ?? 0);
+
+    // Nothing left that needs signing. Either the queue is empty or what was in
+    // it turned out to be on-chain already.
+    if (!built?.xdr) break;
+
+    const signed = await signTransaction(built.xdr);
+    const done = await post(
+      { action: "submit", xdr: signed, saleIds: built.saleIds },
+      "The credit didn't go through.",
+    );
+
+    credited += Number(done?.credited ?? 0);
+    if (done?.hash) hashes.push(done.hash as string);
+    if (done?.warning) warning = done.warning;
+
+    if (!built.remaining) break;
+    if (batch === MAX_BATCHES - 1) {
+      warning = `${built.remaining} more sales are still waiting. Credit again to finish them.`;
+    }
   }
-  // A 200 can still carry a partial failure: batches that landed, then one that
-  // didn't. Both fields are the server's own wording.
-  return {
-    credited: Number(body?.credited ?? 0),
-    warning: body?.error ?? body?.warning,
-  };
+
+  return { credited, hashes, reconciled, warning };
+}
+
+/**
+ * Lets a wallet credit, or stops it. Only the contract's admin can sign either,
+ * and the wallet defaults to the one signing — which is how a deployment gets
+ * its first operator without anyone opening a terminal.
+ *
+ * The contract keeps a set, so this adds and removes rather than replaces:
+ * two or three people can each credit from their own wallet, and one leaving
+ * doesn't take the others' access with them.
+ */
+export async function changeOperator(
+  signTransaction: (xdr: string) => Promise<string>,
+  action: "add-operator" | "remove-operator",
+  operator?: string,
+): Promise<string> {
+  const built = await post(
+    { action, operator },
+    "Couldn't prepare that change.",
+  );
+  const signed = await signTransaction(built.xdr);
+  const done = await post(
+    { action: "submit", xdr: signed },
+    "The change didn't go through.",
+  );
+  return done.hash as string;
 }
 
 /** A settled claim: the hash that moved it, and what moved. */

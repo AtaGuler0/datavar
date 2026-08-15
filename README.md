@@ -98,27 +98,33 @@ turn it on:
 1. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
    command is in `.env.example`, and the contract's interface is in
    [`contracts/README.md`](contracts/README.md).
-2. Create an operator key, give it a few test XLM for fees, and hand it the
-   role with `set_operator`. Its secret goes in `STELLAR_OPERATOR_SECRET`, with
-   no `NEXT_PUBLIC_` prefix — that prefix ships a value to the browser.
-3. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
+2. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
    than one) to get into `/admin`.
+3. Let those wallets credit. The contract keeps its own list — `ADMIN_WALLETS`
+   opens the panel, the contract decides whose signature it takes — and the
+   vault card manages it: the contract's admin can add or remove any wallet
+   there, up to ten. Each one needs a few test XLM for fees and nothing more.
 4. Put test XLM into the vault by calling `fund` from any funded key. There is
    no button for this: the server holds no money and cannot move any.
 
 Then sell a dataset from `/admin` (by hand on the Datasets page, or a random
-round on the Sales page), credit the sales into the vault from the operator
-panel, and claim them from `/dashboard/earnings`. The claim returns a
-transaction hash that resolves on
+round on the Sales page) and claim it from `/dashboard/earnings`. Selling
+credits the sale into the vault in the same step, which takes one signature from
+the operator's wallet; the vault card credits anything left over. The claim
+returns a transaction hash that resolves on
 [stellar.expert](https://stellar.expert/explorer/testnet).
 
-What the server can and cannot do is worth stating plainly. It can record who
-money in the vault belongs to. That is the entire list. It cannot pay a
-contributor, pay itself, take a credit back, or move funds into or out of the
-vault — the contract pays the address that signed the call, and the admin key
-can only withdraw the surplus that nobody is owed. There is no account here
-holding payout money: the key the server does hold carries fee change and
-nothing else, so a leaked server is a bookkeeping problem rather than a theft. The
+There is no server-held Stellar key anywhere in this. Crediting was the last
+thing the server signed, and it now goes through the operator's wallet like
+every other call — so a deployment needs no key material to run the payout side,
+and a compromised server has none to leak.
+
+What the server can and cannot do is worth stating plainly. It can read the
+ledger, prepare transactions for other people to sign, and keep our copy of what
+happened. That is the entire list. It cannot credit a sale, pay a contributor,
+pay itself, take a credit back, or move funds into or out of the vault — every
+one of those needs a signature it has no key to produce, and the contract pays
+the address that signed the call. The
 database is still ours to write, so marking a sale settled needs a `settle`
 claim that only the claim route mints, for two minutes at a time; but a wrong
 row there changes bookkeeping, not who gets paid.

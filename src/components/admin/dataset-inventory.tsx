@@ -18,6 +18,7 @@ import {
 import { sourceLabel, type Dataset } from "@/lib/supabase/datasets";
 import { createSales } from "@/lib/supabase/sales";
 import { Card } from "@/components/dashboard/primitives";
+import { useWallet } from "@/components/dashboard/wallet-provider";
 import { useMarket } from "./use-market";
 
 /**
@@ -28,6 +29,7 @@ import { useMarket } from "./use-market";
  */
 export function DatasetInventory() {
   const { datasets, sales, failed, reload } = useMarket();
+  const { signTransaction } = useWallet();
 
   const [query, setQuery] = useState("");
   const [onlyUnsold, setOnlyUnsold] = useState(false);
@@ -77,7 +79,7 @@ export function DatasetInventory() {
       // Straight into the contract, as on the Sales page: a sale that isn't
       // credited is a payout the contributor can see and cannot take.
       try {
-        const { warning } = await creditPending();
+        const { warning } = await creditPending(signTransaction);
         if (warning) setError(warning);
       } catch (e) {
         setError(

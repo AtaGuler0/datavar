@@ -4,7 +4,6 @@ import {
   BASE_FEE,
   Contract,
   FeeBumpTransaction,
-  Keypair,
   Transaction,
   TransactionBuilder,
   contract,
@@ -221,9 +220,9 @@ async function send(
 /**
  * A rejection before the transaction even reaches a ledger. The generic answer
  * is nearly useless to whoever has to fix it, and one case is common enough to
- * deserve its own sentence: a signing key that has run out of XLM for fees.
- * Soroban's resource fees are large enough that a key kept deliberately thin —
- * as the operator key is — will hit this while everything else is healthy.
+ * deserve its own sentence: a signing wallet that has run out of XLM for fees.
+ * Soroban's resource fees are large enough that a wallet kept deliberately thin
+ * — as an operator's is — will hit this while everything else is healthy.
  */
 function rejectionMessage(sent: rpc.Api.SendTransactionResponse): string {
   const code = sent.errorResult?.result().switch().name;
@@ -258,28 +257,10 @@ export async function submitSigned(
   return send(tx, errors);
 }
 
-/**
- * Builds, signs and sends a call in one go with a key this server holds. Only
- * for calls that are ours to make — never for anything a contributor should be
- * authorising themselves.
+/*
+ * There is deliberately no "sign it here" helper. There used to be — crediting
+ * a sale was signed with a key in the environment — and it is gone with the key
+ * itself. Every call this product makes to a contract is authorised by a person
+ * in their own wallet: a contributor claims, an operator credits, an admin hands
+ * the role on. This module builds and relays; it never holds the means to sign.
  */
-export async function invokeAsServer(
-  secret: string,
-  contractId: string,
-  method: string,
-  args: xdr.ScVal[],
-  errors: ErrorTable,
-): Promise<string> {
-  const keypair = Keypair.fromSecret(secret);
-  const xdrToSign = await buildInvocation(
-    keypair.publicKey(),
-    contractId,
-    method,
-    args,
-    errors,
-  );
-
-  const tx = TransactionBuilder.fromXDR(xdrToSign, STELLAR.networkPassphrase);
-  tx.sign(keypair);
-  return send(tx, errors);
-}

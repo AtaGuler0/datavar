@@ -12,6 +12,7 @@ import {
 import { formatXlm } from "@/lib/stellar/config";
 import { createSales, type SaleDraft, type SaleStatus } from "@/lib/supabase/sales";
 import { Card } from "@/components/dashboard/primitives";
+import { useWallet } from "@/components/dashboard/wallet-provider";
 import { SalesTable } from "./sales-table";
 import { marketTotals, useMarket } from "./use-market";
 
@@ -34,6 +35,7 @@ const ROUND_SIZES = [1, 3, 5, 10] as const;
  */
 export function SaleLedger() {
   const { datasets, sales, failed, reload } = useMarket();
+  const { signTransaction } = useWallet();
 
   const [filter, setFilter] = useState<FilterId>("all");
   const [size, setSize] = useState<number>(3);
@@ -72,12 +74,12 @@ export function SaleLedger() {
       const gross = written.reduce((sum, s) => sum + Number(s.price_stroops), 0);
       const sold = `Sold ${written.length} dataset${written.length === 1 ? "" : "s"} for ${formatXlm(gross)} XLM.`;
 
-      // Credit in the same breath as the sale. A recorded sale is still our
-      // money; only a credited one is the contributor's, and leaving that to a
-      // button someone remembers to press is what left contributors looking at
-      // payouts they could not take.
+      // Credit in the same breath as the sale, with the same wallet that ran
+      // the round. A recorded sale is still our money; only a credited one is
+      // the contributor's, and leaving that to a button someone remembers to
+      // press is what left contributors looking at payouts they could not take.
       try {
-        const { warning } = await creditPending();
+        const { warning } = await creditPending(signTransaction);
         setNote(
           warning
             ? `${sold} ${warning}`

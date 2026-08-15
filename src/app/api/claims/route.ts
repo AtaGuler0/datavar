@@ -8,7 +8,7 @@ import {
   buildClaim,
   isPayoutConfigured,
   PayoutError,
-  submitClaim,
+  submitToVault,
 } from "@/lib/stellar/payout";
 
 /**
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       if (typeof body.xdr !== "string" || !body.xdr) {
         return fail("A signed transaction is required.", 400);
       }
-      const hash = await submitClaim(body.xdr);
+      const hash = await submitToVault(body.xdr);
       return NextResponse.json({ hash, ...(await settle(wallet, hash)) });
     }
 
