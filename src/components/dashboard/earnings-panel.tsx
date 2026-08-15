@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { authHeaders } from "@/lib/auth/session-store";
 import { formatDate } from "@/lib/format";
+import { claimPayout } from "@/lib/payouts";
 import {
   explorerTxUrl,
   formatXlm,
@@ -101,23 +101,7 @@ export function EarningsPanel() {
       // The server prepares the call and the contract checks the signature, so
       // the wallet claimed for is the wallet that signs — not whatever this
       // request says.
-      const prepared = await fetch("/api/claims", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ action: "build" }),
-      });
-      const built = await prepared.json();
-      if (!prepared.ok) throw new Error(built?.error ?? "Couldn't prepare the claim.");
-
-      const signed = await signTransaction(built.xdr);
-
-      const sent = await fetch("/api/claims", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ action: "submit", xdr: signed }),
-      });
-      const result = await sent.json();
-      if (!sent.ok) throw new Error(result?.error ?? "The claim didn't go through.");
+      const result = await claimPayout(signTransaction);
 
       setSettled(result.hash);
       if (result.warning) setError(result.warning);
@@ -268,7 +252,7 @@ function ClaimBar({
         </p>
         <p className="mt-0.5 text-xs text-ink-faint">
           {waitingCount > 0
-            ? `${formatXlm(waitingStroops)} XLM from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is still being written to the contract.`
+            ? `${formatXlm(waitingStroops)} XLM from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is on its way into the contract, and claimable the moment it lands.`
             : "Claiming signs one transaction with your wallet. The contract pays it out."}
         </p>
       </div>

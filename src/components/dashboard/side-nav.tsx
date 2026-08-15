@@ -53,24 +53,6 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
   );
 }
 
-/** The protocol-wide view: a globe, on the same 16-grid as the section icons. */
-function ProtocolIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      className={`h-4 w-4 shrink-0 ${className ?? "text-ink-faint"}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      aria-hidden="true"
-    >
-      <circle cx="8" cy="8" r="5.5" />
-      <ellipse cx="8" cy="8" rx="2.4" ry="5.5" />
-      <path d="M2.7 6h10.6M2.7 10h10.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 /**
  * The wallet as the account block at the foot of the rail — where a SaaS
  * dashboard puts its user avatar. Connected → address plus a leave button;
@@ -174,17 +156,6 @@ export function SideNav() {
       </ul>
 
       <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
-        {/* The protocol-wide view. It lives outside the dashboard because it
-            needs no wallet, but this is where someone looking at their own
-            numbers thinks to ask how everyone else is doing. */}
-        <Link
-          href="/protocol"
-          className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
-        >
-          <ProtocolIcon className="text-ink-faint transition-colors group-hover:text-ink-dim" />
-          Across the protocol
-        </Link>
-
         {/* The way through to the operator side, for the wallets that have
             one. Everyone else never learns the panel exists — and could not
             get in if they did, since the claim comes from a signed session. */}
@@ -281,20 +252,11 @@ export function MobileMenu({ onNavigate }: { onNavigate: () => void }) {
         })}
       </ul>
 
-      <Link
-        href="/protocol"
-        onClick={onNavigate}
-        className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3.5 text-base text-ink-dim transition-colors hover:bg-paper-sunken/60"
-      >
-        <ProtocolIcon />
-        Across the protocol
-      </Link>
-
       {session?.admin && (
         <Link
           href="/admin"
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-xl px-3 py-3.5 text-base text-ink-dim transition-colors hover:bg-paper-sunken/60"
+          className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3.5 text-base text-ink-dim transition-colors hover:bg-paper-sunken/60"
         >
           <svg
             viewBox="0 0 16 16"

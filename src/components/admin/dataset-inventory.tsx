@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatBytes, formatCount, formatDate } from "@/lib/format";
+import { creditPending } from "@/lib/payouts";
 import {
   PRICE_BAND,
   randomBuyer,
@@ -72,6 +73,19 @@ export function DatasetInventory() {
           price_stroops: xlmToStroops(priceXlm),
         },
       ]);
+
+      // Straight into the contract, as on the Sales page: a sale that isn't
+      // credited is a payout the contributor can see and cannot take.
+      try {
+        const { warning } = await creditPending();
+        if (warning) setError(warning);
+      } catch (e) {
+        setError(
+          `Sale recorded, but it isn't in the payout contract yet — ${
+            e instanceof Error ? e.message : "the credit didn't go through."
+          }`,
+        );
+      }
       await reload();
     } catch {
       setError("Couldn't record that sale. Try again.");

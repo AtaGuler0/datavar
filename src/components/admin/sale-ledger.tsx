@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatCount } from "@/lib/format";
+import { creditPending } from "@/lib/payouts";
 import {
   PRICE_BAND,
   randomBuyer,
@@ -69,9 +70,26 @@ export function SaleLedger() {
 
       const written = await createSales(drafts);
       const gross = written.reduce((sum, s) => sum + Number(s.price_stroops), 0);
-      setNote(
-        `Sold ${written.length} dataset${written.length === 1 ? "" : "s"} for ${formatXlm(gross)} XLM. Their contributors can claim now.`,
-      );
+      const sold = `Sold ${written.length} dataset${written.length === 1 ? "" : "s"} for ${formatXlm(gross)} XLM.`;
+
+      // Credit in the same breath as the sale. A recorded sale is still our
+      // money; only a credited one is the contributor's, and leaving that to a
+      // button someone remembers to press is what left contributors looking at
+      // payouts they could not take.
+      try {
+        const { warning } = await creditPending();
+        setNote(
+          warning
+            ? `${sold} ${warning}`
+            : `${sold} Their contributors can claim now.`,
+        );
+      } catch (e) {
+        setNote(
+          `${sold} It isn't in the payout contract yet — ${
+            e instanceof Error ? e.message : "the credit didn't go through."
+          } Credit it from the vault to make it claimable.`,
+        );
+      }
       await reload();
     } catch {
       setError("The round didn't go through. Nothing was recorded.");

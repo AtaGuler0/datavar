@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { authHeaders } from "@/lib/auth/session-store";
 import { formatBytes, formatCount, formatDate } from "@/lib/format";
 import {
   buildLifecycles,
   lifecycleTotals,
   type DatasetLifecycle,
 } from "@/lib/lifecycle";
-import { formatXlm, truncateAddress } from "@/lib/stellar/config";
+import { claimPayout } from "@/lib/payouts";
+import { explorerTxUrl, formatXlm, truncateAddress } from "@/lib/stellar/config";
 import type { ConsentReceipt } from "@/lib/stellar/consent";
 import {
   listDatasets,
@@ -197,7 +197,13 @@ export function DataPanel() {
         <Figure
           label="Ready to claim"
           value={`${formatXlm(totals.claimableStroops)} XLM`}
-          note={totals.claimableStroops === 0 ? "nothing waiting" : "yours to take"}
+          note={
+            totals.pendingCreditStroops > 0
+              ? `${formatXlm(totals.pendingCreditStroops)} XLM still reaching the contract`
+              : totals.claimableStroops === 0
+                ? "nothing waiting"
+                : "yours to take"
+          }
         />
       </div>
 
@@ -335,29 +341,31 @@ function LifecycleRow({
   item: DatasetLifecycle;
   onChanged: () => void;
 }) {
-  const { address } = useWallet();
+  const { address, signTransaction } = useWallet();
   const [granting, setGranting] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settled, setSettled] = useState<{ hash: string; stroops: number } | null>(
+    null,
+  );
 
-  const { dataset, activeReceipts, unclaimedSales } = item;
-  // Oldest first: a payout that has waited longest goes first.
-  const nextSale = unclaimedSales[unclaimedSales.length - 1];
+  const { dataset, activeReceipts } = item;
 
+  /**
+   * The contract holds one balance per wallet, so this claims everything in it,
+   * not this dataset's share. The button says as much — quoting one sale's price
+   * on a transaction that empties the lot is how the old one lied even when it
+   * worked.
+   */
   const claim = async () => {
-    if (!address || !nextSale || claiming) return;
+    if (!address || claiming) return;
     setClaiming(true);
     setError(null);
+    setSettled(null);
     try {
-      const res = await fetch("/api/claims", {
-        method: "POST",
-        // The claim route reads the wallet from the session, not the body —
-        // without the header it is an anonymous request and rightly refused.
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ saleId: nextSale.id }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? "The payout didn't go through.");
+      const result = await claimPayout(signTransaction);
+      setSettled({ hash: result.hash, stroops: result.stroops });
+      if (result.warning) setError(result.warning);
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The payout didn't go through.");
@@ -400,16 +408,14 @@ function LifecycleRow({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-rule pt-3.5">
         <StatusLine item={item} />
 
-        {item.next === "claim" && nextSale && (
+        {item.next === "claim" && (
           <button
             type="button"
             onClick={claim}
             disabled={claiming}
             className="inline-flex shrink-0 items-center rounded-lg bg-slate-deep px-3.5 py-1.5 text-xs font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-50"
           >
-            {claiming
-              ? "Settling…"
-              : `Claim ${formatXlm(Number(nextSale.price_stroops))} XLM`}
+            {claiming ? "Waiting for your wallet…" : "Claim your payouts"}
           </button>
         )}
 
@@ -436,10 +442,23 @@ function LifecycleRow({
         )}
       </div>
 
-      {error && (
-        <p className="mt-3 rounded-lg border border-rule bg-paper-raised/60 px-3.5 py-2.5 text-sm text-ink-dim">
-          {error}
-        </p>
+      {(error || settled) && (
+        <div className="mt-3 rounded-lg border border-rule bg-paper-raised/60 px-3.5 py-2.5 text-sm text-ink-dim">
+          {settled && (
+            <p>
+              Claimed {formatXlm(settled.stroops)} XLM.{" "}
+              <a
+                href={explorerTxUrl(settled.hash)}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-xs text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
+              >
+                {settled.hash.slice(0, 12)}…
+              </a>
+            </p>
+          )}
+          {error && <p className={settled ? "mt-1.5" : undefined}>{error}</p>}
+        </div>
       )}
 
       {/* The grant form, in the row it belongs to. The dataset is already
@@ -465,15 +484,26 @@ function LifecycleRow({
 
 /** What the strip means, in a sentence, for whichever state this row is in. */
 function StatusLine({ item }: { item: DatasetLifecycle }) {
-  const { activeReceipts, unclaimedSales, claimedSales } = item;
+  const { activeReceipts, unclaimedSales, claimedSales, claimableSales } = item;
 
   if (unclaimedSales.length > 0) {
+    // Oldest first: the payout that has waited longest names the row.
     const sale = unclaimedSales[unclaimedSales.length - 1];
+    const pending = item.pendingCreditSales.length;
     return (
       <p className="text-xs text-pretty text-ink-dim">
         Licensed to {sale.buyer}
-        {unclaimedSales.length > 1 && (
-          <> · {unclaimedSales.length} payouts waiting</>
+        {claimableSales.length > 1 && (
+          <> · {claimableSales.length} payouts waiting for you</>
+        )}
+        {/* Sold but not on-chain yet. Named rather than counted with the rest:
+            this is the one part of a payout the contributor cannot act on, and
+            rolling it into "waiting" is what made the old row unexplainable. */}
+        {pending > 0 && (
+          <>
+            {" "}
+            · {formatXlm(item.pendingCreditStroops)} XLM reaching the contract
+          </>
         )}
       </p>
     );

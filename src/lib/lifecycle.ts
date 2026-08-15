@@ -53,11 +53,22 @@ export type DatasetLifecycle = {
   sales: Sale[];
   claimedSales: Sale[];
   unclaimedSales: Sale[];
+  /**
+   * Unclaimed sales the payout contract actually holds. A sale is our record;
+   * only a credited one is money the contributor can take without asking us,
+   * and the difference is the whole point of the contract — so it is the
+   * difference the row is allowed to offer a button for.
+   */
+  claimableSales: Sale[];
+  /** Sold, but not written into the contract yet. Nobody can claim these. */
+  pendingCreditSales: Sale[];
   reached: Reached;
   /** Everything this dataset has sold for, in stroops. */
   grossStroops: number;
-  /** Of that, what is still waiting to be claimed. */
+  /** Of that, what is in the contract and unclaimed. */
   claimableStroops: number;
+  /** And what is sold but not in the contract yet. */
+  pendingCreditStroops: number;
   next: NextAction;
 };
 
@@ -101,6 +112,8 @@ export function buildLifecycles(
     const activeReceipts = datasetReceipts.filter((r) => r.status === "active");
     const claimedSales = datasetSales.filter((s) => s.status === "claimed");
     const unclaimedSales = datasetSales.filter((s) => s.status !== "claimed");
+    const claimableSales = unclaimedSales.filter((s) => s.credited_at);
+    const pendingCreditSales = unclaimedSales.filter((s) => !s.credited_at);
 
     return {
       dataset,
@@ -109,6 +122,8 @@ export function buildLifecycles(
       sales: datasetSales,
       claimedSales,
       unclaimedSales,
+      claimableSales,
+      pendingCreditSales,
       reached: {
         // The file exists and has a digest, or it wouldn't be here at all.
         hashed: true,
@@ -117,8 +132,9 @@ export function buildLifecycles(
         paid: claimedSales.length > 0,
       },
       grossStroops: sum(datasetSales),
-      claimableStroops: sum(unclaimedSales),
-      next: nextAction(activeReceipts.length, unclaimedSales.length),
+      claimableStroops: sum(claimableSales),
+      pendingCreditStroops: sum(pendingCreditSales),
+      next: nextAction(activeReceipts.length, claimableSales.length),
     };
   });
 }
@@ -129,9 +145,12 @@ export function buildLifecycles(
  * After that, the gap that stops anything from happening — no standing consent
  * means no buyer can license it. Otherwise the next move is a buyer's, not
  * theirs, and the row offers nothing rather than inventing busywork.
+ *
+ * "Claimable" here means in the contract, not merely sold: a button offering to
+ * claim money the contract does not hold is a button that can only fail.
  */
-function nextAction(activeCount: number, unclaimedCount: number): NextAction {
-  if (unclaimedCount > 0) return "claim";
+function nextAction(activeCount: number, claimableCount: number): NextAction {
+  if (claimableCount > 0) return "claim";
   if (activeCount === 0) return "grant";
   return null;
 }
@@ -146,6 +165,10 @@ export function lifecycleTotals(items: DatasetLifecycle[]) {
     licensed: items.filter((i) => i.reached.licensed).length,
     grossStroops: items.reduce((total, i) => total + i.grossStroops, 0),
     claimableStroops: items.reduce((total, i) => total + i.claimableStroops, 0),
+    pendingCreditStroops: items.reduce(
+      (total, i) => total + i.pendingCreditStroops,
+      0,
+    ),
     bytes: items.reduce((total, i) => total + i.dataset.byte_size, 0),
   };
 }
