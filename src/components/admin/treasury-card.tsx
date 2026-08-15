@@ -10,13 +10,14 @@ import {
 import { fetchAccount, fundWithFriendbot } from "@/lib/stellar/horizon";
 
 /**
- * The account every claim is paid from. An operator's first question is
- * "can we still pay people", so the balance leads, and topping it up from
- * friendbot is one click away.
+ * The account that feeds the payout vault. It no longer pays contributors —
+ * the contract does that, and only against a contributor's own signature — so
+ * what this balance answers is narrower now: whether we can keep crediting
+ * sales. Topping it up from friendbot is one click away.
  *
- * `outstandingStroops` is what contributors could claim right now — set
- * against the balance, it's the only number that answers the question
- * honestly.
+ * `outstandingStroops` is what contributors are owed in total, credited or
+ * not; set against this balance, it's what says whether the treasury can still
+ * cover the sales we've recorded.
  */
 export function TreasuryCard({
   outstandingStroops,
@@ -78,7 +79,8 @@ export function TreasuryCard({
         </p>
         <p className="mt-2 max-w-md text-sm text-pretty text-chalk-dim">
           Set NEXT_PUBLIC_STELLAR_TREASURY and STELLAR_TREASURY_SECRET, then
-          restart. Sales can still be recorded, but nobody can claim one.
+          restart. Sales can still be recorded, but nothing can be funded into
+          the vault or credited.
         </p>
       </div>
     );
@@ -102,8 +104,8 @@ export function TreasuryCard({
               : !exists
                 ? "This account doesn't exist on testnet yet — fund it to open it."
                 : short
-                  ? `Short of the ${formatXlm(outstandingStroops)} XLM contributors can claim right now.`
-                  : `Covers the ${formatXlm(outstandingStroops)} XLM contributors can claim right now.`}
+                  ? `Short of the ${formatXlm(outstandingStroops)} XLM owed across unclaimed sales.`
+                  : `Covers the ${formatXlm(outstandingStroops)} XLM owed across unclaimed sales.`}
           </p>
 
           <a
