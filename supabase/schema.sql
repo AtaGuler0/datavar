@@ -45,9 +45,11 @@ create index if not exists datasets_owner_idx
 alter table public.datasets
   add column if not exists synthetic boolean not null default false;
 
-create index if not exists datasets_real_idx
-  on public.datasets (created_at desc)
-  where not synthetic;
+-- Ordering for the public network view. Partial on `not synthetic` while that
+-- filter existed; the view no longer has one, so neither does the index.
+drop index if exists public.datasets_real_idx;
+create index if not exists datasets_recent_idx
+  on public.datasets (created_at desc);
 
 alter table public.datasets enable row level security;
 
@@ -192,6 +194,15 @@ create policy "datasets download"
     and (storage.foldername(name))[1] = public.current_wallet()
   );
 
+-- These three views are the whole public surface, and they count the whole
+-- deployment: every dataset row and every sale, generated load included.
+--
+-- They used to carry `where not d.synthetic`, on the reasoning that generated
+-- rows are not adoption. The deployment is testnet end to end — nothing here
+-- is production adoption either way — so the filter was dropped and the public
+-- pages now read the same totals the operator panel does. The `synthetic`
+-- column stays: it is what the operator panel's `generated` badge reads, and
+-- it is how the filter comes back if this ever runs against mainnet.
 drop view if exists public.network_activity;
 create view public.network_activity as
   select
@@ -200,27 +211,27 @@ create view public.network_activity as
     d.byte_size,
     d.created_at,
     exists (select 1 from public.sales s where s.dataset_id = d.id) as sold
-  from public.datasets d
-  where not d.synthetic;
+  from public.datasets d;
 
+-- `paid_stroops` and `gross_stroops` answer two different questions and the
+-- gap between them is the point: gross is everything a buyer has paid for,
+-- paid is the part a contributor has actually claimed and settled on-chain.
+-- Neither is the other, so nothing renders one under the other's label.
 drop view if exists public.protocol_totals;
 create view public.protocol_totals as
   select
-    (select count(distinct owner_wallet) from public.datasets where not synthetic) as contributors,
-    (select count(*) from public.datasets where not synthetic)                     as datasets,
-    (select coalesce(sum(s.price_stroops), 0)
-       from public.sales s
-       join public.datasets d on d.id = s.dataset_id
-      where s.status = 'claimed' and not d.synthetic)                              as paid_stroops,
+    (select count(distinct owner_wallet) from public.datasets)      as contributors,
+    (select count(*) from public.datasets)                          as datasets,
+    (select coalesce(sum(price_stroops), 0)
+       from public.sales where status = 'claimed')                  as paid_stroops,
     (select count(*)
-       from public.sales s
-       join public.datasets d on d.id = s.dataset_id
-      where s.status = 'claimed' and not d.synthetic)                              as payouts;
+       from public.sales where status = 'claimed')                  as payouts,
+    (select count(*) from public.sales)                             as sales,
+    (select coalesce(sum(price_stroops), 0) from public.sales)      as gross_stroops,
+    (select count(distinct dataset_id) from public.sales)           as datasets_sold;
 
--- What each kind of data has actually fetched, from real sales. A category
--- with no sales is absent — the landing page shows a dash rather than
--- inventing a rate for it. Generated sales are no basis for a rate either, so
--- they are out on the same terms.
+-- What each kind of data has actually fetched. A category with no sales is
+-- absent — the landing page shows a dash rather than inventing a rate for it.
 drop view if exists public.source_rates;
 create view public.source_rates as
   select
@@ -229,8 +240,12 @@ create view public.source_rates as
     count(*)                            as sale_count
   from public.sales s
   join public.datasets d on d.id = s.dataset_id
-  where not d.synthetic
   group by d.source_type;
+
+-- Briefly published as a separate "testnet load" total beside the filtered
+-- ones. Now that protocol_totals counts everything, it has no reason to exist,
+-- and this drop clears it from deployments that already ran that version.
+drop view if exists public.testnet_totals;
 
 grant select on public.network_activity to anon, authenticated;
 grant select on public.protocol_totals  to anon, authenticated;

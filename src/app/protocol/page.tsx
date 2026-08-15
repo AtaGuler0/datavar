@@ -29,8 +29,8 @@ export default function ProtocolPage() {
           </div>
           <Reveal delay={120}>
             <p className="max-w-sm text-pretty text-sm text-ink-dim">
-              Counted from real contributions rather than typed in. No wallet,
-              no account, no permission — if the protocol has done nothing, the
+              Counted from the ledger rather than typed in. No wallet, no
+              account, no permission — if the protocol has done nothing, the
               page says zero.
             </p>
           </Reveal>

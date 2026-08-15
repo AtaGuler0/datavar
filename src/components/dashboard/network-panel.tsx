@@ -6,7 +6,7 @@ import { formatBytes, formatCount, percentDelta } from "@/lib/format";
 import { formatXlm } from "@/lib/stellar/config";
 import { SOURCE_TYPES } from "@/lib/supabase/datasets";
 import { listNetworkDatasets, type NetworkRow } from "@/lib/supabase/network";
-import { loadProtocolStats } from "@/lib/supabase/stats";
+import { loadProtocolStats, type ProtocolStats } from "@/lib/supabase/stats";
 import { ActivityChart } from "./activity-chart";
 import { GrowthCurve, type CurvePoint } from "./growth-curve";
 import { Card } from "./primitives";
@@ -32,10 +32,10 @@ export function NetworkPanel() {
   const [period, setPeriod] = useState<PeriodId>("30d");
   const [rows, setRows] = useState<NetworkRow[] | null>(null);
   const [failed, setFailed] = useState(false);
-  // Settled payouts come from the totals view, not the activity rows — a
-  // contribution knows its size, not what it later sold for. Loaded
-  // separately so a missing view costs the page one tile, not the charts.
-  const [paidStroops, setPaidStroops] = useState<number | null>(null);
+  // Money comes from the totals view, not the activity rows — a contribution
+  // knows its size, not what it later sold for. Loaded separately so a missing
+  // view costs the page a few tiles, not the charts.
+  const [totals, setTotals] = useState<ProtocolStats | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +43,7 @@ export function NetworkPanel() {
       .then((data) => !cancelled && setRows(data))
       .catch(() => !cancelled && setFailed(true));
     loadProtocolStats()
-      .then((s) => !cancelled && setPaidStroops(s.paidStroops))
+      .then((s) => !cancelled && setTotals(s))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -287,9 +287,29 @@ export function NetworkPanel() {
               footnote="source categories with at least one contribution"
             />
             <StatCard
+              label="Datasets licensed"
+              value={totals === null ? "—" : formatCount(totals.datasetsSold)}
+              footnote="bought by at least one buyer"
+            />
+            {/* Gross and paid sit side by side deliberately: the gap between
+                them is money contributors have earned and not yet claimed. */}
+            <StatCard
+              label="Sold to date"
+              value={
+                totals === null ? "—" : `${formatXlm(totals.grossStroops)} XLM`
+              }
+              footnote={
+                totals === null
+                  ? undefined
+                  : `across ${formatCount(totals.sales)} licence${
+                      totals.sales === 1 ? "" : "s"
+                    }`
+              }
+            />
+            <StatCard
               label="Paid out to date"
               value={
-                paidStroops === null ? "—" : `${formatXlm(paidStroops)} XLM`
+                totals === null ? "—" : `${formatXlm(totals.paidStroops)} XLM`
               }
               footnote="claimed by contributors and settled on-chain"
             />

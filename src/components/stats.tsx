@@ -4,9 +4,12 @@ import { Reveal } from "./reveal";
 
 /**
  * Protocol numbers, counted from the tables rather than written down. Every
- * value here is live testnet data, which currently means most of them are
- * small — that is the honest state of the thing and the section says so
- * instead of dressing it up.
+ * value here is live testnet data — the whole deployment, which is what the
+ * "Testnet · live" tag beside the heading is there to say.
+ *
+ * `sold to date` is gross: everything a buyer has paid for, whether or not the
+ * contributor has claimed it yet. What has actually reached a contributor's
+ * wallet is `paid out`, and the two never share a label.
  */
 export function Stats({ stats }: { stats: ProtocolStats }) {
   const count = (n: number) => n.toLocaleString("en-US");
@@ -14,6 +17,8 @@ export function Stats({ stats }: { stats: ProtocolStats }) {
   const metrics = [
     { value: count(stats.contributors), label: "contributors" },
     { value: count(stats.datasets), label: "datasets contributed" },
+    { value: count(stats.sales), label: "licences sold" },
+    { value: `${formatXlm(stats.grossStroops)} XLM`, label: "sold to date" },
     { value: `${formatXlm(stats.paidStroops)} XLM`, label: "paid out to date" },
     { value: count(stats.payouts), label: "payouts settled on-chain" },
   ];

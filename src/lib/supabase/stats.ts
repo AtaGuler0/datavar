@@ -9,7 +9,10 @@ import { supabase } from "./client";
  * These read the aggregate views rather than the tables. Row-level security
  * puts the tables out of reach without a session, and rightly so: a landing
  * page has no business pulling anyone's dataset rows into a visitor's browser
- * to count them. Postgres does the counting; four numbers come back.
+ * to count them. Postgres does the counting; a handful of numbers come back.
+ *
+ * The counts cover the whole deployment, generated load included — see the
+ * note above the views in schema.sql for why the synthetic filter came off.
  */
 
 /** How many unit-chart dots the page will draw before it stops adding them. */
@@ -25,6 +28,13 @@ export type ProtocolStats = {
   paidStroops: number;
   /** Payouts that reached the ledger. */
   payouts: number;
+  /** Sales recorded, at any status. */
+  sales: number;
+  /** Everything buyers have paid for, claimed or not, in stroops. Always at
+   *  or above `paidStroops`; the gap is what contributors have yet to claim. */
+  grossStroops: number;
+  /** Distinct datasets licensed at least once. */
+  datasetsSold: number;
   /** One entry per dataset for the unit chart, capped; `sold` marks the ones
    *  that have been licensed at least once. */
   units: { sold: boolean }[];
@@ -46,6 +56,9 @@ export const EMPTY_STATS: ProtocolStats = {
   datasets: 0,
   paidStroops: 0,
   payouts: 0,
+  sales: 0,
+  grossStroops: 0,
+  datasetsSold: 0,
   units: [],
   unitsTruncated: false,
   avgStroopsBySource: {},
@@ -56,6 +69,11 @@ type TotalsRow = {
   datasets: number;
   paid_stroops: number;
   payouts: number;
+  // Added after the first version of the view. A deployment that hasn't
+  // re-run schema.sql won't have them, hence the coalescing below.
+  sales?: number | null;
+  gross_stroops?: number | null;
+  datasets_sold?: number | null;
 };
 
 type RateRow = { source_type: string; avg_price_stroops: number };
@@ -94,6 +112,9 @@ export async function loadProtocolStats(): Promise<ProtocolStats> {
     datasets: Number(totals.datasets),
     paidStroops: Number(totals.paid_stroops),
     payouts: Number(totals.payouts),
+    sales: Number(totals.sales ?? 0),
+    grossStroops: Number(totals.gross_stroops ?? 0),
+    datasetsSold: Number(totals.datasets_sold ?? 0),
     units: units.map((u) => ({ sold: u.sold })),
     unitsTruncated: Number(totals.datasets) > MAX_UNITS,
     avgStroopsBySource,
