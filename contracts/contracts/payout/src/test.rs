@@ -65,7 +65,7 @@ fn balance_of(h: &Harness, who: &Address) -> i128 {
 fn funded_with(h: &Harness, amount: i128) -> BytesN<32> {
     h.client.fund(&h.treasury, &(amount));
     let reference = sale(&h.env);
-    h.client.credit(&h.contributor, &amount, &reference);
+    h.client.credit(&h.operator, &h.contributor, &amount, &reference);
     reference
 }
 
@@ -88,7 +88,7 @@ fn a_credit_becomes_a_claimable_balance() {
     let h = setup();
     h.client.fund(&h.treasury, &(100 * XLM));
 
-    let balance = h.client.credit(&h.contributor, &(4 * XLM), &sale(&h.env));
+    let balance = h.client.credit(&h.operator, &h.contributor, &(4 * XLM), &sale(&h.env));
 
     assert_eq!(balance, 4 * XLM);
     assert_eq!(h.client.balance_of(&h.contributor), 4 * XLM);
@@ -102,7 +102,7 @@ fn credits_accumulate_into_one_balance() {
     h.client.fund(&h.treasury, &(100 * XLM));
 
     for _ in 0..10 {
-        h.client.credit(&h.contributor, &(4 * XLM), &sale(&h.env));
+        h.client.credit(&h.operator, &h.contributor, &(4 * XLM), &sale(&h.env));
     }
 
     // Ten sales, one balance, one claim to make.
@@ -158,7 +158,7 @@ fn crediting_beyond_the_vault_is_refused() {
 
     assert_eq!(
         h.client
-            .try_credit(&h.contributor, &(11 * XLM), &sale(&h.env)),
+            .try_credit(&h.operator, &h.contributor, &(11 * XLM), &sale(&h.env)),
         Err(Ok(Error::Underfunded))
     );
 
@@ -180,7 +180,7 @@ fn every_credited_balance_can_be_claimed() {
         Address::generate(&h.env),
     ];
     for who in others.iter() {
-        h.client.credit(who, &(5 * XLM), &sale(&h.env));
+        h.client.credit(&h.operator, who, &(5 * XLM), &sale(&h.env));
     }
 
     // Everyone claims, in any order, and every one of them is paid in full.
@@ -200,9 +200,9 @@ fn the_same_sale_cannot_be_credited_twice() {
     h.client.fund(&h.treasury, &(100 * XLM));
     let reference = sale(&h.env);
 
-    h.client.credit(&h.contributor, &(4 * XLM), &reference);
+    h.client.credit(&h.operator, &h.contributor, &(4 * XLM), &reference);
     assert_eq!(
-        h.client.try_credit(&h.contributor, &(4 * XLM), &reference),
+        h.client.try_credit(&h.operator, &h.contributor, &(4 * XLM), &reference),
         Err(Ok(Error::AlreadyCredited))
     );
 
@@ -219,7 +219,7 @@ fn a_reference_stays_spent_after_the_balance_is_claimed() {
 
     // Claiming empties the balance; it does not make the sale creditable again.
     assert_eq!(
-        h.client.try_credit(&h.contributor, &(4 * XLM), &reference),
+        h.client.try_credit(&h.operator, &h.contributor, &(4 * XLM), &reference),
         Err(Ok(Error::AlreadyCredited))
     );
 }
@@ -230,7 +230,7 @@ fn a_batch_credits_a_whole_sale_round() {
     h.client.fund(&h.treasury, &(100 * XLM));
 
     let second = Address::generate(&h.env);
-    let owed = h.client.credit_many(&vec![
+    let owed = h.client.credit_many(&h.operator, &vec![
         &h.env,
         Credit {
             contributor: h.contributor.clone(),
@@ -259,10 +259,10 @@ fn a_batch_with_one_bad_entry_writes_none_of_it() {
     let h = setup();
     h.client.fund(&h.treasury, &(100 * XLM));
     let already = sale(&h.env);
-    h.client.credit(&h.contributor, &(4 * XLM), &already);
+    h.client.credit(&h.operator, &h.contributor, &(4 * XLM), &already);
 
     let second = Address::generate(&h.env);
-    let attempt = h.client.try_credit_many(&vec![
+    let attempt = h.client.try_credit_many(&h.operator, &vec![
         &h.env,
         Credit {
             contributor: second.clone(),
@@ -290,7 +290,7 @@ fn a_batch_is_funded_as_a_whole() {
     h.client.fund(&h.treasury, &(10 * XLM));
 
     let second = Address::generate(&h.env);
-    let attempt = h.client.try_credit_many(&vec![
+    let attempt = h.client.try_credit_many(&h.operator, &vec![
         &h.env,
         Credit {
             contributor: h.contributor.clone(),
@@ -325,7 +325,7 @@ fn an_oversized_batch_is_refused() {
     }
 
     assert_eq!(
-        h.client.try_credit_many(&credits),
+        h.client.try_credit_many(&h.operator, &credits),
         Err(Ok(Error::BatchTooLarge))
     );
 }
@@ -337,7 +337,7 @@ fn zero_and_negative_credits_are_refused() {
 
     for amount in [0i128, -1, -(5 * XLM)] {
         assert_eq!(
-            h.client.try_credit(&h.contributor, &amount, &sale(&h.env)),
+            h.client.try_credit(&h.operator, &h.contributor, &amount, &sale(&h.env)),
             Err(Ok(Error::InvalidAmount))
         );
     }
@@ -345,7 +345,7 @@ fn zero_and_negative_credits_are_refused() {
 }
 
 #[test]
-fn only_the_operator_can_credit() {
+fn only_an_operator_can_credit() {
     let env = Env::default();
     let admin = Address::generate(&env);
     let operator = Address::generate(&env);
@@ -363,7 +363,9 @@ fn only_the_operator_can_credit() {
     client.fund(&treasury, &(100 * XLM));
 
     let reference = BytesN::random(&env);
-    // Not the admin, and not the contributor who stands to gain by it.
+    // Not the admin, and not the contributor who stands to gain by it. Each one
+    // signs properly and names itself as the operator — the signature is real,
+    // the membership is what they haven't got.
     for impostor in [&admin, &contributor, &treasury] {
         let attempt = client
             .mock_auths(&[MockAuth {
@@ -371,12 +373,18 @@ fn only_the_operator_can_credit() {
                 invoke: &MockAuthInvoke {
                     contract: &contract_id,
                     fn_name: "credit",
-                    args: (contributor.clone(), 4 * XLM, reference.clone()).into_val(&env),
+                    args: (
+                        impostor.clone(),
+                        contributor.clone(),
+                        4 * XLM,
+                        reference.clone(),
+                    )
+                        .into_val(&env),
                     sub_invokes: &[],
                 },
             }])
-            .try_credit(&contributor, &(4 * XLM), &reference);
-        assert!(attempt.is_err());
+            .try_credit(impostor, &contributor, &(4 * XLM), &reference);
+        assert_eq!(attempt, Err(Ok(Error::NotOperator)));
     }
 
     env.mock_all_auths();
@@ -401,7 +409,7 @@ fn only_the_contributor_can_claim_their_balance() {
     let contract_id = env.register(Payout, (&admin, &operator, &token));
     let client = PayoutClient::new(&env, &contract_id);
     client.fund(&treasury, &(100 * XLM));
-    client.credit(&contributor, &(4 * XLM), &BytesN::random(&env));
+    client.credit(&operator, &contributor, &(4 * XLM), &BytesN::random(&env));
 
     // The operator that recorded the debt cannot collect it, and neither can
     // the admin that owns the contract.
@@ -428,7 +436,7 @@ fn only_the_contributor_can_claim_their_balance() {
 fn the_admin_cannot_withdraw_what_is_owed() {
     let h = setup();
     h.client.fund(&h.treasury, &(10 * XLM));
-    h.client.credit(&h.contributor, &(8 * XLM), &sale(&h.env));
+    h.client.credit(&h.operator, &h.contributor, &(8 * XLM), &sale(&h.env));
 
     // Surplus is 2 XLM. Everything past it belongs to the contributor.
     assert_eq!(h.client.surplus(), 2 * XLM);
@@ -485,24 +493,76 @@ fn only_the_admin_can_withdraw_surplus() {
     assert_eq!(client.funded(), 100 * XLM);
 }
 
+/// The reason the set exists: a second person can credit without the first
+/// handing over a key, and both keep working.
 #[test]
-fn crediting_survives_an_operator_rotation() {
+fn several_operators_can_credit_side_by_side() {
     let h = setup();
     h.client.fund(&h.treasury, &(100 * XLM));
-    h.client.credit(&h.contributor, &(4 * XLM), &sale(&h.env));
 
-    let new_operator = Address::generate(&h.env);
-    h.client.set_operator(&new_operator);
+    let second = Address::generate(&h.env);
+    h.client.add_operator(&second);
 
-    assert_eq!(h.client.operator(), new_operator);
-    // Balances are untouched by who is allowed to write them.
-    assert_eq!(h.client.balance_of(&h.contributor), 4 * XLM);
-    h.client.credit(&h.contributor, &(2 * XLM), &sale(&h.env));
+    assert!(h.client.is_operator(&h.operator));
+    assert!(h.client.is_operator(&second));
+    assert_eq!(h.client.operators().len(), 2);
+
+    h.client
+        .credit(&h.operator, &h.contributor, &(4 * XLM), &sale(&h.env));
+    h.client
+        .credit(&second, &h.contributor, &(2 * XLM), &sale(&h.env));
+
+    // One balance, whoever recorded the sale.
     assert_eq!(h.client.balance_of(&h.contributor), 6 * XLM);
 }
 
 #[test]
-fn rotating_the_operator_is_gated_on_the_admin() {
+fn a_removed_operator_stops_crediting_and_nothing_else() {
+    let h = setup();
+    h.client.fund(&h.treasury, &(100 * XLM));
+    let leaving = Address::generate(&h.env);
+    h.client.add_operator(&leaving);
+    h.client
+        .credit(&leaving, &h.contributor, &(4 * XLM), &sale(&h.env));
+
+    h.client.remove_operator(&leaving);
+
+    assert!(!h.client.is_operator(&leaving));
+    assert_eq!(
+        h.client
+            .try_credit(&leaving, &h.contributor, &(4 * XLM), &sale(&h.env)),
+        Err(Ok(Error::NotOperator))
+    );
+    // What they credited is the contributor's, not theirs to lose on the way
+    // out — and the operator that remains carries on.
+    assert_eq!(h.client.balance_of(&h.contributor), 4 * XLM);
+    assert_eq!(h.client.claim(&h.contributor), 4 * XLM);
+    h.client
+        .credit(&h.operator, &h.contributor, &(1 * XLM), &sale(&h.env));
+    assert_eq!(h.client.balance_of(&h.contributor), 1 * XLM);
+}
+
+#[test]
+fn the_set_has_a_ceiling() {
+    let h = setup();
+
+    // One is already in place from the deployment.
+    for _ in 1..MAX_OPERATORS {
+        h.client.add_operator(&Address::generate(&h.env));
+    }
+    assert_eq!(h.client.operators().len(), MAX_OPERATORS);
+    assert_eq!(
+        h.client.try_add_operator(&Address::generate(&h.env)),
+        Err(Ok(Error::TooManyOperators))
+    );
+
+    // Adding one that is already there is not an error and not a duplicate.
+    h.client.add_operator(&h.operator);
+    assert_eq!(h.client.operators().len(), MAX_OPERATORS);
+}
+
+#[test]
+fn granting_the_operator_role_is_gated_on_the_admin() {
     let env = Env::default();
     let admin = Address::generate(&env);
     let operator = Address::generate(&env);
@@ -519,16 +579,17 @@ fn rotating_the_operator_is_gated_on_the_admin() {
             address: &stranger,
             invoke: &MockAuthInvoke {
                 contract: &contract_id,
-                fn_name: "set_operator",
+                fn_name: "add_operator",
                 args: (stranger.clone(),).into_val(&env),
                 sub_invokes: &[],
             },
         }])
-        .try_set_operator(&stranger);
+        .try_add_operator(&stranger);
 
     assert!(attempt.is_err());
     env.mock_all_auths();
-    assert_eq!(client.operator(), operator);
+    assert!(!client.is_operator(&stranger));
+    assert_eq!(client.operators(), vec![&env, operator]);
 }
 
 #[test]
@@ -576,7 +637,7 @@ fn a_credit_publishes_what_is_owed_and_to_whom() {
     h.client.fund(&h.treasury, &(100 * XLM));
     let reference = sale(&h.env);
 
-    h.client.credit(&h.contributor, &(4 * XLM), &reference);
+    h.client.credit(&h.operator, &h.contributor, &(4 * XLM), &reference);
 
     let expected = Credited {
         contributor: h.contributor.clone(),
@@ -617,5 +678,5 @@ fn the_token_is_fixed_at_deployment() {
 
     assert_eq!(h.client.token(), h.token);
     assert_eq!(h.client.admin(), h.admin);
-    assert_eq!(h.client.operator(), h.operator);
+    assert_eq!(h.client.operators(), vec![&h.env, h.operator.clone()]);
 }

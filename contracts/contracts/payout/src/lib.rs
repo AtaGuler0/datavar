@@ -11,9 +11,12 @@
 //!
 //! The shape is a vault with a ledger attached:
 //!
-//! - The **operator** (our server) can say *this wallet is owed this much*, and
-//!   nothing else. It cannot pay anyone, cannot pay itself, and cannot take a
-//!   credit back once given.
+//! - An **operator** can say *this wallet is owed this much*, and nothing else.
+//!   It cannot pay anyone, cannot pay itself, and cannot take a credit back once
+//!   given. There is a set of them rather than one: the role started as a single
+//!   server key, and a product run by two or three people needs two or three
+//!   wallets able to credit without passing a key around between them. Which one
+//!   signed is stated in the call and checked against the set.
 //! - The **contributor** calls `claim` with their own signature and the balance
 //!   leaves the contract for their wallet. Nobody can claim on their behalf, and
 //!   nobody — operator or admin — can stop them.
@@ -54,6 +57,11 @@ const INSTANCE_TTL_THRESHOLD: u32 = INSTANCE_TTL - 30 * DAY_IN_LEDGERS;
 /// logic. The server sends smaller groups than this in practice.
 const MAX_BATCH: u32 = 50;
 
+/// Most wallets that may credit at once. The set lives in instance storage and
+/// is read on every credit, so it is kept small on purpose — this is the number
+/// of people running the product, not a directory.
+const MAX_OPERATORS: u32 = 10;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -74,6 +82,10 @@ pub enum Error {
     /// The admin tried to withdraw into money that is already owed to
     /// contributors. Only surplus can leave by that door.
     LockedFunds = 6,
+    /// The wallet that signed a credit isn't one the contract credits for.
+    NotOperator = 7,
+    /// More operators than `MAX_OPERATORS`. Remove one first.
+    TooManyOperators = 8,
 }
 
 /// One line of a batch: pay this contributor this much, for this sale.
@@ -91,6 +103,11 @@ pub struct Credit {
 #[contracttype]
 enum DataKey {
     Admin,
+    /// Every wallet allowed to credit. Absent on a contract deployed before the
+    /// set existed, where `Operator` holds the one there was — see `operators`.
+    Operators,
+    /// The single operator of the first version. Read only as a fallback; never
+    /// written any more.
     Operator,
     /// The asset payouts are denominated in. Native XLM's SAC on testnet, but
     /// the contract never assumes that — it holds whatever token it was given.
@@ -134,7 +151,13 @@ pub struct Withdrawn {
 }
 
 #[contractevent]
-pub struct OperatorChanged {
+pub struct OperatorAdded {
+    #[topic]
+    pub operator: Address,
+}
+
+#[contractevent]
+pub struct OperatorRemoved {
     #[topic]
     pub operator: Address,
 }
@@ -149,8 +172,11 @@ impl Payout {
     /// the life of the contract — changing it would strand every balance
     /// credited under the old one.
     pub fn __constructor(env: &Env, admin: Address, operator: Address, token: Address) {
+        let mut operators = Vec::new(env);
+        operators.push_back(operator);
+
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Operator, &operator);
+        env.storage().instance().set(&DataKey::Operators, &operators);
         env.storage().instance().set(&DataKey::Token, &token);
         env.storage().instance().set(&DataKey::Owed, &0i128);
     }
@@ -176,13 +202,20 @@ impl Payout {
     ///
     /// The operator authorises this and gets nothing from it: the money is
     /// already in the contract, and this call only decides whose it is.
+    ///
+    /// Which operator is naming itself in the call rather than being looked up,
+    /// because there is more than one and `require_auth` asks about a particular
+    /// address. Claiming to be an operator buys nothing on its own — the
+    /// signature has to match the address named, and the address has to be in
+    /// the set.
     pub fn credit(
         env: &Env,
+        operator: Address,
         contributor: Address,
         amount: i128,
         reference: BytesN<32>,
     ) -> Result<i128, Error> {
-        Self::operator(env).require_auth();
+        Self::require_operator(env, &operator)?;
 
         let owed = Self::apply_credit(env, &contributor, amount, &reference, Self::owed(env))?;
         Self::assert_funded(env, owed)?;
@@ -197,8 +230,12 @@ impl Payout {
     /// All or nothing on purpose: a partially applied batch would leave our
     /// database and the ledger disagreeing about which sales were settled, and
     /// the operator would have no way to tell which half landed.
-    pub fn credit_many(env: &Env, credits: Vec<Credit>) -> Result<i128, Error> {
-        Self::operator(env).require_auth();
+    pub fn credit_many(
+        env: &Env,
+        operator: Address,
+        credits: Vec<Credit>,
+    ) -> Result<i128, Error> {
+        Self::require_operator(env, &operator)?;
 
         if credits.len() > MAX_BATCH {
             return Err(Error::BatchTooLarge);
@@ -316,19 +353,49 @@ impl Payout {
         Ok(())
     }
 
-    /// Hand crediting to a different key — a server key rotation, without
-    /// touching balances or moving the vault.
-    pub fn set_operator(env: &Env, new_operator: Address) {
+    /// Let another wallet credit. Adding one takes nothing away from anyone:
+    /// an operator can only assign money the vault already holds, so the cost of
+    /// a second one is the same as the cost of the first.
+    pub fn add_operator(env: &Env, operator: Address) -> Result<(), Error> {
         Self::admin(env).require_auth();
-        env.storage()
-            .instance()
-            .set(&DataKey::Operator, &new_operator);
+
+        let mut operators = Self::operators(env);
+        if operators.contains(&operator) {
+            return Ok(());
+        }
+        if operators.len() >= MAX_OPERATORS {
+            return Err(Error::TooManyOperators);
+        }
+
+        operators.push_back(operator.clone());
+        env.storage().instance().set(&DataKey::Operators, &operators);
         Self::bump_instance(env);
 
-        OperatorChanged {
-            operator: new_operator,
+        OperatorAdded { operator }.publish(env);
+        Ok(())
+    }
+
+    /// Take the role back from a wallet — someone leaving, or a key being
+    /// retired. Balances already credited are untouched by it, on purpose: what
+    /// an operator recorded is the contributor's, not the operator's to unsay.
+    ///
+    /// Removing the last one is allowed. It stops new credits and stops nothing
+    /// else; every existing balance stays claimable.
+    pub fn remove_operator(env: &Env, operator: Address) {
+        Self::admin(env).require_auth();
+
+        let operators = Self::operators(env);
+        let mut left = Vec::new(env);
+        for existing in operators.iter() {
+            if existing != operator {
+                left.push_back(existing);
+            }
         }
-        .publish(env);
+
+        env.storage().instance().set(&DataKey::Operators, &left);
+        Self::bump_instance(env);
+
+        OperatorRemoved { operator }.publish(env);
     }
 
     /// Swap the contract's code. Present from the first deployment for the same
@@ -353,11 +420,29 @@ impl Payout {
             .expect("contract not initialised")
     }
 
-    pub fn operator(env: &Env) -> Address {
-        env.storage()
-            .instance()
-            .get(&DataKey::Operator)
-            .expect("contract not initialised")
+    /// Every wallet allowed to credit.
+    ///
+    /// Falls back to the single operator of the first version when the set has
+    /// never been written. That is the whole migration: a contract upgraded in
+    /// place keeps crediting for whoever was its operator, and the first
+    /// `add_operator` turns that one into a set without a moment where nobody
+    /// can credit.
+    pub fn operators(env: &Env) -> Vec<Address> {
+        if let Some(operators) = env.storage().instance().get(&DataKey::Operators) {
+            return operators;
+        }
+
+        let mut operators = Vec::new(env);
+        if let Some(legacy) = env.storage().instance().get(&DataKey::Operator) {
+            operators.push_back(legacy);
+        }
+        operators
+    }
+
+    /// Whether this wallet may credit. What the dashboard asks before offering
+    /// a button, so a refusal is a sentence rather than a failed transaction.
+    pub fn is_operator(env: &Env, who: Address) -> bool {
+        Self::operators(env).contains(&who)
     }
 
     pub fn token(env: &Env) -> Address {
@@ -365,6 +450,17 @@ impl Payout {
             .instance()
             .get(&DataKey::Token)
             .expect("contract not initialised")
+    }
+
+    /// Checks a credit's signer: it must have signed, and it must be in the set.
+    /// Both halves matter — the signature without the membership is a stranger,
+    /// and the membership without the signature is a claim anyone could make.
+    fn require_operator(env: &Env, operator: &Address) -> Result<(), Error> {
+        operator.require_auth();
+        if !Self::operators(env).contains(operator) {
+            return Err(Error::NotOperator);
+        }
+        Ok(())
     }
 
     /// Writes one credit and returns the new total owed. Split out so `credit`

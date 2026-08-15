@@ -111,9 +111,12 @@ can move it to a contributor is the contributor's own.
 
 Three roles, deliberately unequal:
 
-- The **operator** (our server) can say *this wallet is owed this much*, and
-  nothing else. It cannot pay anyone, cannot pay itself, and cannot take a
-  credit back.
+- An **operator** can say *this wallet is owed this much*, and nothing else. It
+  cannot pay anyone, cannot pay itself, and cannot take a credit back. There is
+  a set of them, up to ten: the role began as a single server key, and a product
+  run by two or three people needs that many wallets able to credit without
+  passing a key between them. A credit names the operator signing it, and the
+  contract checks that name against the set.
 - The **contributor** calls `claim` with their own signature and the balance
   leaves for their wallet. Nobody can claim on their behalf, and nobody —
   operator or admin — can stop them.
@@ -141,14 +144,15 @@ here rather than in an account we control:
 | Function | Who may call it | What it does |
 |---|---|---|
 | `fund(from, amount)` | anyone, signed | Moves tokens into the vault |
-| `credit(contributor, amount, reference)` | operator, signed | Records one sale as owed |
-| `credit_many(credits)` | operator, signed | The same for a sale round, all or nothing |
+| `credit(operator, contributor, amount, reference)` | an operator, signed | Records one sale as owed |
+| `credit_many(operator, credits)` | an operator, signed | The same for a sale round, all or nothing |
 | `claim(contributor)` | the contributor, signed | Pays their whole balance out |
 | `balance_of(contributor)` | anyone | What that wallet can claim right now |
 | `is_credited(reference)` | anyone | Whether that sale is already on the ledger |
+| `operators()` / `is_operator(who)` | anyone | Who may credit |
 | `funded()` / `owed()` / `surplus()` | anyone | What it holds, owes, and has spare |
 | `withdraw(to, amount)` | admin, signed | Takes back surplus only |
-| `set_operator(new_operator)` | admin, signed | Rotates the crediting key |
+| `add_operator(operator)` / `remove_operator(operator)` | admin, signed | Changes who may credit |
 | `upgrade(new_wasm_hash)` / `set_admin(new_admin)` | admin, signed | As in the consent contract |
 
 The token is fixed at deployment — native XLM's SAC in our deployment, though
@@ -165,6 +169,11 @@ stellar contract deploy \
      --operator "$(stellar keys address datavar-operator)" \
      --token "$(stellar contract id asset --asset native --network testnet)"
 ```
+
+The `--operator` given here is only the first one; the rest are added from the
+operator panel, or with `add_operator`. Upgrading a contract deployed before the
+set existed needs no migration call — `operators()` falls back to the single
+operator it was deployed with until the first `add_operator` writes the set.
 
 Put the contract id into `NEXT_PUBLIC_PAYOUT_CONTRACT_ID`, then move test XLM in
 — from the operator panel, or:
