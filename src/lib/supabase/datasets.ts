@@ -34,6 +34,8 @@ export type Dataset = {
   content_type: string | null;
   storage_path: string;
   created_at: string;
+ 
+  synthetic: boolean;
 };
 
 /**

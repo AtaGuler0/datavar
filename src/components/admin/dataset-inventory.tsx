@@ -203,6 +203,17 @@ function InventoryRow({
         </span>
         <span className="mt-0.5 block truncate text-xs text-ink-faint">
           {sourceLabel(dataset.source_type)}
+          {dataset.synthetic ? (
+            // Load-testing data. Shown because pricing a dataset means knowing
+            // whether anyone actually contributed it — and because a marker
+            // only the database can see is not a marker.
+            <span
+              className="ml-1.5 rounded-sm border border-rule px-1 py-px text-[10px] tracking-wide uppercase"
+              title="Generated for load testing. Excluded from public totals."
+            >
+              generated
+            </span>
+          ) : null}
         </span>
       </td>
       <td className="py-3 pr-4 font-mono text-xs tabular-nums whitespace-nowrap text-ink-dim">

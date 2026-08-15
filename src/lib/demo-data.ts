@@ -119,6 +119,7 @@ export type DemoDataset = {
   byte_size: number;
   content_type: string;
   storage_path: string;
+  synthetic: boolean;
   created_at: string;
 };
 
@@ -140,6 +141,12 @@ export function demoDataset(wallet: string, days: number): DemoDataset {
     // SQL keys off it — no other row in the table can start with it, because
     // real uploads are namespaced by wallet address.
     storage_path: `seed/${wallet}/${sha256}`,
+    // The other marker, and the one the public aggregates read. The prefix
+    // above says how to delete these rows; this says they are not adoption.
+    // Until this column existed the two claims in this file's own docstring —
+    // that nothing here is ever presented as a real contribution, and that the
+    // landing page counts every dataset row — could not both be true.
+    synthetic: true,
     created_at: recentDate(days),
   };
 }

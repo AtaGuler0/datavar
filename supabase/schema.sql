@@ -1,23 +1,3 @@
--- Datavar — contributor data plane (Supabase).
--- Run this once in the Supabase SQL editor (SQL Editor → New query → paste → Run).
--- It is idempotent: re-run it after pulling changes that add to it.
---
--- Identity here is the connected Stellar wallet, not a Supabase Auth user. The
--- wallet proves itself by signing a SEP-10 challenge, and the server mints a
--- JWT carrying its address in a `wallet` claim (see src/lib/auth/). Everything
--- below keys off that claim, so the database enforces ownership rather than
--- trusting the app to remember to filter.
---
--- What a stranger holding the anon key can reach: the three aggregate views at
--- the bottom, and nothing else. No dataset row, no sale row, no file.
-
--- ---------------------------------------------------------------------------
--- Claims from the session token
---
--- Marked `stable` so the planner can call them once per statement rather than
--- once per row, and pinned to an empty search_path so a shadowing schema can't
--- change what they mean.
--- ---------------------------------------------------------------------------
 create or replace function public.current_wallet()
   returns text
   language sql
@@ -35,12 +15,6 @@ create or replace function public.is_operator()
 as $$
   select coalesce((auth.jwt() ->> 'admin')::boolean, false)
 $$;
-
--- A payout may only be marked settled by the route that actually pays it. That
--- route mints itself a short-lived token carrying this claim; the token a
--- browser gets when it signs in never has it, because /api/auth/session does
--- not put it there. So a contributor cannot mark their own sale claimed with an
--- invented transaction hash.
 create or replace function public.can_settle()
   returns boolean
   language sql
@@ -68,52 +42,31 @@ create table if not exists public.datasets (
 
 create index if not exists datasets_owner_idx
   on public.datasets (owner_wallet, created_at desc);
+alter table public.datasets
+  add column if not exists synthetic boolean not null default false;
+
+create index if not exists datasets_real_idx
+  on public.datasets (created_at desc)
+  where not synthetic;
 
 alter table public.datasets enable row level security;
 
--- The permissive testnet policies this replaces.
 drop policy if exists "datasets read (testnet)"   on public.datasets;
 drop policy if exists "datasets insert (testnet)" on public.datasets;
 drop policy if exists "datasets read"             on public.datasets;
 drop policy if exists "datasets insert"           on public.datasets;
 
--- Your own rows, or every row if you're an operator. There is no third case:
--- the protocol-wide view the dashboard draws reads network_activity below,
--- which carries no addresses.
 create policy "datasets read"
   on public.datasets for select
   using (owner_wallet = public.current_wallet() or public.is_operator());
 
--- You may only file a dataset as yourself. This is the one that matters most:
--- owner_wallet used to be whatever the browser said it was.
+
 create policy "datasets insert"
   on public.datasets for insert
   with check (owner_wallet = public.current_wallet());
 
--- No update or delete policy, so neither is possible for anyone. A contributed
--- record's history is not something the contributor edits in place.
-
--- Policies pick which rows come back; privileges decide whether the table can
--- be addressed at all, and enabling RLS does not imply them. Without this the
--- answer is "permission denied for table datasets" before a policy is ever
--- consulted. Granted only what a policy could allow: no update, no delete.
---
--- anon is left off deliberately. Signed out there is no policy here that can
--- pass, so the grant would buy nothing but a different error message — a
--- stranger gets the aggregate views and that is the whole offer.
 grant select, insert on public.datasets to authenticated;
 
--- ---------------------------------------------------------------------------
--- Table: sales
---
--- A dataset licensed to a buyer, and the payout the contributor can claim for
--- it. Buyers are simulated for now — operators run sale rounds from the admin
--- panel — but the claim itself is a real Stellar testnet payment, so every row
--- that reaches 'claimed' carries a transaction hash you can look up on-chain.
---
--- Price is stroops (1 XLM = 10,000,000), never a float: money that has to
--- match a Horizon operation to the last digit has no business being a double.
--- ---------------------------------------------------------------------------
 create table if not exists public.sales (
   id            uuid        primary key default gen_random_uuid(),
   dataset_id    uuid        not null references public.datasets (id) on delete cascade,
@@ -154,12 +107,6 @@ create policy "sales insert"
   on public.sales for insert
   with check (public.is_operator());
 
--- Settling is the payout route's job and nobody else's. Operators are not
--- exempt: they create sales and price them, but a sale's outcome is a fact
--- about a payment, and the only thing that may write it is the code that made
--- the payment. Nothing in the admin panel updates a sale, so this costs the
--- product nothing and closes the one way a row could claim a payout that never
--- happened.
 create policy "sales update"
   on public.sales for update
   using (public.can_settle() and owner_wallet = public.current_wallet())
@@ -220,24 +167,6 @@ create policy "datasets download"
     and (storage.foldername(name))[1] = public.current_wallet()
   );
 
--- ---------------------------------------------------------------------------
--- Public aggregates
---
--- The landing page and the dashboard's network panel need protocol-wide
--- numbers, and neither has any business reading rows to get them. These views
--- are the entire public surface.
---
--- Views run with the privileges of their owner, so they see past the row-level
--- security above. That is the point here — it is what lets a stranger count
--- contributions without being able to read one. Supabase's linter flags this
--- shape; it is intentional, and the reason each view exposes only what it does.
---
--- Known limit: contributor_id is an unsalted md5 of the address. It stops the
--- casual exposure that publishing owner_wallet was, and still lets the panel
--- count distinct contributors, but someone who already suspects a particular
--- address can confirm it by hashing it. Salting it, or moving the bucketing
--- into Postgres so no per-contribution row leaves at all, is the tightening.
--- ---------------------------------------------------------------------------
 drop view if exists public.network_activity;
 create view public.network_activity as
   select
@@ -246,19 +175,27 @@ create view public.network_activity as
     d.byte_size,
     d.created_at,
     exists (select 1 from public.sales s where s.dataset_id = d.id) as sold
-  from public.datasets d;
+  from public.datasets d
+  where not d.synthetic;
 
 drop view if exists public.protocol_totals;
 create view public.protocol_totals as
   select
-    (select count(distinct owner_wallet) from public.datasets)                       as contributors,
-    (select count(*) from public.datasets)                                           as datasets,
-    (select coalesce(sum(price_stroops), 0) from public.sales where status = 'claimed') as paid_stroops,
-    (select count(*) from public.sales where status = 'claimed')                     as payouts;
+    (select count(distinct owner_wallet) from public.datasets where not synthetic) as contributors,
+    (select count(*) from public.datasets where not synthetic)                     as datasets,
+    (select coalesce(sum(s.price_stroops), 0)
+       from public.sales s
+       join public.datasets d on d.id = s.dataset_id
+      where s.status = 'claimed' and not d.synthetic)                              as paid_stroops,
+    (select count(*)
+       from public.sales s
+       join public.datasets d on d.id = s.dataset_id
+      where s.status = 'claimed' and not d.synthetic)                              as payouts;
 
 -- What each kind of data has actually fetched, from real sales. A category
 -- with no sales is absent — the landing page shows a dash rather than
--- inventing a rate for it.
+-- inventing a rate for it. Generated sales are no basis for a rate either, so
+-- they are out on the same terms.
 drop view if exists public.source_rates;
 create view public.source_rates as
   select
@@ -267,6 +204,7 @@ create view public.source_rates as
     count(*)                            as sale_count
   from public.sales s
   join public.datasets d on d.id = s.dataset_id
+  where not d.synthetic
   group by d.source_type;
 
 grant select on public.network_activity to anon, authenticated;
