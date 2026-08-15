@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesTable } from "./sales-table";
 import { TreasuryCard } from "./treasury-card";
 import { marketTotals, useMarket } from "./use-market";
+import { VaultCard } from "./vault-card";
 
 const RECENT_ROWS = 6;
 
@@ -17,7 +18,7 @@ const RECENT_ROWS = 6;
  * because an operator asks "where do we stand", not "how did the week go".
  */
 export function AdminOverview() {
-  const { datasets, sales, failed } = useMarket();
+  const { datasets, sales, failed, reload } = useMarket();
 
   if (failed) {
     return (
@@ -49,7 +50,17 @@ export function AdminOverview() {
 
   return (
     <div className="mt-10">
-      <TreasuryCard outstandingStroops={totals.outstanding} />
+      {/* The vault leads: whether contributors can be paid is now a question
+          about the contract, and the treasury only feeds it. */}
+      <VaultCard
+        pendingCount={totals.pending}
+        pendingStroops={totals.pendingStroops}
+        onCredited={reload}
+      />
+
+      <div className="mt-3">
+        <TreasuryCard outstandingStroops={totals.outstanding} />
+      </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard

@@ -82,11 +82,24 @@ create table if not exists public.sales (
   created_at    timestamptz not null default now()
 );
 
+-- Where this sale sits against the payout contract. A sale is credited when the
+-- operator has written it into the vault on-chain, which is the moment the
+-- money stops being ours: from then on the contributor can claim it whether we
+-- cooperate or not. Nullable because a sale exists here first and reaches the
+-- ledger a moment later — the row is the intent, the credit is the fact.
+alter table public.sales add column if not exists credited_at timestamptz;
+alter table public.sales add column if not exists credit_tx   text;
+
 create index if not exists sales_owner_idx
   on public.sales (owner_wallet, created_at desc);
 
 create index if not exists sales_dataset_idx
   on public.sales (dataset_id);
+
+-- The operator's work queue: sales that haven't made it to the vault yet.
+create index if not exists sales_uncredited_idx
+  on public.sales (created_at)
+  where credited_at is null;
 
 alter table public.sales enable row level security;
 
@@ -107,10 +120,22 @@ create policy "sales insert"
   on public.sales for insert
   with check (public.is_operator());
 
+-- Two writers, for two different facts. The settle token — minted by the claim
+-- route and good for two minutes — records that a contributor's claim landed,
+-- and only for their own rows. The operator records that a sale was credited
+-- into the vault, which is a statement about the ledger rather than about any
+-- one contributor. A contributor's ordinary session token is neither, so it
+-- still cannot touch this table.
 create policy "sales update"
   on public.sales for update
-  using (public.can_settle() and owner_wallet = public.current_wallet())
-  with check (public.can_settle() and owner_wallet = public.current_wallet());
+  using (
+    (public.can_settle() and owner_wallet = public.current_wallet())
+    or public.is_operator()
+  )
+  with check (
+    (public.can_settle() and owner_wallet = public.current_wallet())
+    or public.is_operator()
+  );
 
 -- Update is in the grant because the payout route has to write the outcome;
 -- the policy above is what narrows it to the token that made the payment.

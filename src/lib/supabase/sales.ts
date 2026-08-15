@@ -13,6 +13,11 @@ export type Sale = {
   status: SaleStatus;
   tx_hash: string | null;
   claimed_at: string | null;
+  /** When the operator wrote this sale into the payout contract. Until then the
+   *  money is still ours; after it, the contributor can claim it regardless. */
+  credited_at: string | null;
+  /** The transaction that credited it — public, like every other hash here. */
+  credit_tx: string | null;
   created_at: string;
 };
 

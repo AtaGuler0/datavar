@@ -1,58 +1,44 @@
 import { NextResponse } from "next/server";
-import {
-  Asset,
-  BASE_FEE,
-  Horizon,
-  Keypair,
-  Memo,
-  Networks,
-  Operation,
-  StrKey,
-  TransactionBuilder,
-} from "@stellar/stellar-sdk";
+import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
 import { supabaseForToken } from "@/lib/supabase/client";
 import {
-  STELLAR,
-  STROOPS_PER_XLM,
-  stroopsToAmount,
-} from "@/lib/stellar/config";
-import type { Sale } from "@/lib/supabase/sales";
+  balanceOf,
+  buildClaim,
+  isPayoutConfigured,
+  PayoutError,
+  submitClaim,
+} from "@/lib/stellar/payout";
 
 /**
- * Claiming a sale. This is the one route in the product that moves value, so
- * it is also the one place the treasury secret is read — the browser never
- * sees it, and never signs a payout itself.
+ * Claiming a payout.
  *
- * The shape is: take the row, pay it, then record what happened. Taking the
- * row first is what makes a double-clicked claim safe — the status moves to
- * 'claiming' under a conditional update, so the second request finds nothing
- * left to take. If the payment then fails the row goes back to 'unclaimed'.
+ * This route used to hold the treasury key and send the payment itself, which
+ * meant a contributor's earnings were ours until we chose to part with them.
+ * They are not any more: the money sits in the payout contract, and the only
+ * signature that can move it to a contributor is the contributor's own. So this
+ * route holds no key and pays nobody. It does two things.
  *
- * Who is claiming comes from the signed session, never from the request body.
- * It used to come from the body, which meant a stranger could force someone
- * else's payout out early — the money still went to its owner, but the timing
- * was not the stranger's to choose.
+ * `build` asks the contract what this wallet is owed and returns an unsigned
+ * transaction for their wallet to sign. `submit` relays the signed result and
+ * then records the outcome against the sales it settled.
  *
- * The row is then touched with a token minted here and good for two minutes,
- * carrying the `settle` claim that the sales update policy requires. The
- * session token a browser holds does not have it, so marking a payout claimed
- * is something only this route can do — see can_settle() in schema.sql.
+ * Which wallet is claiming comes from the signed session, never from the
+ * request body — but note that this now matters far less than it did. Even a
+ * forged body cannot misdirect a payout, because the contract pays the address
+ * that authorised the call and nothing else.
+ *
+ * The database write still needs the `settle` claim that the sales update
+ * policy requires, minted here and good for two minutes. Marking a payout
+ * claimed remains something only this route can do — see can_settle() in
+ * schema.sql.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
 export const runtime = "nodejs";
 
-/**
- * Bonus paid alongside a first claim that has to create the account: Stellar's
- * base reserve is 1 XLM, so an account funded with the payout alone would be
- * unusable.
- */
-const NEW_ACCOUNT_RESERVE_STROOPS = 2 * STROOPS_PER_XLM;
-
-/** Long enough to submit a payment and record it; short enough to be useless
- *  if it ever leaked. */
+/** Long enough to record a claim; short enough to be useless if it leaked. */
 const SETTLE_TTL_SECONDS = 120;
 
 function fail(message: string, status: number) {
@@ -71,31 +57,63 @@ export async function POST(request: Request) {
     return fail("That session isn't for a Stellar address.", 400);
   }
 
-  const secret = process.env.STELLAR_TREASURY_SECRET;
-  if (!secret) {
+  if (!isPayoutConfigured()) {
     return fail(
-      "Payouts aren't configured. Set STELLAR_TREASURY_SECRET on the server.",
+      "Payouts aren't configured. Set NEXT_PUBLIC_PAYOUT_CONTRACT_ID on the server.",
       503,
     );
   }
 
-  let body: { saleId?: unknown };
+  let body: { action?: unknown; xdr?: unknown };
   try {
     body = await request.json();
   } catch {
     return fail("Expected a JSON body.", 400);
   }
 
-  const saleId = typeof body.saleId === "string" ? body.saleId : null;
-  if (!saleId) {
-    return fail("A saleId is required.", 400);
-  }
+  try {
+    if (body.action === "build") {
+      const stroops = await balanceOf(wallet);
+      if (stroops <= 0) {
+        // Sales exist but nothing is credited yet: the honest answer is that
+        // the money isn't in the vault, not that the claim failed.
+        return fail(
+          "Nothing is waiting in the payout contract for this wallet yet.",
+          409,
+        );
+      }
+      return NextResponse.json({ xdr: await buildClaim(wallet), stroops });
+    }
 
+    if (body.action === "submit") {
+      if (typeof body.xdr !== "string" || !body.xdr) {
+        return fail("A signed transaction is required.", 400);
+      }
+      const hash = await submitClaim(body.xdr);
+      return NextResponse.json({ hash, ...(await settle(wallet, hash)) });
+    }
+
+    return fail("Unknown action.", 400);
+  } catch (e) {
+    if (e instanceof PayoutError) return fail(e.message, 502);
+    return fail("Couldn't reach the payout contract. Try again.", 502);
+  }
+}
+
+/**
+ * Records the claim against the sales it paid for. The money has already moved
+ * by the time this runs, so a failure here is reported rather than treated as a
+ * failed payout — the hash is the truth, and the row is our copy of it.
+ */
+async function settle(
+  wallet: string,
+  hash: string,
+): Promise<{ warning?: string }> {
   let supabase;
   try {
-    // Deliberately not session.admin: this token exists to settle one row, and
-    // an operator claiming their own payout has no reason to carry operator
-    // rights into it.
+    // Deliberately not session.admin: this token exists to settle rows, and an
+    // operator claiming their own payout has no reason to carry operator rights
+    // into it.
     const { token } = issueToken({
       wallet,
       admin: false,
@@ -104,127 +122,32 @@ export async function POST(request: Request) {
     });
     supabase = supabaseForToken(token);
   } catch (e) {
-    return fail(
-      e instanceof AuthConfigError ? e.message : "Couldn't authorise the payout.",
-      503,
-    );
+    return {
+      warning:
+        e instanceof AuthConfigError
+          ? e.message
+          : "Paid on-chain, but the payout couldn't be marked claimed.",
+    };
   }
 
-  // Claim the row before paying: only the request that flips unclaimed →
-  // claiming gets to continue, and it can only do so for its own wallet.
-  const { data: taken, error: takeError } = await supabase
+  // Everything credited and not yet claimed: a claim empties the wallet's whole
+  // balance in the contract, so it settles all of them at once.
+  const { error } = await supabase
     .from("sales")
-    .update({ status: "claiming" })
-    .eq("id", saleId)
+    .update({
+      status: "claimed",
+      tx_hash: hash,
+      claimed_at: new Date().toISOString(),
+    })
     .eq("owner_wallet", wallet)
     .eq("status", "unclaimed")
-    .select()
-    .maybeSingle();
+    .not("credited_at", "is", null);
 
-  if (takeError) {
-    return fail("Couldn't reach the ledger. Try again.", 502);
+  if (error) {
+    return {
+      warning:
+        "Paid on-chain, but the payout couldn't be marked claimed. Note the hash.",
+    };
   }
-  if (!taken) {
-    // Either it isn't this wallet's sale, or someone already claimed it.
-    return fail("That payout isn't available to claim.", 409);
-  }
-
-  const sale = taken as Sale;
-  const release = (status: "unclaimed") =>
-    supabase.from("sales").update({ status }).eq("id", sale.id);
-
-  try {
-    const server = new Horizon.Server(STELLAR.horizonUrl);
-    const treasury = Keypair.fromSecret(secret);
-    const stroops = Number(sale.price_stroops);
-
-    // A payment to an account that doesn't exist yet fails on Stellar, so a
-    // contributor whose wallet has never been funded gets created instead —
-    // their first claim opens the account and lands the payout in one go.
-    const destinationExists = await server
-      .loadAccount(wallet)
-      .then(() => true)
-      .catch(() => false);
-
-    const source = await server.loadAccount(treasury.publicKey());
-    const operation = destinationExists
-      ? Operation.payment({
-          destination: wallet,
-          asset: Asset.native(),
-          amount: stroopsToAmount(stroops),
-        })
-      : Operation.createAccount({
-          destination: wallet,
-          startingBalance: stroopsToAmount(
-            stroops + NEW_ACCOUNT_RESERVE_STROOPS,
-          ),
-        });
-
-    const tx = new TransactionBuilder(source, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(operation)
-      // The memo is the audit trail: the sale this payment settles, readable
-      // from the transaction alone. A text memo is 28 bytes, which is exactly
-      // the prefix plus the significant half of a UUID.
-      .addMemo(Memo.text(`datavar:${sale.id.slice(0, 20)}`))
-      .setTimeout(60)
-      .build();
-
-    tx.sign(treasury);
-    const result = await server.submitTransaction(tx);
-
-    const { error: settleError } = await supabase
-      .from("sales")
-      .update({
-        status: "claimed",
-        tx_hash: result.hash,
-        claimed_at: new Date().toISOString(),
-      })
-      .eq("id", sale.id);
-
-    // The money moved. If recording it didn't, say so plainly rather than
-    // reverting a row whose payment is already final on-chain.
-    if (settleError) {
-      return NextResponse.json(
-        {
-          hash: result.hash,
-          warning:
-            "Paid on-chain, but the payout couldn't be marked claimed. Note the hash.",
-        },
-        { status: 200 },
-      );
-    }
-
-    return NextResponse.json({ hash: result.hash });
-  } catch (e) {
-    await release("unclaimed");
-    return fail(horizonMessage(e), 502);
-  }
-}
-
-/**
- * Horizon buries the useful part of a rejection in result_codes. Surface the
- * two an operator will actually hit, and stay vague rather than wrong on the
- * rest.
- */
-function horizonMessage(e: unknown): string {
-  const codes = (
-    e as {
-      response?: { data?: { extras?: { result_codes?: Record<string, unknown> } } };
-    }
-  )?.response?.data?.extras?.result_codes;
-
-  const operation = Array.isArray(codes?.operations)
-    ? String(codes.operations[0])
-    : null;
-
-  if (operation === "op_underfunded" || codes?.transaction === "tx_insufficient_balance") {
-    return "The treasury is out of test XLM. Top it up from the admin panel.";
-  }
-  if (operation === "op_no_destination") {
-    return "That wallet doesn't exist on testnet yet.";
-  }
-  return "The payout didn't go through. Nothing was charged — try again.";
+  return {};
 }

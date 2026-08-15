@@ -3,7 +3,8 @@ import { STROOPS_PER_XLM } from "./stellar/config";
 /**
  * The demand side of the protocol, simulated. Nothing here is real yet: no
  * buyer has signed anything, no licence has been issued. What is real is the
- * payout — a claimed sale settles as an XLM payment on Stellar testnet — so
+ * payout — a credited sale is test XLM sitting in the payout contract, and a
+ * claim moves it out on the contributor's own signature — so
  * this file is the only place that invents anything, and it says so loudly.
  */
 

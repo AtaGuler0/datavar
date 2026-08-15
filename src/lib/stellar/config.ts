@@ -23,9 +23,17 @@ export const CONSENT_CONTRACT_ID =
   process.env.NEXT_PUBLIC_CONSENT_CONTRACT_ID ?? "";
 
 /**
- * The account payouts are paid from. Public key only — it's an address, it's
- * meant to be read. Its secret lives in STELLAR_TREASURY_SECRET, server-side,
- * and is never imported by anything under a "use client" boundary.
+ * The payout vault — where a contributor's earnings sit between the sale and
+ * the claim. Public for the same reason the consent contract is: the point of
+ * holding payouts in a contract rather than an account is that anyone can read
+ * what it holds and what it owes, without asking us.
+ */
+export const PAYOUT_CONTRACT_ID = process.env.NEXT_PUBLIC_PAYOUT_CONTRACT_ID ?? "";
+
+/**
+ * The account that funds the vault and signs credits. Public key only — it's an
+ * address, it's meant to be read. Its secret lives in STELLAR_TREASURY_SECRET,
+ * server-side, and is never imported by anything under a "use client" boundary.
  */
 export const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_STELLAR_TREASURY ?? "";
 

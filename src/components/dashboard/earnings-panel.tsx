@@ -21,51 +21,68 @@ import { useWallet } from "./wallet-provider";
 
 /**
  * The payout ledger, and the one place in the contributor dashboard where
- * something actually settles on-chain. Each row is a dataset a buyer licensed;
- * claiming one asks the server to pay it out in test XLM and comes back with a
- * transaction hash the contributor can check for themselves.
+ * something actually settles on-chain.
+ *
+ * What a claim is here: earnings sit in the payout contract, credited to this
+ * wallet, and claiming signs a transaction that moves them out. The server
+ * builds it and relays it but cannot sign it — which is the point. Nobody can
+ * claim this wallet's balance except this wallet, and nobody can stop it.
  */
 export function EarningsPanel() {
-  const { address } = useWallet();
+  const { address, signTransaction } = useWallet();
 
   const [loaded, setLoaded] = useState<{
     wallet: string;
     rows: SaleWithDataset[];
+    /** Stroops the payout contract holds for this wallet. Null while unread. */
+    vault: number | null;
   } | null>(null);
   const [failed, setFailed] = useState(false);
-  // Which sale is mid-claim, and the last claim error worth showing.
-  const [claiming, setClaiming] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settled, setSettled] = useState<string | null>(null);
 
-  /** Refetch after a claim — the server owns the row's final shape. */
-  const load = useCallback((wallet: string) => {
-    return listSalesForWallet(wallet)
-      .then((rows) => setLoaded({ wallet, rows }))
-      .catch(() => setFailed(true));
+  /**
+   * Sales come from the database; the claimable balance comes from the
+   * contract. Read together, because a row that says "credited" is only true if
+   * the ledger agrees — and the ledger is the one that pays.
+   */
+  const load = useCallback(async (wallet: string) => {
+    const [rows, vault] = await Promise.all([
+      listSalesForWallet(wallet),
+      fetch(`/api/payouts?wallet=${wallet}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body) => (typeof body?.balance === "number" ? body.balance : null))
+        .catch(() => null),
+    ]);
+    return { wallet, rows, vault };
   }, []);
 
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    listSalesForWallet(address)
-      .then((rows) => !cancelled && setLoaded({ wallet: address, rows }))
+    load(address)
+      .then((next) => !cancelled && setLoaded(next))
       .catch(() => !cancelled && setFailed(true));
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, load]);
 
   // Keyed by wallet, like the overview — a switched account never shows the
   // previous one's payouts while the new ones load.
-  const sales = address && loaded?.wallet === address ? loaded.rows : null;
+  const state = address && loaded?.wallet === address ? loaded : null;
+  const sales = state?.rows ?? null;
 
   const totals = useMemo(() => {
     if (!sales) return null;
     const unclaimed = sales.filter((s) => s.status === "unclaimed");
     const claimed = sales.filter((s) => s.status === "claimed");
+    const waiting = unclaimed.filter((s) => !s.credited_at);
     return {
-      claimable: totalStroops(unclaimed),
-      claimableCount: unclaimed.length,
+      inVault: unclaimed.filter((s) => s.credited_at).length,
+      waiting: waiting.length,
+      waitingStroops: totalStroops(waiting),
       paid: totalStroops(claimed),
       paidCount: claimed.length,
       lifetime: totalStroops(sales),
@@ -73,25 +90,44 @@ export function EarningsPanel() {
     };
   }, [sales]);
 
-  const claim = async (sale: SaleWithDataset) => {
-    if (!address || claiming) return;
-    setClaiming(sale.id);
+  const claimable = state?.vault ?? 0;
+
+  const claim = async () => {
+    if (!address || claiming || claimable <= 0) return;
+    setClaiming(true);
     setError(null);
+    setSettled(null);
     try {
-      // The wallet being paid comes from the session, not from here — the
-      // route reads it out of the token and ignores anything we'd claim.
-      const res = await fetch("/api/claims", {
+      // The server prepares the call and the contract checks the signature, so
+      // the wallet claimed for is the wallet that signs — not whatever this
+      // request says.
+      const prepared = await fetch("/api/claims", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ saleId: sale.id }),
+        body: JSON.stringify({ action: "build" }),
       });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? "The payout didn't go through.");
-      await load(address);
+      const built = await prepared.json();
+      if (!prepared.ok) throw new Error(built?.error ?? "Couldn't prepare the claim.");
+
+      const signed = await signTransaction(built.xdr);
+
+      const sent = await fetch("/api/claims", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ action: "submit", xdr: signed }),
+      });
+      const result = await sent.json();
+      if (!sent.ok) throw new Error(result?.error ?? "The claim didn't go through.");
+
+      setSettled(result.hash);
+      if (result.warning) setError(result.warning);
+      setLoaded(await load(address));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The payout didn't go through.");
+      setError(
+        e instanceof Error ? e.message : "The claim didn't go through.",
+      );
     } finally {
-      setClaiming(null);
+      setClaiming(false);
     }
   };
 
@@ -126,11 +162,13 @@ export function EarningsPanel() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Available to claim"
-          value={`${formatXlm(totals.claimable)} XLM`}
+          value={`${formatXlm(claimable)} XLM`}
           footnote={
-            totals.claimableCount === 0
-              ? "nothing waiting"
-              : `across ${totals.claimableCount} sale${totals.claimableCount === 1 ? "" : "s"}`
+            state?.vault === null
+              ? "the payout contract is unreachable"
+              : claimable === 0
+                ? "nothing in the contract for you"
+                : `held in the contract, across ${totals.inVault} sale${totals.inVault === 1 ? "" : "s"}`
           }
         />
         <StatCard
@@ -150,10 +188,31 @@ export function EarningsPanel() {
         />
       </div>
 
-      {error && (
-        <p className="mt-3 rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink-dim">
-          {error}
-        </p>
+      <ClaimBar
+        claimable={claimable}
+        waitingStroops={totals.waitingStroops}
+        waitingCount={totals.waiting}
+        claiming={claiming}
+        onClaim={claim}
+      />
+
+      {(error || settled) && (
+        <div className="mt-3 rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink-dim">
+          {settled && (
+            <p>
+              Claimed.{" "}
+              <a
+                href={explorerTxUrl(settled)}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-xs text-ink underline decoration-rule-strong underline-offset-4 hover:decoration-ink"
+              >
+                {settled.slice(0, 12)}…
+              </a>
+            </p>
+          )}
+          {error && <p className={settled ? "mt-1.5" : undefined}>{error}</p>}
+        </div>
       )}
 
       <div className="mt-3">
@@ -166,24 +225,61 @@ export function EarningsPanel() {
             </span>
           }
         >
-          {sales.length === 0 ? (
-            <EmptySales />
-          ) : (
-            <SalesTable
-              sales={sales}
-              claimingId={claiming}
-              onClaim={claim}
-              busy={!!claiming}
-            />
-          )}
+          {sales.length === 0 ? <EmptySales /> : <SalesTable sales={sales} />}
         </Card>
       </div>
 
       <p className="mt-4 text-xs text-pretty text-ink-faint">
         Buyers are simulated while the demand side of the protocol is built —
-        prices are placeholders. The payout is not: claiming settles a real
-        payment on Stellar testnet, and every hash below is public.
+        prices are placeholders. The payout is not: your earnings are held in a
+        contract on Stellar testnet, and only your wallet can move them out.
       </p>
+    </div>
+  );
+}
+
+/**
+ * The claim itself, given its own row rather than a button per sale: the
+ * contract holds one balance per wallet, so there is one thing to claim and one
+ * signature to give.
+ */
+function ClaimBar({
+  claimable,
+  waitingStroops,
+  waitingCount,
+  claiming,
+  onClaim,
+}: {
+  claimable: number;
+  waitingStroops: number;
+  waitingCount: number;
+  claiming: boolean;
+  onClaim: () => void;
+}) {
+  const nothing = claimable <= 0;
+
+  return (
+    <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-rule bg-paper-raised px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm text-ink">
+          {nothing
+            ? "Nothing to claim right now."
+            : `${formatXlm(claimable)} XLM is yours to withdraw.`}
+        </p>
+        <p className="mt-0.5 text-xs text-ink-faint">
+          {waitingCount > 0
+            ? `${formatXlm(waitingStroops)} XLM from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is still being written to the contract.`
+            : "Claiming signs one transaction with your wallet. The contract pays it out."}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClaim}
+        disabled={nothing || claiming}
+        className="inline-flex shrink-0 items-center justify-center rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-40"
+      >
+        {claiming ? "Waiting for your wallet…" : "Claim"}
+      </button>
     </div>
   );
 }
@@ -206,17 +302,7 @@ function EmptySales() {
 }
 
 /** The ledger proper: what sold, to whom, for how much, and where it settled. */
-function SalesTable({
-  sales,
-  claimingId,
-  onClaim,
-  busy,
-}: {
-  sales: SaleWithDataset[];
-  claimingId: string | null;
-  onClaim: (sale: SaleWithDataset) => void;
-  busy: boolean;
-}) {
+function SalesTable({ sales }: { sales: SaleWithDataset[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -263,12 +349,7 @@ function SalesTable({
                 {formatXlm(sale.price_stroops)} XLM
               </td>
               <td className="py-3 text-right whitespace-nowrap">
-                <PayoutCell
-                  sale={sale}
-                  claiming={claimingId === sale.id}
-                  disabled={busy}
-                  onClaim={onClaim}
-                />
+                <PayoutCell sale={sale} />
               </td>
             </tr>
           ))}
@@ -279,62 +360,59 @@ function SalesTable({
 }
 
 /**
- * The right-hand column carries the row's whole state: claim it, watch it
- * settle, then read the hash it settled as.
+ * The right-hand column carries where this sale's money is: on its way to the
+ * contract, sitting in it, or already paid out — each with the hash that proves
+ * it where there is one.
  */
-function PayoutCell({
-  sale,
-  claiming,
-  disabled,
-  onClaim,
-}: {
-  sale: SaleWithDataset;
-  claiming: boolean;
-  disabled: boolean;
-  onClaim: (sale: SaleWithDataset) => void;
-}) {
+function PayoutCell({ sale }: { sale: SaleWithDataset }) {
   if (sale.status === "claimed") {
     return sale.tx_hash ? (
-      <a
-        href={explorerTxUrl(sale.tx_hash)}
-        target="_blank"
-        rel="noreferrer"
-        className="group inline-flex items-center gap-1.5 font-mono text-xs text-ink-dim transition-colors hover:text-ink"
-        title={sale.tx_hash}
-      >
-        {sale.tx_hash.slice(0, 8)}…
-        <svg
-          viewBox="0 0 16 16"
-          className="h-3 w-3 text-ink-faint transition-colors group-hover:text-ink-dim"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path d="M6.5 3.5H4A1.5 1.5 0 002.5 5v7A1.5 1.5 0 004 13.5h7a1.5 1.5 0 001.5-1.5V9.5" strokeLinecap="round" />
-          <path d="M9.5 2.5h4v4M13.5 2.5L7 9" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </a>
+      <TxLink hash={sale.tx_hash} />
     ) : (
       <span className="font-mono text-xs text-ink-faint">Paid</span>
     );
   }
 
-  if (sale.status === "claiming" || claiming) {
+  if (sale.credited_at) {
     return (
-      <span className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-ink-faint">
-        Settling…
+      <span className="inline-flex items-center gap-2">
+        <span className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-ink-dim">
+          In the contract
+        </span>
+        {sale.credit_tx && <TxLink hash={sale.credit_tx} muted />}
       </span>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => onClaim(sale)}
-      disabled={disabled}
-      className="inline-flex items-center rounded-lg bg-slate-deep px-3.5 py-1.5 text-xs font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-50"
+    <span className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-ink-faint">
+      Being credited…
+    </span>
+  );
+}
+
+function TxLink({ hash, muted = false }: { hash: string; muted?: boolean }) {
+  return (
+    <a
+      href={explorerTxUrl(hash)}
+      target="_blank"
+      rel="noreferrer"
+      className={`group inline-flex items-center gap-1.5 font-mono text-xs transition-colors ${
+        muted ? "text-ink-faint hover:text-ink-dim" : "text-ink-dim hover:text-ink"
+      }`}
+      title={hash}
     >
-      Claim
-    </button>
+      {hash.slice(0, 8)}…
+      <svg
+        viewBox="0 0 16 16"
+        className="h-3 w-3 text-ink-faint transition-colors group-hover:text-ink-dim"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path d="M6.5 3.5H4A1.5 1.5 0 002.5 5v7A1.5 1.5 0 004 13.5h7a1.5 1.5 0 001.5-1.5V9.5" strokeLinecap="round" />
+        <path d="M9.5 2.5h4v4M13.5 2.5L7 9" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </a>
   );
 }

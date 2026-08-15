@@ -51,8 +51,12 @@ export function useMarket() {
 export function marketTotals(datasets: Dataset[], sales: SaleWithDataset[]) {
   const unclaimed = sales.filter((s) => s.status !== "claimed");
   const claimed = sales.filter((s) => s.status === "claimed");
+  // Sold, but not yet written into the payout contract — the operator's queue.
+  const pending = unclaimed.filter((s) => !s.credited_at);
 
   return {
+    pending: pending.length,
+    pendingStroops: totalStroops(pending),
     datasets: datasets.length,
     contributors: new Set(datasets.map((d) => d.owner_wallet)).size,
     sold: new Set(sales.map((s) => s.dataset_id)).size,
