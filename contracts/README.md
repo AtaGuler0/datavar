@@ -162,7 +162,7 @@ stellar contract deploy \
   --wasm target/wasm32v1-none/release/payout.wasm \
   --source datavar-admin --network testnet \
   -- --admin "$(stellar keys address datavar-admin)" \
-     --operator "$(stellar keys address datavar-treasury)" \
+     --operator "$(stellar keys address datavar-operator)" \
      --token "$(stellar contract id asset --asset native --network testnet)"
 ```
 
@@ -170,9 +170,9 @@ Put the contract id into `NEXT_PUBLIC_PAYOUT_CONTRACT_ID`, then move test XLM in
 — from the operator panel, or:
 
 ```bash
-stellar contract invoke --id <contract> --source datavar-treasury \
+stellar contract invoke --id <contract> --source <any-funded-key> \
   --network testnet -- fund \
-  --from "$(stellar keys address datavar-treasury)" --amount 5000000000
+  --from "$(stellar keys address <any-funded-key>)" --amount 5000000000
 ```
 
 The current testnet deployment is

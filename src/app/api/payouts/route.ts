@@ -7,7 +7,6 @@ import {
   balanceOf,
   CREDIT_BATCH,
   creditSales,
-  fundVault,
   isCredited,
   isPayoutConfigured,
   PayoutError,
@@ -23,9 +22,11 @@ import {
  * and a claim nobody can check is not worth making. What it holds and what it
  * owes are public because they have to be.
  *
- * `POST` is the operator's: it writes sales into the vault, which is the moment
- * money stops being ours. The operator key can do nothing else there. It cannot
- * pay a contributor, cannot pay itself, and cannot undo a credit.
+ * `POST` is the operator's, and it is the only thing this server can do to the
+ * vault: write sales into it, which is the moment money stops being ours. The
+ * operator key cannot pay a contributor, cannot pay itself, cannot undo a
+ * credit, and cannot move funds in or out. It holds no balance of its own —
+ * enough test XLM for transaction fees, nothing more.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -78,34 +79,12 @@ export async function POST(request: Request) {
     return fail("The payout contract isn't configured on this deployment.", 503);
   }
 
-  const secret = process.env.STELLAR_TREASURY_SECRET;
+  const secret = process.env.STELLAR_OPERATOR_SECRET;
   if (!secret) {
     return fail(
-      "The operator key isn't configured. Set STELLAR_TREASURY_SECRET on the server.",
+      "The operator key isn't configured. Set STELLAR_OPERATOR_SECRET on the server.",
       503,
     );
-  }
-
-  let body: { action?: unknown; stroops?: unknown } = {};
-  try {
-    body = await request.json();
-  } catch {
-    // An empty body means the default action, which is crediting.
-  }
-
-  if (body.action === "fund") {
-    const stroops =
-      typeof body.stroops === "number" ? Math.floor(body.stroops) : 0;
-    if (stroops <= 0) {
-      return fail("Say how much to move into the vault.", 400);
-    }
-    try {
-      const hash = await fundVault(secret, stroops);
-      return NextResponse.json({ hash, vault: await vault() });
-    } catch (e) {
-      if (e instanceof PayoutError) return fail(e.message, 502);
-      return fail("The vault couldn't be funded.", 502);
-    }
   }
 
   let supabase;

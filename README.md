@@ -95,20 +95,16 @@ Sales are simulated, but the payout is real: earnings are held in a Soroban
 contract on testnet and leave it only on the contributor's own signature. To
 turn it on:
 
-1. Create a testnet keypair in the
-   [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test).
-   This is the treasury — it funds the vault and signs credits.
-2. Put the public key in `NEXT_PUBLIC_STELLAR_TREASURY` and the secret in
-   `STELLAR_TREASURY_SECRET`. Do not mix the two up: the secret has no
-   `NEXT_PUBLIC_` prefix on purpose, because that prefix ships a value to the
-   browser.
-3. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
+1. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
    command is in `.env.example`, and the contract's interface is in
    [`contracts/README.md`](contracts/README.md).
-4. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
+2. Create an operator key, give it a few test XLM for fees, and hand it the
+   role with `set_operator`. Its secret goes in `STELLAR_OPERATOR_SECRET`, with
+   no `NEXT_PUBLIC_` prefix — that prefix ships a value to the browser.
+3. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
    than one) to get into `/admin`.
-5. Fund the treasury with friendbot, then move test XLM into the vault. Both
-   are buttons on the admin overview.
+4. Put test XLM into the vault by calling `fund` from any funded key. There is
+   no button for this: the server holds no money and cannot move any.
 
 Then sell a dataset from `/admin` (by hand on the Datasets page, or a random
 round on the Sales page), credit the sales into the vault from the operator
@@ -116,10 +112,13 @@ panel, and claim them from `/dashboard/earnings`. The claim returns a
 transaction hash that resolves on
 [stellar.expert](https://stellar.expert/explorer/testnet).
 
-What the server can and cannot do is worth stating plainly. It can put test XLM
-into the vault and record who it belongs to. It cannot pay a contributor, pay
-itself, or take a credit back — the contract pays the address that signed the
-call, and the admin key can only withdraw the surplus that nobody is owed. The
+What the server can and cannot do is worth stating plainly. It can record who
+money in the vault belongs to. That is the entire list. It cannot pay a
+contributor, pay itself, take a credit back, or move funds into or out of the
+vault — the contract pays the address that signed the call, and the admin key
+can only withdraw the surplus that nobody is owed. There is no account here
+holding payout money: the key the server does hold carries fee change and
+nothing else, so a leaked server is a bookkeeping problem rather than a theft. The
 database is still ours to write, so marking a sale settled needs a `settle`
 claim that only the claim route mints, for two minutes at a time; but a wrong
 row there changes bookkeeping, not who gets paid.

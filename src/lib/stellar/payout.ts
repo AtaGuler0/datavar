@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Keypair, nativeToScVal, xdr } from "@stellar/stellar-sdk";
+import { nativeToScVal, xdr } from "@stellar/stellar-sdk";
 import { PAYOUT_CONTRACT_ID } from "./config";
 import {
   addressArg,
@@ -21,7 +21,12 @@ import {
  * the wallet to sign, and relays the result.
  *
  * The one thing it does sign is `credit`, with the operator key. That call
- * cannot pay anyone; it only assigns money already in the vault.
+ * cannot pay anyone; it only assigns money already in the vault. The key that
+ * signs it holds no funds — enough test XLM for fees and nothing else — so
+ * there is no balance on this server for anyone to reach.
+ *
+ * Funding the vault is not here either. Money goes in from outside, by whoever
+ * chooses to put it there; the server has no way to move it in or out.
  */
 
 /** Mirrors the `Error` enum in contracts/contracts/payout/src/lib.rs. */
@@ -157,26 +162,6 @@ export function creditSales(
     contractId(),
     "credit_many",
     [xdr.ScVal.scvVec(entries.map(creditArg))],
-    PAYOUT_ERRORS,
-  );
-}
-
-/**
- * Moves test XLM from the treasury account into the vault. The one direction
- * that is ours to choose: money can always go in, and once it is credited to
- * someone it can only come back out as their claim.
- */
-export function fundVault(secret: string, stroops: number): Promise<string> {
-  if (stroops <= 0) {
-    throw new SorobanError("Fund the vault with more than nothing.");
-  }
-
-  const treasury = Keypair.fromSecret(secret).publicKey();
-  return invokeAsServer(
-    secret,
-    contractId(),
-    "fund",
-    [addressArg(treasury), amountArg(stroops)],
     PAYOUT_ERRORS,
   );
 }

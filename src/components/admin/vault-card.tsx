@@ -7,7 +7,6 @@ import {
   explorerTxUrl,
   formatXlm,
   PAYOUT_CONTRACT_ID,
-  STROOPS_PER_XLM,
   truncateAddress,
 } from "@/lib/stellar/config";
 
@@ -38,9 +37,8 @@ export function VaultCard({
     surplus: number;
   } | null>(null);
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState<"credit" | "fund" | null>(null);
+  const [busy, setBusy] = useState<"credit" | null>(null);
   const [note, setNote] = useState<{ text: string; hash?: string } | null>(null);
-  const [topUp, setTopUp] = useState("1000");
 
   const read = useCallback(async () => {
     const res = await fetch("/api/payouts");
@@ -68,19 +66,16 @@ export function VaultCard({
     };
   }, [read]);
 
-  /** Both operator actions are the same POST with a different verb. */
-  const act = async (
-    action: "credit" | "fund",
-    payload: Record<string, unknown> = {},
-  ) => {
+  /** Crediting is the only thing this panel can ask the contract to do. */
+  const credit = async () => {
     if (busy) return;
-    setBusy(action);
+    setBusy("credit");
     setNote(null);
     try {
       const res = await fetch("/api/payouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ action, ...payload }),
+        body: JSON.stringify({ action: "credit" }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "That didn't go through.");
@@ -88,9 +83,7 @@ export function VaultCard({
       if (body.vault) setVault(body.vault);
       else await refresh();
 
-      if (action === "fund") {
-        setNote({ text: "Moved into the vault.", hash: body.hash });
-      } else if (body.error) {
+      if (body.error) {
         // Partial: some batches landed before one failed.
         setNote({ text: `${body.credited} credited, then: ${body.error}` });
       } else if (body.warning) {
@@ -150,7 +143,7 @@ export function VaultCard({
           {vault !== null && pendingCount > 0 && (
             <p className="mt-2 text-sm text-pretty text-chalk-dim">
               {short
-                ? `${formatXlm(pendingStroops)} XLM of sales is waiting and the vault is short — move more in first.`
+                ? `${formatXlm(pendingStroops)} XLM of sales is waiting and the vault is short — fund it before crediting.`
                 : `${formatXlm(pendingStroops)} XLM across ${pendingCount} sale${pendingCount === 1 ? "" : "s"} is waiting to be credited.`}
             </p>
           )}
@@ -169,7 +162,7 @@ export function VaultCard({
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <button
             type="button"
-            onClick={() => act("credit")}
+            onClick={credit}
             disabled={busy !== null || pendingCount === 0}
             className="inline-flex items-center rounded-lg bg-chalk px-5 py-2.5 text-sm font-medium text-ink-950 transition-colors duration-200 hover:bg-paper disabled:opacity-40"
           >
@@ -180,26 +173,9 @@ export function VaultCard({
                 : `Credit ${pendingCount} sale${pendingCount === 1 ? "" : "s"}`}
           </button>
 
-          <div className="flex items-center gap-1.5">
-            <input
-              value={topUp}
-              onChange={(e) => setTopUp(e.target.value.replace(/[^\d]/g, ""))}
-              inputMode="numeric"
-              aria-label="XLM to move into the vault"
-              className="w-24 rounded-lg border border-ink-800 bg-ink-950 px-2.5 py-1.5 text-right font-mono text-xs tabular-nums text-chalk outline-none focus:border-chalk-faint"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                act("fund", { stroops: Number(topUp) * STROOPS_PER_XLM })
-              }
-              disabled={busy !== null || !Number(topUp)}
-              className="rounded-lg border border-ink-800 px-3 py-1.5 text-xs text-chalk-dim transition-colors hover:border-chalk-faint hover:text-chalk disabled:opacity-40"
-            >
-              {busy === "fund" ? "Moving…" : "Move in"}
-            </button>
-          </div>
-
+          {/* No "fund the vault" control, on purpose: this server holds no
+              money to move. Topping the vault up is done from outside, by
+              whoever chooses to put test XLM into the contract. */}
           <button
             type="button"
             onClick={refresh}

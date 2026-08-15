@@ -56,7 +56,7 @@ A data broker sells data you never knowingly handed over and keeps the proceeds.
 
 Here the terms live on a public ledger rather than in a contract nobody reads. Consent always has an end date, and only you can revoke it — both enforced by the contract itself, not by our policy.
 
-The money works the same way. Your earnings sit in a payout contract, credited to your wallet, and only your signature moves them out. We can put money in and we can say who it belongs to; we cannot pay it to ourselves, and we cannot stop you claiming it.
+The money works the same way. Your earnings sit in a payout contract, credited to your wallet, and only your signature moves them out. All we can do is record who money in the contract belongs to; we cannot pay it to ourselves, cannot move it back out, and cannot stop you claiming it.
 
 > Datavar runs on Stellar testnet today. Both contracts — consent and payouts — are real and on-chain; the buyers are simulated while the demand side is built, so payouts settle in test XLM.
 
@@ -167,9 +167,9 @@ A receipt can't reach into a model that already trained on your data. Revoking s
 
 ## Where the money sits
 
-Not with us. Earnings are held in a payout contract, and the contract has one rule about paying them out: it pays the wallet that signed the request. Datavar can put test XLM in and record who it belongs to. It cannot pay itself, cannot redirect a payout, and cannot stop you claiming yours.
+Not with us. There is no Datavar account holding payout money — there used to be, and closing it was the point. Earnings sit in the payout contract, and the contract has one rule about paying them out: it pays the wallet that signed the request. All Datavar can do is record who the money belongs to. It cannot pay itself, redirect a payout, move funds out, or stop you claiming yours.
 
-That is the difference between being owed money and holding it. The contract refuses to credit a sale it can't cover, so a balance on your earnings page is money already sitting in the contract — not an IOU against a treasury you have to trust.
+That is the difference between being owed money and holding it. The contract refuses to credit a sale it can't cover, so a balance on your earnings page is money already sitting in the contract — not an IOU against an account you have to trust us with.
 
 ## Claiming
 

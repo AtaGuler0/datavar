@@ -15,7 +15,7 @@ export const ADMIN_NAV: AdminSection[] = [
     href: "/admin",
     label: "Overview",
     index: "00",
-    summary: "Treasury balance, what's sold, and what's still owed.",
+    summary: "What the vault holds, what's sold, and what's still owed.",
   },
   {
     href: "/admin/datasets",

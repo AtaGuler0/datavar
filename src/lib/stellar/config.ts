@@ -31,11 +31,15 @@ export const CONSENT_CONTRACT_ID =
 export const PAYOUT_CONTRACT_ID = process.env.NEXT_PUBLIC_PAYOUT_CONTRACT_ID ?? "";
 
 /**
- * The account that funds the vault and signs credits. Public key only — it's an
- * address, it's meant to be read. Its secret lives in STELLAR_TREASURY_SECRET,
- * server-side, and is never imported by anything under a "use client" boundary.
+ * There is deliberately no treasury address here any more.
+ *
+ * There used to be an account that held the money and sent payouts, and this
+ * file exported its address so the operator panel could show a balance. Both
+ * are gone: the funds live in the payout contract, and the only key the server
+ * holds is the operator's, which signs credits and holds nothing. An address
+ * whose balance is the answer to "can we pay people" no longer exists — that
+ * question is now asked of the contract, via `funded` and `owed`.
  */
-export const TREASURY_ADDRESS = process.env.NEXT_PUBLIC_STELLAR_TREASURY ?? "";
 
 /** 1 XLM = 10,000,000 stroops. Money is integers here, all the way down. */
 export const STROOPS_PER_XLM = 10_000_000;

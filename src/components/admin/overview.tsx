@@ -6,7 +6,6 @@ import { formatXlm } from "@/lib/stellar/config";
 import { Card } from "@/components/dashboard/primitives";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesTable } from "./sales-table";
-import { TreasuryCard } from "./treasury-card";
 import { marketTotals, useMarket } from "./use-market";
 import { VaultCard } from "./vault-card";
 
@@ -50,17 +49,14 @@ export function AdminOverview() {
 
   return (
     <div className="mt-10">
-      {/* The vault leads: whether contributors can be paid is now a question
-          about the contract, and the treasury only feeds it. */}
+      {/* The vault is the whole answer to "can we pay people" now. There used
+          to be a treasury card next to it, showing the balance of the account
+          payouts came from; there is no such account any more. */}
       <VaultCard
         pendingCount={totals.pending}
         pendingStroops={totals.pendingStroops}
         onCredited={reload}
       />
-
-      <div className="mt-3">
-        <TreasuryCard outstandingStroops={totals.outstanding} />
-      </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
