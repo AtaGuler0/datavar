@@ -189,12 +189,11 @@ async function send(
   const server = rpcServer();
 
   const sent = await server.sendTransaction(tx);
-  if (sent.status === "ERROR" || sent.status === "DUPLICATE") {
-    throw new SorobanError(
-      sent.status === "DUPLICATE"
-        ? "That transaction was already submitted."
-        : "The network rejected the transaction.",
-    );
+  if (sent.status === "DUPLICATE") {
+    throw new SorobanError("That transaction was already submitted.");
+  }
+  if (sent.status === "ERROR") {
+    throw new SorobanError(rejectionMessage(sent));
   }
 
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
@@ -217,6 +216,29 @@ async function send(
   throw new SorobanError(
     `Still unconfirmed after ${POLL_ATTEMPTS} tries. It may yet land — check ${sent.hash}.`,
   );
+}
+
+/**
+ * A rejection before the transaction even reaches a ledger. The generic answer
+ * is nearly useless to whoever has to fix it, and one case is common enough to
+ * deserve its own sentence: a signing key that has run out of XLM for fees.
+ * Soroban's resource fees are large enough that a key kept deliberately thin —
+ * as the operator key is — will hit this while everything else is healthy.
+ */
+function rejectionMessage(sent: rpc.Api.SendTransactionResponse): string {
+  const code = sent.errorResult?.result().switch().name;
+  if (code === "txInsufficientBalance") {
+    return "The signing key is out of test XLM for fees. Top it up and try again.";
+  }
+  if (code === "txBadSeq") {
+    return "That transaction was built against a stale sequence number. Try again.";
+  }
+  if (code === "txInsufficientFee") {
+    return "The network wants a higher fee than this transaction offered.";
+  }
+  return code
+    ? `The network rejected the transaction (${code}).`
+    : "The network rejected the transaction.";
 }
 
 /** Relays a transaction someone else signed, after checking where it points. */
