@@ -4,10 +4,11 @@ Your data already trains AI models. You just never see a cent of it.
 
 Datavar is our attempt to fix that. We are building a data protocol where people contribute data on their own terms and get paid when it gets used. Every record carries a signed consent receipt, so an AI team licensing a dataset knows exactly who agreed to what, for which purpose, and until when. Nothing in it is scraped or pulled from some legal gray area.
 
-The first piece of that protocol is live on Stellar testnet: a Soroban contract
-that holds consent receipts as ledger state, in
-[`contracts/`](contracts/README.md). The demand side is still simulated — see
-the caveats below for exactly what is and isn't real.
+Two pieces of that protocol are live on Stellar testnet, both in
+[`contracts/`](contracts/README.md): a Soroban contract that holds consent
+receipts as ledger state, and a payout vault that holds contributor earnings
+until the contributor's own signature moves them out. The demand side is still
+simulated — see the caveats below for exactly what is and isn't real.
 
 ## Why a protocol and not just a marketplace
 
@@ -90,29 +91,38 @@ makes.
 
 ### Payouts on testnet
 
-Sales are simulated, but the payout that settles one is a real Stellar testnet
-payment. To turn it on:
+Sales are simulated, but the payout is real: earnings are held in a Soroban
+contract on testnet and leave it only on the contributor's own signature. To
+turn it on:
 
 1. Create a testnet keypair in the
    [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test).
+   This is the treasury — it funds the vault and signs credits.
 2. Put the public key in `NEXT_PUBLIC_STELLAR_TREASURY` and the secret in
-   `STELLAR_TREASURY_SECRET`. The secret has no `NEXT_PUBLIC_` prefix on
-   purpose: it stays on the server, and only `src/app/api/claims/route.ts`
-   reads it.
-3. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
+   `STELLAR_TREASURY_SECRET`. Do not mix the two up: the secret has no
+   `NEXT_PUBLIC_` prefix on purpose, because that prefix ships a value to the
+   browser.
+3. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
+   command is in `.env.example`, and the contract's interface is in
+   [`contracts/README.md`](contracts/README.md).
+4. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
    than one) to get into `/admin`.
-4. Fund the treasury with friendbot — there's a button on the admin overview.
+5. Fund the treasury with friendbot, then move test XLM into the vault. Both
+   are buttons on the admin overview.
 
 Then sell a dataset from `/admin` (by hand on the Datasets page, or a random
-round on the Sales page) and claim it from `/dashboard/earnings`. The claim
-returns a transaction hash that resolves on
+round on the Sales page), credit the sales into the vault from the operator
+panel, and claim them from `/dashboard/earnings`. The claim returns a
+transaction hash that resolves on
 [stellar.expert](https://stellar.expert/explorer/testnet).
 
-Claiming needs a signed-in wallet, and the wallet being paid is read out of the
-session rather than the request body — a stranger cannot force someone else's
-payout out early. Marking a sale settled needs a `settle` claim that only the
-payout route mints, for two minutes at a time, so a contributor cannot record
-their own payout as claimed with an invented hash.
+What the server can and cannot do is worth stating plainly. It can put test XLM
+into the vault and record who it belongs to. It cannot pay a contributor, pay
+itself, or take a credit back — the contract pays the address that signed the
+call, and the admin key can only withdraw the surplus that nobody is owed. The
+database is still ours to write, so marking a sale settled needs a `settle`
+claim that only the claim route mints, for two minutes at a time; but a wrong
+row there changes bookkeeping, not who gets paid.
 
 ## Stack
 

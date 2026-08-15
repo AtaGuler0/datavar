@@ -48,7 +48,7 @@ Datavar is a data protocol where you contribute data on your own terms and get p
 1. Sign in with a Stellar wallet. No email, no password, no name.
 2. Upload a dataset. It is hashed on your device before anything leaves it.
 3. Grant consent — a named buyer, a named purpose, an end date — signed by your wallet.
-4. When it sells, claim your payout in XLM, straight to your wallet.
+4. When it sells, your earnings are credited to you in a contract — claim them in XLM with your own signature.
 
 ## What makes it different
 
@@ -56,7 +56,9 @@ A data broker sells data you never knowingly handed over and keeps the proceeds.
 
 Here the terms live on a public ledger rather than in a contract nobody reads. Consent always has an end date, and only you can revoke it — both enforced by the contract itself, not by our policy.
 
-> Datavar runs on Stellar testnet today. The consent contract and payouts are real and on-chain; the buyers are simulated while the demand side is built, so payouts settle in test XLM.
+The money works the same way. Your earnings sit in a payout contract, credited to your wallet, and only your signature moves them out. We can put money in and we can say who it belongs to; we cannot pay it to ourselves, and we cannot stop you claiming it.
+
+> Datavar runs on Stellar testnet today. Both contracts — consent and payouts — are real and on-chain; the buyers are simulated while the demand side is built, so payouts settle in test XLM.
 
 [How it works](/docs/how-it-works) walks through the whole path, from wallet to payout hash.`,
       },
@@ -82,7 +84,7 @@ See [consent receipts](/docs/consent-receipts).
 
 ## 4. Get paid
 
-When a dataset is licensed, the payout is yours to claim. Claiming sends an XLM payment to your wallet and hands back the transaction hash, so you can check it on a public explorer rather than take our word for it.
+When a dataset is licensed, the payout is credited to your wallet in a contract on Stellar. Claiming signs a transaction with your wallet, the contract pays you, and you get back a hash you can check on a public explorer rather than take our word for it.
 
 See [getting paid](/docs/payouts).`,
       },
@@ -161,13 +163,19 @@ A receipt can't reach into a model that already trained on your data. Revoking s
         slug: "payouts",
         title: "Getting paid",
         summary: "Payouts settle in XLM, with a hash you can check yourself.",
-        body: `When a dataset of yours is licensed, the payout appears on your earnings page as something to claim.
+        body: `When a dataset of yours is licensed, the payout is written into a contract on Stellar and credited to your wallet. It shows on your earnings page as something to claim.
+
+## Where the money sits
+
+Not with us. Earnings are held in a payout contract, and the contract has one rule about paying them out: it pays the wallet that signed the request. Datavar can put test XLM in and record who it belongs to. It cannot pay itself, cannot redirect a payout, and cannot stop you claiming yours.
+
+That is the difference between being owed money and holding it. The contract refuses to credit a sale it can't cover, so a balance on your earnings page is money already sitting in the contract — not an IOU against a treasury you have to trust.
 
 ## Claiming
 
-One press. Datavar sends the payment on Stellar and returns the transaction hash, which resolves on a public explorer whether or not this site is up.
+One press, then your wallet asks you to sign. The contract pays you and returns a transaction hash, which resolves on a public explorer whether or not this site is up.
 
-If your wallet has never been used on Stellar before, the first claim opens the account and lands the payout in the same transaction — you don't need to fund anything to get started.
+Your wallet has to exist on Stellar to sign — the same requirement as granting consent. Testnet accounts open with [friendbot](https://friendbot.stellar.org) in a click.
 
 ## Why XLM
 
@@ -179,7 +187,7 @@ Fiat payouts through PayPal are planned.
 
 Rare data earns more than common data. The estimator on the home page quotes the average settled price per category, computed from real sales — a category nobody has bought yet shows a dash rather than a number we invented.
 
-> Buyers are simulated while the demand side is built, and payouts settle in test XLM on Stellar testnet. The payment itself is real and on-chain; the demand behind it isn't yet.`,
+> Buyers are simulated while the demand side is built, and payouts settle in test XLM on Stellar testnet. The contract and the payment are real and on-chain; the demand behind them isn't yet.`,
       },
     ],
   },
@@ -224,14 +232,15 @@ Contributors keep producing. Rather than a frozen snapshot of an internet that h
         body: `## Code
 
 - Repository: [github.com/AtaGuler0/datavar](https://github.com/AtaGuler0/datavar)
-- The consent contract and its tests live in \`contracts/\`.
+- Both contracts and their tests live in \`contracts/\`.
 
 ## On-chain
 
 - Consent contract on Stellar testnet: [\`CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI\`](https://stellar.expert/explorer/testnet/contract/CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI)
+- Payout contract on Stellar testnet: [\`CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL\`](https://stellar.expert/explorer/testnet/contract/CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL)
 - Explorer: [stellar.expert testnet](https://stellar.expert/explorer/testnet)
 
-Every settled payout links to its own transaction from the earnings page.
+The payout contract will tell you what it holds and what it owes without asking us — \`funded\`, \`owed\` and \`balance_of\` are view calls anyone can simulate. Every settled payout links to its own transaction from the earnings page.
 
 ## Reading
 

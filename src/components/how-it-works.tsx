@@ -17,7 +17,7 @@ const STEPS = [
   {
     n: "03",
     title: "Get paid when it sells",
-    body: "Rare, high-signal data earns more than common data. Payouts settle in XLM straight to your wallet, with the transaction hash to check them against.",
+    body: "Rare, high-signal data earns more than common data. Earnings are held in a contract on Stellar and leave it on your signature alone, with the transaction hash to check them against.",
     detail: ["XLM payouts", "On-chain receipts", "PayPal soon"],
   },
 ];
