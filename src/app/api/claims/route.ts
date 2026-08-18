@@ -8,7 +8,7 @@ import {
   buildClaim,
   isPayoutConfigured,
   PayoutError,
-  submitToVault,
+  submitClaim,
 } from "@/lib/stellar/payout";
 
 /**
@@ -22,7 +22,9 @@ import {
  *
  * `build` asks the contract what this wallet is owed and returns an unsigned
  * transaction for their wallet to sign. `submit` relays the signed result and
- * then records the outcome against the sales it settled.
+ * then records the outcome against the sales it settled — after checking the
+ * transaction is a `claim` for the session's own wallet, because the record it
+ * writes is only true if that is what the transaction was.
  *
  * Which wallet is claiming comes from the signed session, never from the
  * request body — but note that this now matters far less than it did. Even a
@@ -89,7 +91,10 @@ export async function POST(request: Request) {
       if (typeof body.xdr !== "string" || !body.xdr) {
         return fail("A signed transaction is required.", 400);
       }
-      const hash = await submitToVault(body.xdr);
+      // Narrowed to `claim`, for this session's wallet. What lands here is
+      // recorded as a payout the moment it succeeds, so "it reached the vault"
+      // is not enough to know on — it has to be the call that pays.
+      const hash = await submitClaim(body.xdr, wallet);
       return NextResponse.json({ hash, ...(await settle(wallet, hash)) });
     }
 

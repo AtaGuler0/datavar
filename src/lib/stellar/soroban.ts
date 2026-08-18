@@ -125,17 +125,39 @@ export async function buildInvocation(
 }
 
 /**
- * Refuses to relay anything that isn't a call to the contract we expect.
+ * What a relayed call has to be, for a caller that knows. Checking only the
+ * contract leaves "which function, on whose behalf" open, and a route that acts
+ * on the outcome — marking a payout settled, say — needs that answered before
+ * it writes anything.
+ */
+export type ExpectedCall = {
+  /** The contract function the transaction must invoke. */
+  method: string;
+  /** Addresses the call must name, matched against its leading arguments. */
+  addresses?: string[];
+};
+
+/**
+ * Refuses to relay anything that isn't the call we expect on the contract we
+ * expect.
  *
- * Without this a submit route is an open transaction relay: it would happily
- * broadcast any signed Stellar transaction, letting a stranger use this server
- * to put arbitrary operations on the network from our address rather than
- * theirs. Nothing is stolen by it — the signer still pays the fee — but it is
- * our infrastructure, and a relay is not what we set out to run.
+ * Without the contract check a submit route is an open transaction relay: it
+ * would happily broadcast any signed Stellar transaction, letting a stranger
+ * use this server to put arbitrary operations on the network from our address
+ * rather than theirs. Nothing is stolen by it — the signer still pays the fee —
+ * but it is our infrastructure, and a relay is not what we set out to run.
+ *
+ * The function and argument check is for a different failure. A route that
+ * records something after a successful submit is trusting the transaction to
+ * have been what it claimed: without this, any call to the right contract —
+ * a view function, someone else's claim — lands successfully and the route
+ * writes its consequence anyway. The ledger is asked what the transaction
+ * actually was, before anything is believed about it.
  */
 function assertCallTo(
   tx: Transaction | FeeBumpTransaction,
   contractId: string,
+  expected?: ExpectedCall,
 ): void {
   if ("innerTransaction" in tx) {
     throw new SorobanError("Fee-bump transactions aren't accepted here.");
@@ -154,12 +176,30 @@ function assertCallTo(
     throw new SorobanError("That isn't a contract invocation.");
   }
 
-  const target = Address.fromScAddress(
-    func.invokeContract().contractAddress(),
-  ).toString();
+  const invocation = func.invokeContract();
+  const target = Address.fromScAddress(invocation.contractAddress()).toString();
   if (target !== contractId) {
     throw new SorobanError("That call isn't for the contract it claims.");
   }
+
+  if (!expected) return;
+
+  if (invocation.functionName().toString() !== expected.method) {
+    throw new SorobanError(
+      `That transaction doesn't call ${expected.method}.`,
+    );
+  }
+
+  const args = invocation.args();
+  (expected.addresses ?? []).forEach((address, i) => {
+    const arg = args[i];
+    if (!arg || arg.switch() !== xdr.ScValType.scvAddress()) {
+      throw new SorobanError("That call names the wrong thing.");
+    }
+    if (Address.fromScVal(arg).toString() !== address) {
+      throw new SorobanError("That call is for a different wallet.");
+    }
+  });
 }
 
 /** How long to wait for a ledger to close on a submitted transaction. */
@@ -240,11 +280,15 @@ function rejectionMessage(sent: rpc.Api.SendTransactionResponse): string {
     : "The network rejected the transaction.";
 }
 
-/** Relays a transaction someone else signed, after checking where it points. */
+/**
+ * Relays a transaction someone else signed, after checking where it points —
+ * and, when the caller says what it should be, that it is that call.
+ */
 export async function submitSigned(
   signedXdr: string,
   contractId: string,
   errors: ErrorTable,
+  expected?: ExpectedCall,
 ): Promise<string> {
   let tx;
   try {
@@ -253,7 +297,7 @@ export async function submitSigned(
     throw new SorobanError("That isn't a signed transaction.");
   }
 
-  assertCallTo(tx, contractId);
+  assertCallTo(tx, contractId, expected);
   return send(tx, errors);
 }
 

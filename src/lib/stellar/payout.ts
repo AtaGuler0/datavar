@@ -231,11 +231,30 @@ export async function readAdmin(): Promise<string> {
 }
 
 /**
- * Relays a signed call to the vault and waits for it to land. One function for
- * every call this product makes — a claim, a credit, a role change — because
- * the server's part in all three is identical: check where it points, send it,
- * report the hash. It signs none of them.
+ * Relays a signed call to the vault and waits for it to land. The operator's
+ * calls come through here — a credit, a role change — and what they did is
+ * checked afterwards against the ledger rather than taken from the transaction:
+ * `record` asks `is_credited` about every sale before marking one. It signs
+ * none of them.
  */
 export function submitToVault(signedXdr: string): Promise<string> {
   return submitSigned(signedXdr, contractId(), PAYOUT_ERRORS);
+}
+
+/**
+ * The same, for a contributor's claim — and narrower on purpose.
+ *
+ * A claim is the one relay whose success is written straight into the database:
+ * the sales it settled are marked paid the moment this returns. Checking only
+ * that the transaction pointed at the vault left that write standing on the
+ * caller's word, because any call to the vault lands successfully — a view
+ * function costs nothing and settles nothing, and the rows would have been
+ * marked anyway. So this insists the transaction is `claim`, for the wallet
+ * whose session is asking. Then a hash that comes back means the money moved.
+ */
+export function submitClaim(signedXdr: string, wallet: string): Promise<string> {
+  return submitSigned(signedXdr, contractId(), PAYOUT_ERRORS, {
+    method: "claim",
+    addresses: [wallet],
+  });
 }
