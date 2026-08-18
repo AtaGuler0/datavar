@@ -24,6 +24,20 @@ as $$
   select coalesce((auth.jwt() ->> 'settle')::boolean, false)
 $$;
 
+-- Permission to count a request against a rate limit, and nothing else. Only
+-- our own routes mint a token carrying this claim; the one a browser gets when
+-- it signs in never has it. See `public.rate_limit_hit()` below for why that
+-- distinction is the whole point — a counter anyone may increment on anyone
+-- else's behalf is a way to lock people out, not a way to protect them.
+create or replace function public.can_rate_limit()
+  returns boolean
+  language sql
+  stable
+  set search_path = ''
+as $$
+  select coalesce((auth.jwt() ->> 'rl')::boolean, false)
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Table: datasets
 -- ---------------------------------------------------------------------------
@@ -227,6 +241,122 @@ revoke all on internal.secrets from public, anon, authenticated;
 insert into internal.secrets (name, value)
 values ('contributor_id', gen_random_uuid()::text || gen_random_uuid()::text)
 on conflict (name) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Rate limiting
+--
+-- Every route that reaches the network on an anonymous caller's say-so needs a
+-- ceiling, and the worst of them is consent submission: no session, and a poll
+-- loop that holds a server connection for up to fifteen seconds while the
+-- ledger closes. A handful of concurrent callers is a slow site; a script is an
+-- outage. Sign-in is the same shape more cheaply — a challenge is a keypair
+-- operation, handed out to anyone who asks.
+--
+-- The counter lives here rather than in the server's memory because there is no
+-- server: on Vercel each request may land in a fresh instance, so a process
+-- local counter is a counter of one request. Postgres is the only thing every
+-- instance already shares, and this is small enough to sit beside the salt.
+--
+-- Fixed windows, not a sliding log. A caller who times it right gets up to
+-- twice the limit across a window boundary, which is the well known cost of
+-- this being one row and one statement instead of a row per request. The point
+-- is a ceiling on sustained load, and a fixed window gives that.
+create table if not exists internal.rate_limits (
+  bucket       text        not null,
+  subject      text        not null,
+  window_start timestamptz not null,
+  hits         integer     not null default 0,
+  primary key (bucket, subject, window_start)
+);
+revoke all on internal.rate_limits from public, anon, authenticated;
+
+-- Old windows are dead weight the moment they close; this is how the sweep
+-- inside the function finds them without scanning the live rows.
+create index if not exists rate_limits_window_idx
+  on internal.rate_limits (window_start);
+
+-- Counts one request and says whether it may proceed: 0 to allow, otherwise the
+-- seconds until the caller's window resets, ready to be handed back as
+-- `Retry-After`.
+--
+-- `security definer`, because the table it writes is in a schema no caller can
+-- reach — that is what stops a limit from being readable or editable by the
+-- people it applies to. And guarded by `can_rate_limit()`, because a definer
+-- function granted broadly would be worse than no limit at all: the subject is
+-- an IP address on the routes that have no session, so anyone able to call this
+-- directly with the anon key could spend a stranger's budget and lock them out
+-- of signing in. Only a token this server mints for itself carries the claim.
+create or replace function public.rate_limit_hit(
+  p_bucket  text,
+  p_subject text,
+  p_limit   integer,
+  p_window  integer
+)
+  returns integer
+  language plpgsql
+  volatile
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_window_start timestamptz;
+  v_hits         integer;
+begin
+  if not public.can_rate_limit() then
+    raise exception 'not authorised to record rate limit hits'
+      using errcode = '42501';
+  end if;
+
+  -- The rule arrives from the caller, so it is checked rather than trusted. A
+  -- window of zero would divide by zero below; an enormous one would keep rows
+  -- alive past the sweep.
+  if p_limit < 1 or p_window < 1 or p_window > 86400 then
+    raise exception 'invalid rate limit rule' using errcode = '22023';
+  end if;
+
+  v_window_start := to_timestamp(
+    floor(extract(epoch from clock_timestamp()) / p_window) * p_window
+  );
+
+  -- One statement: the row is created or incremented and read back in the same
+  -- breath, so two requests arriving together cannot both read "0 so far".
+  -- Subjects are truncated because one of them is a header a client controls.
+  insert into internal.rate_limits as r (bucket, subject, window_start, hits)
+  values (p_bucket, left(p_subject, 200), v_window_start, 1)
+  on conflict (bucket, subject, window_start)
+    do update set hits = r.hits + 1
+  returning r.hits into v_hits;
+
+  -- Closed windows are never read again. Sweeping one call in a hundred keeps
+  -- the table flat without paying for a delete on the hot path, and without a
+  -- scheduled job this file cannot install.
+  if random() < 0.01 then
+    delete from internal.rate_limits
+    where window_start < clock_timestamp() - interval '1 day';
+  end if;
+
+  if v_hits > p_limit then
+    return greatest(
+      ceil(
+        extract(
+          epoch from (v_window_start + make_interval(secs => p_window))
+                     - clock_timestamp()
+        )
+      )::integer,
+      1
+    );
+  end if;
+
+  return 0;
+end;
+$$;
+
+-- Postgres grants execute on a new function to `public` by default, and `anon`
+-- is in `public` — so the revoke is not tidiness, it is the control itself.
+revoke all on function public.rate_limit_hit(text, text, integer, integer)
+  from public, anon;
+grant execute on function public.rate_limit_hit(text, text, integer, integer)
+  to authenticated;
 
 -- These three views are the whole public surface, and they count the whole
 -- deployment: every dataset row and every sale, generated load included.

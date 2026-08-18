@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Keypair, StrKey, WebAuth } from "@stellar/stellar-sdk";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { STELLAR } from "@/lib/stellar/config";
 import { CHALLENGE_TIMEOUT_SECONDS, authDomain } from "../shared";
 
@@ -22,6 +23,10 @@ import { CHALLENGE_TIMEOUT_SECONDS, authDomain } from "../shared";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  // Handing out a challenge is a keypair operation for an anonymous caller.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.authChallenge);
+  if (limited) return limited;
+
   const secret = process.env.STELLAR_AUTH_SECRET;
   if (!secret) {
     return NextResponse.json(

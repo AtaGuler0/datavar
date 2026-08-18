@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
 import {
   balanceOf,
@@ -58,6 +59,12 @@ export async function POST(request: Request) {
   if (!StrKey.isValidEd25519PublicKey(wallet)) {
     return fail("That session isn't for a Stellar address.", 400);
   }
+
+  // Counted per wallet rather than per address: this route is reached with a
+  // session, and a wallet is who the limit is actually about. Two contributors
+  // behind one office network get a budget each.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.claims, wallet);
+  if (limited) return limited;
 
   if (!isPayoutConfigured()) {
     return fail(

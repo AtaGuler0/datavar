@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
 import {
   balanceOf,
@@ -58,6 +59,11 @@ function fail(message: string, status: number) {
 }
 
 export async function GET(request: Request) {
+  // Anyone may check the vault, and should be able to — but each check is three
+  // calls to the contract, so "anyone" comes with a ceiling.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.payoutsRead);
+  if (limited) return limited;
+
   if (!isPayoutConfigured()) {
     return fail("The payout contract isn't configured on this deployment.", 503);
   }

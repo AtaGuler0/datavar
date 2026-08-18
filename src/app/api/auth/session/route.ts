@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Keypair, WebAuth } from "@stellar/stellar-sdk";
 import { adminListEmpty, isAdminWallet } from "@/lib/auth/admins";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { STELLAR } from "@/lib/stellar/config";
 import { SESSION_TTL_SECONDS, authDomain } from "../shared";
 
@@ -30,6 +31,11 @@ import { SESSION_TTL_SECONDS, authDomain } from "../shared";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  // Also the ceiling on grinding at the replay window named above: a captured
+  // challenge is still good for five minutes, but not for unlimited attempts.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.authSession);
+  if (limited) return limited;
+
   const secret = process.env.STELLAR_AUTH_SECRET;
   if (!secret) {
     return NextResponse.json(

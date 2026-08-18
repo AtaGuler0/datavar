@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import {
   ConsentError,
   buildGrant,
@@ -39,6 +40,11 @@ function handle(e: unknown) {
 }
 
 export async function GET(request: Request) {
+  // Public on purpose, which is exactly why it needs a ceiling: every call is a
+  // simulation against the contract, paid for by us.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.consentRead);
+  if (limited) return limited;
+
   if (!isConsentConfigured()) {
     return fail("The consent contract isn't configured on this deployment.", 503);
   }
@@ -56,6 +62,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(request, RATE_LIMITS.consentBuild);
+  if (limited) return limited;
+
   if (!isConsentConfigured()) {
     return fail("The consent contract isn't configured on this deployment.", 503);
   }
