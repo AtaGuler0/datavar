@@ -194,6 +194,40 @@ create policy "datasets download"
     and (storage.foldername(name))[1] = public.current_wallet()
   );
 
+-- ---------------------------------------------------------------------------
+-- Schema: internal
+--
+-- Things the public surface needs and must never be able to read for itself.
+-- Nothing is granted on it, and nothing outside this file looks in: the views
+-- below run with their owner's rights, so they can read what a caller cannot.
+-- ---------------------------------------------------------------------------
+create schema if not exists internal;
+revoke all on schema internal from public, anon, authenticated;
+
+create table if not exists internal.secrets (
+  name  text primary key,
+  value text not null
+);
+revoke all on internal.secrets from public, anon, authenticated;
+
+-- The salt under `contributor_id`. Minted once and never rotated by a re-run
+-- of this file — `do nothing` is what keeps the public view's ids stable
+-- across the idempotent replay this schema is written for.
+--
+-- Why it exists: the id used to be a plain md5 of the wallet address, which
+-- hides nothing from anyone holding the list of addresses — and that list is
+-- public by construction, because the consent contract publishes `contributor`
+-- as an event topic. Hashing the candidates and joining to this view then
+-- returns a named person's entire upload history: what kind of data, how much
+-- of it, when, and whether it sold. Salting it costs nothing and makes the
+-- guess unavailable, because the guesser cannot compute the digest.
+--
+-- gen_random_uuid() rather than gen_random_bytes(): 122 bits from a built-in,
+-- with no extension to be missing on a fresh project.
+insert into internal.secrets (name, value)
+values ('contributor_id', gen_random_uuid()::text || gen_random_uuid()::text)
+on conflict (name) do nothing;
+
 -- These three views are the whole public surface, and they count the whole
 -- deployment: every dataset row and every sale, generated load included.
 --
@@ -203,15 +237,32 @@ create policy "datasets download"
 -- pages now read the same totals the operator panel does. The `synthetic`
 -- column stays: it is what the operator panel's `generated` badge reads, and
 -- it is how the filter comes back if this ever runs against mainnet.
+
+-- `contributor_id` is an opaque, stable key and nothing more. Everything that
+-- reads it counts distinct values and asks when each was first seen, so the
+-- digest never has to be reversible — and it isn't, because the salt lives in
+-- a schema no caller can reach. Truncated to 128 bits, far past collision
+-- range for a protocol counted in hundreds of contributors.
+--
+-- The salt is joined rather than looked up inline on purpose: a missing salt
+-- row then yields no rows at all, which the page renders as zero. Inline it
+-- would yield a null id on every row, and the dashboard would confidently
+-- report one contributor. Same rule as everywhere else here — fall to zero,
+-- never to a made-up number.
 drop view if exists public.network_activity;
 create view public.network_activity as
   select
-    md5(d.owner_wallet) as contributor_id,
+    left(
+      encode(sha256(convert_to(salt.value || d.owner_wallet, 'UTF8')), 'hex'),
+      32
+    ) as contributor_id,
     d.source_type,
     d.byte_size,
     d.created_at,
     exists (select 1 from public.sales s where s.dataset_id = d.id) as sold
-  from public.datasets d;
+  from public.datasets d
+  cross join internal.secrets salt
+  where salt.name = 'contributor_id';
 
 -- `paid_stroops` and `gross_stroops` answer two different questions and the
 -- gap between them is the point: gross is everything a buyer has paid for,

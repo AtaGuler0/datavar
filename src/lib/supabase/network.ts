@@ -6,10 +6,16 @@ import { supabase } from "./client";
  * protocol-wide view never needed to know whose dataset it was looking at, only
  * that the contributions came from different people.
  *
- * `contributor_id` is a hash, enough to count distinct contributors and no
- * more. It comes from the `network_activity` view rather than the table, which
- * is why this works without a session: the view is the entire public surface,
- * and row-level security keeps the table itself out of reach. See schema.sql.
+ * `contributor_id` is a salted digest, enough to count distinct contributors
+ * and no more. Salted rather than plain, because contributor addresses are
+ * public on the ledger — the consent contract publishes them as event topics —
+ * so an unsalted hash of one is a lookup anybody can perform, and this view
+ * would answer it with a named person's whole upload history. The salt lives
+ * in a schema no caller can read, so the digest stays a key rather than a
+ * pseudonym. It comes from the `network_activity` view rather than the table,
+ * which is why this works without a session: the view is the entire public
+ * surface, and row-level security keeps the table itself out of reach.
+ * See schema.sql.
  */
 export type NetworkRow = {
   contributor_id: string;
