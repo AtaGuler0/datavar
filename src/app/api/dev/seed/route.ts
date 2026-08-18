@@ -113,6 +113,11 @@ export async function POST(request: Request) {
       const { token } = issueToken({
         wallet,
         admin: false,
+        // The rows below are marked `synthetic` and live under `seed/`, and the
+        // insert policy now asks who is entitled to write those rather than
+        // taking the marker's word for it. This is the only place that claim is
+        // minted, and it also exempts the burst from the per-wallet ceiling.
+        seed: true,
         ttlSeconds: TOKEN_TTL_SECONDS,
       });
       const client = supabaseForToken(token);

@@ -22,6 +22,37 @@ export function sourceLabel(id: string): string {
   return SOURCE_TYPES.find((s) => s.id === id)?.label ?? id;
 }
 
+/**
+ * Extensions a stored file may keep, covering what the source categories
+ * actually produce: exports and archives, photos, audio and video from dashcam
+ * and voice contributions, and the odd database file a phone hands you.
+ */
+const SAFE_EXTENSIONS = new Set([
+  ".csv", ".json", ".jsonl", ".ndjson", ".txt", ".xml", ".html", ".md",
+  ".zip", ".gz", ".tar", ".7z", ".parquet", ".db", ".sqlite", ".pdf",
+  ".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif",
+  ".mp3", ".m4a", ".wav", ".ogg", ".flac",
+  ".mp4", ".mov", ".webm", ".mkv",
+]);
+
+/**
+ * The extension to store a file under, or none.
+ *
+ * The suffix of a name the contributor chose used to be carried through
+ * untouched. Supabase does not resolve `..` inside an object key, so there was
+ * no traversal to be had, but "no exploit today" is a thin reason to keep
+ * putting arbitrary text into a path — and a whitelist costs one lookup. An
+ * unrecognised extension is dropped rather than rejected: the file is still
+ * stored, still content-addressed, and its type is recorded in `content_type`,
+ * so nothing is lost but the label.
+ */
+export function safeExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0) return "";
+  const ext = filename.slice(dot).toLowerCase();
+  return SAFE_EXTENSIONS.has(ext) ? ext : "";
+}
+
 /** One contributed dataset, as stored in the `datasets` table. */
 export type Dataset = {
   id: string;
@@ -93,11 +124,10 @@ export async function createDataset(input: {
 }): Promise<Dataset> {
   const sha256 = await hashFile(input.file);
   // Content-addressed name keeps identical files from overwriting each other
-  // meaningfully while staying stable per (wallet, content).
-  const ext = input.file.name.includes(".")
-    ? input.file.name.slice(input.file.name.lastIndexOf("."))
-    : "";
-  const storagePath = `${input.wallet}/${sha256}${ext}`;
+  // meaningfully while staying stable per (wallet, content). The schema checks
+  // this exact shape on the way in — see datasets_storage_path_ck — so a path
+  // built any other way is refused by the database rather than merely unusual.
+  const storagePath = `${input.wallet}/${sha256}${safeExtension(input.file.name)}`;
 
   const { error: uploadError } = await supabase.storage
     .from(DATASETS_BUCKET)

@@ -38,6 +38,20 @@ as $$
   select coalesce((auth.jwt() ->> 'rl')::boolean, false)
 $$;
 
+-- Permission to file a dataset that is admitted fiction. Generated rows live
+-- under a `seed/` path and carry `synthetic`, and until this claim existed both
+-- of those were honour-system: a contributor's ordinary token could write a row
+-- claiming to be seeded, and the demo generator's token was indistinguishable
+-- from theirs. Only /api/dev/seed mints this, and only for the length of a run.
+create or replace function public.can_seed()
+  returns boolean
+  language sql
+  stable
+  set search_path = ''
+as $$
+  select coalesce((auth.jwt() ->> 'seed')::boolean, false)
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Table: datasets
 -- ---------------------------------------------------------------------------
@@ -65,6 +79,89 @@ drop index if exists public.datasets_real_idx;
 create index if not exists datasets_recent_idx
   on public.datasets (created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- What a dataset row has to look like
+--
+-- Every one of these columns used to arrive from the browser and none of them
+-- was checked. A wallet with a session could file unlimited rows describing
+-- files that were never uploaded, at any size it liked — and the landing page's
+-- contributor and dataset counts, and `source_rates`, read straight off this
+-- table. Those are the numbers this project is judged on, so "the client says
+-- so" is not a good enough provenance for them.
+--
+-- These are table constraints rather than more conditions on the insert policy
+-- because they are not about who is writing. They are what makes a row internally
+-- consistent, and they should hold for every writer this schema ever grows,
+-- including one that bypasses row-level security entirely.
+--
+-- `not valid` throughout: rows written before this existed are grandfathered
+-- rather than blocking the migration, because a re-run of this file must never
+-- fail on data it inherited. Every new row is checked. Dropping first is what
+-- keeps the pair idempotent.
+-- ---------------------------------------------------------------------------
+
+-- A Stellar ed25519 public key: 'G' and 55 more base32 characters. Worth
+-- stating for its own sake, and load-bearing for the path check below, which
+-- builds a pattern out of this column — a wallet holding regex metacharacters
+-- would quietly turn that check into one that matches anything.
+alter table public.datasets drop constraint if exists datasets_owner_wallet_ck;
+alter table public.datasets add constraint datasets_owner_wallet_ck
+  check (owner_wallet ~ '^G[A-Z2-7]{55}$') not valid;
+
+-- The digest the browser computed, as a digest and not as a sentence.
+alter table public.datasets drop constraint if exists datasets_sha256_ck;
+alter table public.datasets add constraint datasets_sha256_ck
+  check (sha256 ~ '^[0-9a-f]{64}$') not valid;
+
+-- Nothing is a zero-byte contribution, and the ceiling is the upload form's own
+-- 50 MB (MAX_BYTES in components/dashboard/upload-flow.tsx). A row bigger than
+-- the product accepts describes a file it could not have taken.
+alter table public.datasets drop constraint if exists datasets_byte_size_ck;
+alter table public.datasets add constraint datasets_byte_size_ck
+  check (byte_size > 0 and byte_size <= 52428800) not valid;
+
+-- The categories in SOURCE_TYPES (lib/supabase/datasets.ts). Written out rather
+-- than joined to a lookup table: nine values that change when the product's
+-- vocabulary changes, which is a schema edit either way.
+alter table public.datasets drop constraint if exists datasets_source_type_ck;
+alter table public.datasets add constraint datasets_source_type_ck
+  check (source_type in (
+    'browsing', 'purchases', 'health', 'location', 'media',
+    'voice', 'messaging', 'dashcam', 'other'
+  )) not valid;
+
+alter table public.datasets drop constraint if exists datasets_title_ck;
+alter table public.datasets add constraint datasets_title_ck
+  check (length(btrim(title)) between 1 and 200) not valid;
+
+-- The path has to name the row's own owner and its own digest, which is what
+-- ties the metadata to a file in storage instead of letting it float free. Two
+-- shapes are legal, and `synthetic` is not free to disagree with which one:
+--
+--   <wallet>/<sha256>[.ext]   a real upload, synthetic false
+--   seed/<wallet>/<sha256>    the demo generator, synthetic true
+--
+-- The extension is bounded and lowercase because it comes from a user's file
+-- name; see safeExtension() in lib/supabase/datasets.ts, which now whitelists it
+-- on the way in. Who may write the seeded shape is a question of authority, so
+-- it is the insert policy below that asks for `can_seed()`, not this.
+--
+-- The two markers do not agree on rows written before this constraint existed,
+-- and that is the reason it is worth having. Read against the testnet
+-- deployment on 2026-08-19: of 525 rows, 485 carried `synthetic` while sitting
+-- at a real upload path, and 36 sat under `seed/` while claiming not to be
+-- generated. `not valid` grandfathers all of them; from here the two markers
+-- cannot drift apart again. Note that the cleanup SQL in lib/demo-data.ts keys
+-- on the path, so on that inherited data it still finds only the 36.
+alter table public.datasets drop constraint if exists datasets_storage_path_ck;
+alter table public.datasets add constraint datasets_storage_path_ck
+  check (
+    case when synthetic
+      then storage_path = 'seed/' || owner_wallet || '/' || sha256
+      else storage_path ~ ('^' || owner_wallet || '/' || sha256 || '(\.[a-z0-9]{1,10})?$')
+    end
+  ) not valid;
+
 alter table public.datasets enable row level security;
 
 drop policy if exists "datasets read (testnet)"   on public.datasets;
@@ -77,9 +174,19 @@ create policy "datasets read"
   using (owner_wallet = public.current_wallet() or public.is_operator());
 
 
+-- You may only file a dataset as yourself, and you may only file admitted
+-- fiction if you are the thing that generates it. `synthetic` rows are counted
+-- by the public aggregates exactly like every other row, so a contributor free
+-- to set it would be free to inflate the very numbers the constraints above
+-- protect — the marker would say "not adoption" while the total said otherwise.
+-- The shape of the two storage paths is datasets_storage_path_ck's business;
+-- this decides who is allowed to be in the seeded one.
 create policy "datasets insert"
   on public.datasets for insert
-  with check (owner_wallet = public.current_wallet());
+  with check (
+    owner_wallet = public.current_wallet()
+    and (not synthetic or public.can_seed())
+  );
 
 grant select, insert on public.datasets to authenticated;
 
@@ -275,18 +382,15 @@ revoke all on internal.rate_limits from public, anon, authenticated;
 create index if not exists rate_limits_window_idx
   on internal.rate_limits (window_start);
 
--- Counts one request and says whether it may proceed: 0 to allow, otherwise the
--- seconds until the caller's window resets, ready to be handed back as
+-- Counts one hit and says whether it may proceed: 0 to allow, otherwise the
+-- seconds until that subject's window resets, ready to be handed back as
 -- `Retry-After`.
 --
--- `security definer`, because the table it writes is in a schema no caller can
--- reach — that is what stops a limit from being readable or editable by the
--- people it applies to. And guarded by `can_rate_limit()`, because a definer
--- function granted broadly would be worse than no limit at all: the subject is
--- an IP address on the routes that have no session, so anyone able to call this
--- directly with the anon key could spend a stranger's budget and lock them out
--- of signing in. Only a token this server mints for itself carries the claim.
-create or replace function public.rate_limit_hit(
+-- The counting lives here, in a schema nothing can reach, because it has two
+-- callers that need it on different terms — the HTTP routes, through the guarded
+-- wrapper below, and the trigger on `datasets`, which has no token to check. It
+-- is `security definer` for the table's sake; neither caller could write it.
+create or replace function internal.count_hit(
   p_bucket  text,
   p_subject text,
   p_limit   integer,
@@ -302,11 +406,6 @@ declare
   v_window_start timestamptz;
   v_hits         integer;
 begin
-  if not public.can_rate_limit() then
-    raise exception 'not authorised to record rate limit hits'
-      using errcode = '42501';
-  end if;
-
   -- The rule arrives from the caller, so it is checked rather than trusted. A
   -- window of zero would divide by zero below; an enormous one would keep rows
   -- alive past the sweep.
@@ -351,12 +450,91 @@ begin
 end;
 $$;
 
+-- What the HTTP routes call, which is the counter plus one question about who
+-- is asking. Guarded by `can_rate_limit()`, because an unguarded definer
+-- function here would be worse than no limit at all: on the routes with no
+-- session the subject is an IP address, so anyone able to reach this with the
+-- anon key could spend a stranger's budget and lock them out of signing in.
+-- Only a token the server mints for itself carries the claim.
+create or replace function public.rate_limit_hit(
+  p_bucket  text,
+  p_subject text,
+  p_limit   integer,
+  p_window  integer
+)
+  returns integer
+  language plpgsql
+  volatile
+  security definer
+  set search_path = ''
+as $$
+begin
+  if not public.can_rate_limit() then
+    raise exception 'not authorised to record rate limit hits'
+      using errcode = '42501';
+  end if;
+
+  return internal.count_hit(p_bucket, p_subject, p_limit, p_window);
+end;
+$$;
+
 -- Postgres grants execute on a new function to `public` by default, and `anon`
 -- is in `public` — so the revoke is not tidiness, it is the control itself.
 revoke all on function public.rate_limit_hit(text, text, integer, integer)
   from public, anon;
 grant execute on function public.rate_limit_hit(text, text, integer, integer)
   to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- A ceiling on filing datasets
+--
+-- The constraints on the table say what a row must look like; they say nothing
+-- about how many of them one wallet may write. Without this, a contributor who
+-- is willing to hash and upload a real file — or just to write rows a hundred at
+-- a time — still moves the public counters as far as they like, only tidily.
+--
+-- A trigger rather than the route helper, because this insert never passes
+-- through a route: the browser writes to PostgREST directly and row-level
+-- security is the whole of the server it meets. So the ceiling has to live where
+-- the write does.
+--
+-- Seeding is exempt. It is already gated twice over at /api/dev/seed (operator
+-- session, and NODE_ENV or ALLOW_DEMO_SEED), it writes a wallet's rows in one
+-- burst by design, and the claim it carries is minted nowhere else.
+create or replace function internal.datasets_insert_limit()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path = ''
+as $$
+declare
+  v_retry integer;
+begin
+  if public.can_seed() then
+    return new;
+  end if;
+
+  v_retry := internal.count_hit(
+    'datasets:insert',
+    coalesce(public.current_wallet(), '-'),
+    60,     -- rows per wallet
+    3600    -- per hour
+  );
+
+  if v_retry > 0 then
+    raise exception
+      'too many datasets filed from this wallet; try again in % seconds', v_retry
+      using errcode = '53400';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists datasets_insert_limit on public.datasets;
+create trigger datasets_insert_limit
+  before insert on public.datasets
+  for each row execute function internal.datasets_insert_limit();
 
 -- These three views are the whole public surface, and they count the whole
 -- deployment: every dataset row and every sale, generated load included.

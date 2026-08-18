@@ -73,6 +73,12 @@ export function issueToken(claims: {
    * one payment. See `can_settle()` in schema.sql.
    */
   settle?: boolean;
+  /**
+   * Permission to file a dataset marked `synthetic`, under the `seed/` path.
+   * Only /api/dev/seed mints this. Without it the generated rows would be
+   * indistinguishable from a contributor's own — see `can_seed()` in schema.sql.
+   */
+  seed?: boolean;
 }): { token: string; expiresAt: number } {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + claims.ttlSeconds;
@@ -82,10 +88,11 @@ export function issueToken(claims: {
       // Supabase reads these two.
       role: ROLE,
       aud: ROLE,
-      // Ours. Policies read `wallet`, `admin` and `settle`.
+      // Ours. Policies read `wallet`, `admin`, `settle` and `seed`.
       wallet: claims.wallet,
       admin: claims.admin,
       ...(claims.settle ? { settle: true } : {}),
+      ...(claims.seed ? { seed: true } : {}),
       iss: ISSUER,
       iat: now,
       exp,
