@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
+import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import {
   ConsentError,
@@ -34,7 +35,8 @@ function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function handle(e: unknown) {
+function handle(where: string, e: unknown) {
+  logFailure(`consent ${where}`, e);
   if (e instanceof ConsentError) return fail(e.message, 502);
   return fail("Couldn't reach the consent contract. Try again.", 502);
 }
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
   try {
     return NextResponse.json({ receipts: await listReceipts(wallet) });
   } catch (e) {
-    return handle(e);
+    return handle("receipts", e);
   }
 }
 
@@ -130,7 +132,7 @@ export async function POST(request: Request) {
 
     return fail("Unknown action.", 400);
   } catch (e) {
-    return handle(e);
+    return handle("build", e);
   }
 }
 

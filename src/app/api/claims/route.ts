@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
+import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
 import {
@@ -107,6 +108,7 @@ export async function POST(request: Request) {
 
     return fail("Unknown action.", 400);
   } catch (e) {
+    logFailure(`claims ${String(body.action)}`, e);
     if (e instanceof PayoutError) return fail(e.message, 502);
     return fail("Couldn't reach the payout contract. Try again.", 502);
   }
@@ -134,6 +136,10 @@ async function settle(
     });
     supabase = supabaseForToken(token);
   } catch (e) {
+    // The worst failure in the product: the contributor has been paid on-chain
+    // and our copy says they haven't. It must never be the case that this
+    // happened and nothing anywhere recorded why.
+    logFailure(`claims settle ${hash}`, e);
     return {
       warning:
         e instanceof AuthConfigError
@@ -156,6 +162,8 @@ async function settle(
     .not("credited_at", "is", null);
 
   if (error) {
+    // Not a thrown error, but the same silence: paid on-chain, unrecorded here.
+    logFailure(`claims settle ${hash}`, error);
     return {
       warning:
         "Paid on-chain, but the payout couldn't be marked claimed. Note the hash.",

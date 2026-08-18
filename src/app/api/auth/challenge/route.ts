@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Keypair, StrKey, WebAuth } from "@stellar/stellar-sdk";
+import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { STELLAR } from "@/lib/stellar/config";
 import { CHALLENGE_TIMEOUT_SECONDS, authDomain } from "../shared";
@@ -61,7 +62,10 @@ export async function GET(request: Request) {
       challenge,
       networkPassphrase: STELLAR.networkPassphrase,
     });
-  } catch {
+  } catch (e) {
+    // Almost always a malformed STELLAR_AUTH_SECRET, which is invisible from
+    // the sentence below — sign-in simply stops working for everyone.
+    logFailure("auth/challenge build", e);
     return NextResponse.json(
       { error: "Couldn't build a sign-in challenge." },
       { status: 500 },

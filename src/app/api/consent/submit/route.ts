@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { ConsentError, isConsentConfigured, submit } from "@/lib/stellar/consent";
 
@@ -45,6 +46,9 @@ export async function POST(request: Request) {
   try {
     return NextResponse.json({ hash: await submit(body.xdr) });
   } catch (e) {
+    // A contributor has already signed by the time this runs, so a failure here
+    // is a grant they authorised and did not get. Worth a line either way.
+    logFailure("consent/submit", e);
     return NextResponse.json(
       {
         error:

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import { issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
+import { logFailure } from "@/lib/log";
 import { supabaseForToken } from "@/lib/supabase/client";
 import { CLEANUP_SQL, demoDataset, demoSale } from "@/lib/demo-data";
 
@@ -161,6 +162,9 @@ export async function POST(request: Request) {
       cleanupSql: CLEANUP_SQL,
     });
   } catch (e) {
+    // Seeding writes in a loop and this can land halfway through, so the log is
+    // where "how far did it get" has to come from.
+    logFailure("dev/seed", e);
     return fail(
       e instanceof Error ? e.message : "Seeding failed part-way through.",
       502,
