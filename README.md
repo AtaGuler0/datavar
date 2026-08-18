@@ -135,6 +135,16 @@ Next.js 16 (App Router), React 19, Tailwind CSS v4, TypeScript.
 
 The App Router entry lives in `src/app`, and each landing page section (hero, stats, buyers, FAQ and so on) is its own component in `src/components`.
 
+### Why package.json has an `overrides` block
+
+`@creit.tech/stellar-wallets-kit` depends on adapters for chains this product does not use — Trezor, WalletConnect, Ledger, and through Reown a further tree reaching Solana, NEAR and Coinbase. They are ordinary dependencies rather than optional ones, so installing the kit installs all of them, and most of the advisories `npm audit` reports come from there rather than from anything we call.
+
+Nothing in that tree is shipped. The kit is imported per module, and this app loads four: Freighter, xBull, Albedo and Lobstr. Grepping a production build for the rest finds nothing in either the client chunks or the server output.
+
+The pins are still worth having. `axios` is the one that matters — it arrives under our own `@stellar/stellar-sdk`, it is in the server build, and it is what talks to Horizon and the Soroban RPC. The rest (`protobufjs`, `nanoid`, `ip-address`, `uuid`) are pinned to keep the audit readable, so a real advisory is not lost among a page of unreachable ones.
+
+`elliptic` is the one that stays. Every version is affected and there is no fixed release, so the only thing `npm audit fix --force` can offer is a downgrade of the wallet kit to 1.5.0 — an older kit, in exchange for an advisory in code that is never loaded. Not worth it.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
