@@ -121,6 +121,18 @@ export function SiteFooter() {
             © {new Date().getFullYear()} Datavar Labs
           </p>
           <div className="flex items-center gap-6">
+            {/* One legal page, not two: the terms and the privacy half
+                describe the same arrangement from opposite ends, and splitting
+                them meant repeating the ledger's permanence in both. It lives
+                in the docs rather than a folder of its own (same renderer,
+                same diff) and is linked from here, where a reader looks for
+                it, rather than from a column above. */}
+            <Link
+              href="/docs/terms"
+              className="font-mono text-xs text-ink-faint transition-colors hover:text-ink"
+            >
+              Terms &amp; Privacy
+            </Link>
             {/* One entry, because one exists. The X and LinkedIn placeholders
                 are gone rather than parked here as dead text — an empty
                 account list says less than a real repository does. */}
