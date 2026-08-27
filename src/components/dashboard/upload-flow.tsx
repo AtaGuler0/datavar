@@ -13,6 +13,9 @@ import { useWallet } from "./wallet-provider";
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — plenty for a testnet demo.
 
+/** Matches datasets_title_ck in supabase/schema.sql. */
+const TITLE_MAX_LENGTH = 200;
+
 type Staged = { file: File; sha256: string };
 
 /**
@@ -157,6 +160,10 @@ export function UploadCard({
                 id="ds-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                // The schema's own ceiling (datasets_title_ck). Stopping the
+                // typing is a better answer than a constraint violation read
+                // back as "something went wrong".
+                maxLength={TITLE_MAX_LENGTH}
                 placeholder="e.g. Two years of browsing history"
                 className="mt-2 w-full rounded-lg border border-rule bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-slate/50 focus:outline-none"
               />

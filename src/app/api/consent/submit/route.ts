@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { logFailure } from "@/lib/log";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { ConsentError, isConsentConfigured, submit } from "@/lib/stellar/consent";
 
 /**
@@ -15,6 +17,11 @@ import { ConsentError, isConsentConfigured, submit } from "@/lib/stellar/consent
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  // Before anything else: this is the route with no session and the longest
+  // hold, so it is the one worth spending a round trip to protect.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.consentSubmit);
+  if (limited) return limited;
+
   if (!isConsentConfigured()) {
     return NextResponse.json(
       { error: "The consent contract isn't configured on this deployment." },
@@ -39,6 +46,9 @@ export async function POST(request: Request) {
   try {
     return NextResponse.json({ hash: await submit(body.xdr) });
   } catch (e) {
+    // A contributor has already signed by the time this runs, so a failure here
+    // is a grant they authorised and did not get. Worth a line either way.
+    logFailure("consent/submit", e);
     return NextResponse.json(
       {
         error:

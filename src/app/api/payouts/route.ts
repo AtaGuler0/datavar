@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
+import { logFailure } from "@/lib/log";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
 import {
   balanceOf,
@@ -58,6 +60,11 @@ function fail(message: string, status: number) {
 }
 
 export async function GET(request: Request) {
+  // Anyone may check the vault, and should be able to — but each check is three
+  // calls to the contract, so "anyone" comes with a ceiling.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.payoutsRead);
+  if (limited) return limited;
+
   if (!isPayoutConfigured()) {
     return fail("The payout contract isn't configured on this deployment.", 503);
   }
@@ -74,11 +81,20 @@ export async function GET(request: Request) {
       // Who may credit and who may hand that role out. Public for the same
       // reason the balances are: a vault whose rules you have to take our word
       // for is not meaningfully different from a database.
-      readOperators().catch(() => null),
-      readAdmin().catch(() => null),
+      // Null here renders as "we couldn't read the roles", which is a fine
+      // thing to show and a terrible thing to leave unexplained.
+      readOperators().catch((e) => {
+        logFailure("payouts roles operators", e);
+        return null;
+      }),
+      readAdmin().catch((e) => {
+        logFailure("payouts roles admin", e);
+        return null;
+      }),
     ]);
     return NextResponse.json({ vault, balance, roles: { operators, admin } });
   } catch (e) {
+    logFailure("payouts read", e);
     if (e instanceof PayoutError) return fail(e.message, 502);
     return fail("Couldn't reach the payout contract.", 502);
   }
@@ -143,6 +159,7 @@ export async function POST(request: Request) {
 
     return fail("Unknown action.", 400);
   } catch (e) {
+    logFailure(`payouts ${String(body.action)}`, e);
     if (e instanceof PayoutError) return fail(e.message, 502);
     return fail("Couldn't reach the payout contract. Try again.", 502);
   }
@@ -187,6 +204,7 @@ async function buildRound(wallet: string) {
     .limit(CREDIT_BATCH);
 
   if (error) {
+    logFailure("payouts pending sales", error);
     return fail("Couldn't read the sales waiting to be credited.", 502);
   }
 
@@ -326,6 +344,9 @@ async function mark(
       ...(hash ? { credit_tx: hash } : {}),
     })
     .in("id", ids);
+  // The caller turns this into "run the sync again", which says what to do and
+  // not what happened. The ledger has already moved by then.
+  if (error) logFailure(`payouts mark ${ids.length} sales`, error);
   return !error;
 }
 
@@ -346,6 +367,7 @@ function operatorClient(wallet: string):
     });
     return { client: supabaseForToken(token), error: null };
   } catch (e) {
+    logFailure("payouts operator token", e);
     return {
       client: null,
       error:
@@ -356,5 +378,8 @@ function operatorClient(wallet: string):
 
 /** The vault as it stands after a credit, for the panel to render. */
 async function vault() {
-  return readVault().catch(() => null);
+  return readVault().catch((e) => {
+    logFailure("payouts vault refresh", e);
+    return null;
+  });
 }

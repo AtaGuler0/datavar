@@ -55,6 +55,13 @@ function sign(input: string): string {
   return createHmac("sha256", secret()).update(input).digest("base64url");
 }
 
+/** Header, payload and one HMAC over both. The only place a token is built. */
+function mint(payload: Record<string, unknown>): string {
+  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = b64url(JSON.stringify(payload));
+  return `${header}.${body}.${sign(`${header}.${body}`)}`;
+}
+
 /** Mints a session token for a wallet that has already proved itself. */
 export function issueToken(claims: {
   wallet: string;
@@ -66,27 +73,55 @@ export function issueToken(claims: {
    * one payment. See `can_settle()` in schema.sql.
    */
   settle?: boolean;
+  /**
+   * Permission to file a dataset marked `synthetic`, under the `seed/` path.
+   * Only /api/dev/seed mints this. Without it the generated rows would be
+   * indistinguishable from a contributor's own — see `can_seed()` in schema.sql.
+   */
+  seed?: boolean;
 }): { token: string; expiresAt: number } {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + claims.ttlSeconds;
 
-  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = b64url(
-    JSON.stringify({
+  return {
+    token: mint({
       // Supabase reads these two.
       role: ROLE,
       aud: ROLE,
-      // Ours. Policies read `wallet`, `admin` and `settle`.
+      // Ours. Policies read `wallet`, `admin`, `settle` and `seed`.
       wallet: claims.wallet,
       admin: claims.admin,
       ...(claims.settle ? { settle: true } : {}),
+      ...(claims.seed ? { seed: true } : {}),
       iss: ISSUER,
       iat: now,
       exp,
     }),
-  );
+    expiresAt: exp,
+  };
+}
 
-  return { token: `${header}.${payload}.${sign(`${header}.${payload}`)}`, expiresAt: exp };
+/**
+ * A token whose only power is counting a request against a rate limit.
+ *
+ * Deliberately carries no `wallet`, so `current_wallet()` is null for it and
+ * every policy in the schema keyed on ownership refuses it: it can read no
+ * dataset, no sale, no file. What it can do is call `rate_limit_hit()`, which
+ * is granted to nothing else — see `can_rate_limit()` in schema.sql.
+ *
+ * Short-lived and minted per request rather than held, because it is cheaper to
+ * sign one than to reason about when a cached one expires mid-flight.
+ */
+export function issueRateLimitToken(ttlSeconds: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  return mint({
+    role: ROLE,
+    aud: ROLE,
+    rl: true,
+    iss: ISSUER,
+    iat: now,
+    exp: now + ttlSeconds,
+  });
 }
 
 /**

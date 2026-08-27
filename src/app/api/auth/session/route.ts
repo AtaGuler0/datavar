@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Keypair, WebAuth } from "@stellar/stellar-sdk";
 import { adminListEmpty, isAdminWallet } from "@/lib/auth/admins";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
+import { logFailure } from "@/lib/log";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { STELLAR } from "@/lib/stellar/config";
 import { SESSION_TTL_SECONDS, authDomain } from "../shared";
 
@@ -30,6 +32,11 @@ import { SESSION_TTL_SECONDS, authDomain } from "../shared";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
+  // Also the ceiling on grinding at the replay window named above: a captured
+  // challenge is still good for five minutes, but not for unlimited attempts.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.authSession);
+  if (limited) return limited;
+
   const secret = process.env.STELLAR_AUTH_SECRET;
   if (!secret) {
     return NextResponse.json(
@@ -80,7 +87,13 @@ export async function POST(request: Request) {
     );
 
     wallet = clientAccountID;
-  } catch {
+  } catch (e) {
+    // This is the lesson from the August config bug, in the place it bit. A
+    // wrong STELLAR_AUTH_SECRET, a domain that doesn't match, and a genuinely
+    // bad signature all arrive here and all say the same thing to the person
+    // signing in. Only the first two are ours to fix, and only the log tells
+    // them apart.
+    logFailure("auth/session verify", e);
     return NextResponse.json(
       { error: "That challenge didn't check out. Start sign-in again." },
       { status: 401 },
@@ -105,6 +118,7 @@ export async function POST(request: Request) {
       adminListEmpty: adminListEmpty(),
     });
   } catch (e) {
+    logFailure("auth/session issue", e);
     return NextResponse.json(
       {
         error:

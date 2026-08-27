@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
+import { logFailure } from "@/lib/log";
+import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import {
   ConsentError,
   buildGrant,
@@ -33,12 +35,18 @@ function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function handle(e: unknown) {
+function handle(where: string, e: unknown) {
+  logFailure(`consent ${where}`, e);
   if (e instanceof ConsentError) return fail(e.message, 502);
   return fail("Couldn't reach the consent contract. Try again.", 502);
 }
 
 export async function GET(request: Request) {
+  // Public on purpose, which is exactly why it needs a ceiling: every call is a
+  // simulation against the contract, paid for by us.
+  const limited = await enforceRateLimit(request, RATE_LIMITS.consentRead);
+  if (limited) return limited;
+
   if (!isConsentConfigured()) {
     return fail("The consent contract isn't configured on this deployment.", 503);
   }
@@ -51,11 +59,14 @@ export async function GET(request: Request) {
   try {
     return NextResponse.json({ receipts: await listReceipts(wallet) });
   } catch (e) {
-    return handle(e);
+    return handle("receipts", e);
   }
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(request, RATE_LIMITS.consentBuild);
+  if (limited) return limited;
+
   if (!isConsentConfigured()) {
     return fail("The consent contract isn't configured on this deployment.", 503);
   }
@@ -121,7 +132,7 @@ export async function POST(request: Request) {
 
     return fail("Unknown action.", 400);
   } catch (e) {
-    return handle(e);
+    return handle("build", e);
   }
 }
 

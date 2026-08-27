@@ -42,6 +42,17 @@ export function supabaseForToken(token: string) {
   });
 }
 
+/**
+ * A client that mints a fresh token before each request instead of carrying
+ * one. For a long-lived client on the server whose token would otherwise expire
+ * under it — the rate limiter holds exactly one of these for the process.
+ */
+export function supabaseForMintedToken(token: () => string) {
+  return createClient(url!, anonKey!, {
+    accessToken: async () => token(),
+  });
+}
+
 /** Storage bucket that holds the raw dataset files. Private; see schema SQL. */
 export const DATASETS_BUCKET = "datasets";
 
