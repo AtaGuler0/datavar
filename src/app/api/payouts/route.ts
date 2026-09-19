@@ -5,14 +5,15 @@ import { readSession } from "@/lib/auth/session";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
+import { isPayAsset, type PayAsset } from "@/lib/stellar/config";
 import {
   balanceOf,
   buildAddOperator,
   buildCredit,
   buildRemoveOperator,
   CREDIT_BATCH,
+  isAssetConfigured,
   isCredited,
-  isPayoutConfigured,
   PayoutError,
   readAdmin,
   readOperators,
@@ -41,6 +42,12 @@ import {
  * to it in their own wallet, and this server holds no key at all. It cannot
  * credit, cannot claim, cannot pay, cannot withdraw. It reads the ledger, hands
  * over unsigned transactions, and keeps our copy of what happened.
+ *
+ * Everything here is per vault. There are two, one for each asset a sale can be
+ * paid in, and they share nothing: their own balances, their own credited
+ * references, their own operator sets. So the asset travels on every call, and
+ * a credit round only ever gathers sales that were paid in the asset of the
+ * vault it is about to be signed against.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -55,6 +62,20 @@ type PendingSale = {
   price_stroops: number;
 };
 
+/** The asset a request is about. Unstated means XLM, as it always did. */
+function assetOf(value: unknown): PayAsset {
+  return isPayAsset(value) ? value : "XLM";
+}
+
+function unconfigured(asset: PayAsset) {
+  return fail(
+    asset === "USDC"
+      ? "The USDC payout vault isn't configured on this deployment."
+      : "The payout contract isn't configured on this deployment.",
+    503,
+  );
+}
+
 function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -65,34 +86,39 @@ export async function GET(request: Request) {
   const limited = await enforceRateLimit(request, RATE_LIMITS.payoutsRead);
   if (limited) return limited;
 
-  if (!isPayoutConfigured()) {
-    return fail("The payout contract isn't configured on this deployment.", 503);
-  }
+  const url = new URL(request.url);
+  const asset = assetOf(url.searchParams.get("asset"));
+  if (!isAssetConfigured(asset)) return unconfigured(asset);
 
-  const wallet = new URL(request.url).searchParams.get("wallet");
+  const wallet = url.searchParams.get("wallet");
   if (wallet && !StrKey.isValidEd25519PublicKey(wallet)) {
     return fail("That isn't a Stellar address.", 400);
   }
 
   try {
     const [vault, balance, operators, admin] = await Promise.all([
-      readVault(),
-      wallet ? balanceOf(wallet) : Promise.resolve(null),
+      readVault(asset),
+      wallet ? balanceOf(asset, wallet) : Promise.resolve(null),
       // Who may credit and who may hand that role out. Public for the same
       // reason the balances are: a vault whose rules you have to take our word
       // for is not meaningfully different from a database.
       // Null here renders as "we couldn't read the roles", which is a fine
       // thing to show and a terrible thing to leave unexplained.
-      readOperators().catch((e) => {
+      readOperators(asset).catch((e) => {
         logFailure("payouts roles operators", e);
         return null;
       }),
-      readAdmin().catch((e) => {
+      readAdmin(asset).catch((e) => {
         logFailure("payouts roles admin", e);
         return null;
       }),
     ]);
-    return NextResponse.json({ vault, balance, roles: { operators, admin } });
+    return NextResponse.json({
+      asset,
+      vault,
+      balance,
+      roles: { operators, admin },
+    });
   } catch (e) {
     logFailure("payouts read", e);
     if (e instanceof PayoutError) return fail(e.message, 502);
@@ -105,10 +131,6 @@ export async function POST(request: Request) {
   if (!session?.admin) {
     return fail("Only an operator can credit payouts.", 403);
   }
-  if (!isPayoutConfigured()) {
-    return fail("The payout contract isn't configured on this deployment.", 503);
-  }
-
   const wallet = session.wallet;
   if (!StrKey.isValidEd25519PublicKey(wallet)) {
     return fail("That session isn't for a Stellar address.", 400);
@@ -119,6 +141,7 @@ export async function POST(request: Request) {
     xdr?: unknown;
     saleIds?: unknown;
     operator?: unknown;
+    asset?: unknown;
   };
   try {
     body = await request.json();
@@ -126,8 +149,11 @@ export async function POST(request: Request) {
     return fail("Expected a JSON body.", 400);
   }
 
+  const asset = assetOf(body.asset);
+  if (!isAssetConfigured(asset)) return unconfigured(asset);
+
   try {
-    if (body.action === "build") return await buildRound(wallet);
+    if (body.action === "build") return await buildRound(wallet, asset);
 
     if (body.action === "add-operator" || body.action === "remove-operator") {
       // Defaults to the caller, which is the common case: an admin giving
@@ -136,7 +162,7 @@ export async function POST(request: Request) {
       if (typeof target !== "string" || !StrKey.isValidEd25519PublicKey(target)) {
         return fail("That isn't a Stellar address.", 400);
       }
-      return await buildRoleChange(wallet, target, body.action);
+      return await buildRoleChange(asset, wallet, target, body.action);
     }
 
     if (body.action === "submit") {
@@ -148,13 +174,18 @@ export async function POST(request: Request) {
         return fail("That isn't a list of sales to record.", 400);
       }
 
-      const hash = await submitToVault(body.xdr);
+      const hash = await submitToVault(asset, body.xdr);
       // A role change carries no sales, and there is nothing to record for it:
       // the contract is the record.
       const recorded = saleIds.length
-        ? await record(wallet, saleIds, hash)
+        ? await record(wallet, asset, saleIds, hash)
         : { credited: 0 };
-      return NextResponse.json({ hash, ...recorded, vault: await vault() });
+      return NextResponse.json({
+        hash,
+        asset,
+        ...recorded,
+        vault: await vault(asset),
+      });
     }
 
     return fail("Unknown action.", 400);
@@ -181,8 +212,8 @@ function readSaleIds(value: unknown): string[] | null {
  * `remaining` says there is more. The contract's ceiling is the real reason
  * batches exist at all.
  */
-async function buildRound(wallet: string) {
-  const operators = await readOperators();
+async function buildRound(wallet: string, asset: PayAsset) {
+  const operators = await readOperators(asset);
   if (!operators.includes(wallet)) {
     return fail(
       operators.length === 0
@@ -199,6 +230,9 @@ async function buildRound(wallet: string) {
     .from("sales")
     .select("id, owner_wallet, price_stroops", { count: "exact" })
     .is("credited_at", null)
+    // One asset per round: the batch is signed against one vault, and a sale
+    // paid in the other one has no money behind it there.
+    .eq("asset", asset)
     .eq("status", "unclaimed")
     .order("created_at", { ascending: true })
     .limit(CREDIT_BATCH);
@@ -217,7 +251,9 @@ async function buildRound(wallet: string) {
   // leaves here as recorded rather than as a transaction that cannot land. This
   // is the drift a batch that reached the ledger while our copy didn't leaves
   // behind; a rerun repairs it without anyone signing anything.
-  const known = await Promise.all(pending.map((sale) => isCredited(sale.id)));
+  const known = await Promise.all(
+    pending.map((sale) => isCredited(asset, sale.id)),
+  );
   const stale = pending.filter((_, i) => known[i]);
   const fresh = pending.filter((_, i) => !known[i]);
 
@@ -244,7 +280,7 @@ async function buildRound(wallet: string) {
   }));
 
   return NextResponse.json({
-    xdr: await buildCredit(wallet, entries),
+    xdr: await buildCredit(asset, wallet, entries),
     saleIds: fresh.map((sale) => sale.id),
     stroops: entries.reduce((sum, entry) => sum + entry.stroops, 0),
     remaining: Math.max((count ?? 0) - pending.length, 0),
@@ -258,11 +294,17 @@ async function buildRound(wallet: string) {
  * is so the answer is a sentence rather than a failed simulation.
  */
 async function buildRoleChange(
+  asset: PayAsset,
   wallet: string,
   target: string,
   action: "add-operator" | "remove-operator",
 ) {
-  const [admin, operators] = await Promise.all([readAdmin(), readOperators()]);
+  // Per vault, because the sets are per vault: a wallet that credits XLM has
+  // no standing in the USDC contract until it is added there too.
+  const [admin, operators] = await Promise.all([
+    readAdmin(asset),
+    readOperators(asset),
+  ]);
   if (admin !== wallet) {
     return fail(
       `Only the contract's admin can change who credits, and that is ${admin}.`,
@@ -280,8 +322,8 @@ async function buildRoleChange(
 
   return NextResponse.json({
     xdr: adding
-      ? await buildAddOperator(wallet, target)
-      : await buildRemoveOperator(wallet, target),
+      ? await buildAddOperator(asset, wallet, target)
+      : await buildRemoveOperator(asset, wallet, target),
   });
 }
 
@@ -296,6 +338,7 @@ async function buildRoleChange(
  */
 async function record(
   wallet: string,
+  asset: PayAsset,
   saleIds: string[],
   hash: string,
 ): Promise<{ credited: number; warning?: string }> {
@@ -304,7 +347,7 @@ async function record(
     return { credited: 0, warning: `Credited in ${hash}, but ${supabase.error}` };
   }
 
-  const known = await Promise.all(saleIds.map((id) => isCredited(id)));
+  const known = await Promise.all(saleIds.map((id) => isCredited(asset, id)));
   const landed = saleIds.filter((_, i) => known[i]);
   if (landed.length === 0) {
     return {
@@ -377,8 +420,8 @@ function operatorClient(wallet: string):
 }
 
 /** The vault as it stands after a credit, for the panel to render. */
-async function vault() {
-  return readVault().catch((e) => {
+async function vault(asset: PayAsset) {
+  return readVault(asset).catch((e) => {
     logFailure("payouts vault refresh", e);
     return null;
   });

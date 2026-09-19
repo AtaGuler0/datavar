@@ -5,10 +5,11 @@ import { readSession } from "@/lib/auth/session";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
+import { isPayAsset, type PayAsset } from "@/lib/stellar/config";
 import {
   balanceOf,
   buildClaim,
-  isPayoutConfigured,
+  isAssetConfigured,
   PayoutError,
   submitClaim,
 } from "@/lib/stellar/payout";
@@ -37,6 +38,12 @@ import {
  * policy requires, minted here and good for two minutes. Marking a payout
  * claimed remains something only this route can do — see can_settle() in
  * schema.sql.
+ *
+ * Earnings come in two assets and so does this route. A claim empties one
+ * vault, so the asset is part of the request and part of the write: the sales
+ * marked claimed afterwards are the ones denominated in what was actually
+ * paid out. Settling XLM rows on the back of a USDC claim would report money
+ * to contributors that is still sitting in the other contract.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -67,23 +74,29 @@ export async function POST(request: Request) {
   const limited = await enforceRateLimit(request, RATE_LIMITS.claims, wallet);
   if (limited) return limited;
 
-  if (!isPayoutConfigured()) {
-    return fail(
-      "Payouts aren't configured. Set NEXT_PUBLIC_PAYOUT_CONTRACT_ID on the server.",
-      503,
-    );
-  }
-
-  let body: { action?: unknown; xdr?: unknown };
+  let body: { action?: unknown; xdr?: unknown; asset?: unknown };
   try {
     body = await request.json();
   } catch {
     return fail("Expected a JSON body.", 400);
   }
 
+  // Unstated means XLM, which is what every client sent before the second
+  // vault existed and what every row filed then was paid in.
+  const asset: PayAsset = isPayAsset(body.asset) ? body.asset : "XLM";
+
+  if (!isAssetConfigured(asset)) {
+    return fail(
+      asset === "USDC"
+        ? "USDC payouts aren't configured on this deployment."
+        : "Payouts aren't configured. Set NEXT_PUBLIC_PAYOUT_CONTRACT_ID on the server.",
+      503,
+    );
+  }
+
   try {
     if (body.action === "build") {
-      const stroops = await balanceOf(wallet);
+      const stroops = await balanceOf(asset, wallet);
       if (stroops <= 0) {
         // Sales exist but nothing is credited yet: the honest answer is that
         // the money isn't in the vault, not that the claim failed.
@@ -92,7 +105,11 @@ export async function POST(request: Request) {
           409,
         );
       }
-      return NextResponse.json({ xdr: await buildClaim(wallet), stroops });
+      return NextResponse.json({
+        xdr: await buildClaim(asset, wallet),
+        stroops,
+        asset,
+      });
     }
 
     if (body.action === "submit") {
@@ -102,8 +119,12 @@ export async function POST(request: Request) {
       // Narrowed to `claim`, for this session's wallet. What lands here is
       // recorded as a payout the moment it succeeds, so "it reached the vault"
       // is not enough to know on — it has to be the call that pays.
-      const hash = await submitClaim(body.xdr, wallet);
-      return NextResponse.json({ hash, ...(await settle(wallet, hash)) });
+      const hash = await submitClaim(asset, body.xdr, wallet);
+      return NextResponse.json({
+        hash,
+        asset,
+        ...(await settle(wallet, asset, hash)),
+      });
     }
 
     return fail("Unknown action.", 400);
@@ -121,6 +142,7 @@ export async function POST(request: Request) {
  */
 async function settle(
   wallet: string,
+  asset: PayAsset,
   hash: string,
 ): Promise<{ warning?: string }> {
   let supabase;
@@ -148,8 +170,9 @@ async function settle(
     };
   }
 
-  // Everything credited and not yet claimed: a claim empties the wallet's whole
-  // balance in the contract, so it settles all of them at once.
+  // Everything credited in this asset and not yet claimed: a claim empties the
+  // wallet's whole balance in one contract, so it settles exactly those rows
+  // and leaves the other vault's alone.
   const { error } = await supabase
     .from("sales")
     .update({
@@ -158,6 +181,7 @@ async function settle(
       claimed_at: new Date().toISOString(),
     })
     .eq("owner_wallet", wallet)
+    .eq("asset", asset)
     .eq("status", "unclaimed")
     .not("credited_at", "is", null);
 

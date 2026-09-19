@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate, percentDelta } from "@/lib/format";
-import { formatXlm, truncateAddress } from "@/lib/stellar/config";
+import {
+  addMoney,
+  emptyMoney,
+  formatMoney,
+  moneyTotal,
+  truncateAddress,
+} from "@/lib/stellar/config";
 import {
   listDatasets,
   SOURCE_TYPES,
@@ -12,7 +18,6 @@ import {
 } from "@/lib/supabase/datasets";
 import {
   listSalesForWallet,
-  totalStroops,
   type SaleWithDataset,
 } from "@/lib/supabase/sales";
 import { ActivityChart } from "./activity-chart";
@@ -120,10 +125,16 @@ export function Overview() {
 
     // What the data actually earned, straight off the sales ledger — the same
     // stroops the earnings page claims against, not a rate-card estimate.
-    const earned = totalStroops(sales);
-    const claimable = totalStroops(
-      sales.filter((s) => s.status === "unclaimed"),
-    );
+    // Per asset: a contributor paid in both has two figures, and adding them
+    // would need a rate nothing here has.
+    const money = (rows: typeof sales) =>
+      rows.reduce(
+        (total, sale) =>
+          addMoney(total, sale.asset ?? "XLM", Number(sale.price_stroops)),
+        emptyMoney(),
+      );
+    const earned = money(sales);
+    const claimable = money(sales.filter((s) => s.status === "unclaimed"));
 
     // Daily-ish buckets for the trend line: the period split into 12 slices.
     const slice = (period * DAY) / SPARK_POINTS;
@@ -224,12 +235,12 @@ export function Overview() {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Earned"
-            value={`${formatXlm(stats.earned)} XLM`}
+            value={formatMoney(stats.earned)}
             footnote={
               stats.salesCount === 0
                 ? "nothing sold yet"
-                : stats.claimable > 0
-                  ? `${formatXlm(stats.claimable)} XLM waiting to be claimed`
+                : moneyTotal(stats.claimable) > 0
+                  ? `${formatMoney(stats.claimable)} waiting to be claimed`
                   : `across ${stats.salesCount} sale${stats.salesCount === 1 ? "" : "s"}, all paid out`
             }
           />

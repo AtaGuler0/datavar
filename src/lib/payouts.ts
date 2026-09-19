@@ -1,4 +1,5 @@
 import { authHeaders } from "@/lib/auth/session-store";
+import type { PayAsset } from "@/lib/stellar/config";
 
 /**
  * The browser's side of the two money routes.
@@ -15,6 +16,10 @@ import { authHeaders } from "@/lib/auth/session-store";
  * The server counterparts are in `app/api/payouts` and `app/api/claims`; the
  * contract calls themselves are in `lib/stellar/payout.ts`, which is Node-only
  * and cannot be reached from here.
+ *
+ * Every call names an asset, because there is a vault per asset and they hold
+ * separate money. A contributor paid in both has two balances and makes two
+ * claims; an operator crediting a round credits one asset's sales at a time.
  */
 
 /** What a credit run did, as the panels report it. */
@@ -64,6 +69,7 @@ async function post(body: unknown, fallback: string) {
  * failed credit is a retry, not a lost sale.
  */
 export async function creditPending(
+  asset: PayAsset,
   signTransaction: (xdr: string) => Promise<string>,
 ): Promise<CreditResult> {
   let credited = 0;
@@ -73,7 +79,7 @@ export async function creditPending(
 
   for (let batch = 0; batch < MAX_BATCHES; batch++) {
     const built = await post(
-      { action: "build" },
+      { action: "build", asset },
       "The payouts couldn't be prepared.",
     );
     reconciled += Number(built?.reconciled ?? 0);
@@ -84,7 +90,7 @@ export async function creditPending(
 
     const signed = await signTransaction(built.xdr);
     const done = await post(
-      { action: "submit", xdr: signed, saleIds: built.saleIds },
+      { action: "submit", asset, xdr: signed, saleIds: built.saleIds },
       "The credit didn't go through.",
     );
 
@@ -111,17 +117,18 @@ export async function creditPending(
  * doesn't take the others' access with them.
  */
 export async function changeOperator(
+  asset: PayAsset,
   signTransaction: (xdr: string) => Promise<string>,
   action: "add-operator" | "remove-operator",
   operator?: string,
 ): Promise<string> {
   const built = await post(
-    { action, operator },
+    { action, asset, operator },
     "Couldn't prepare that change.",
   );
   const signed = await signTransaction(built.xdr);
   const done = await post(
-    { action: "submit", xdr: signed },
+    { action: "submit", asset, xdr: signed },
     "The change didn't go through.",
   );
   return done.hash as string;
@@ -130,8 +137,9 @@ export async function changeOperator(
 /** A settled claim: the hash that moved it, and what moved. */
 export type ClaimResult = {
   hash: string;
-  /** Stroops the contract held for this wallet when the claim was built. */
+  /** Units the contract held for this wallet when the claim was built. */
   stroops: number;
+  asset: PayAsset;
   /** Paid on-chain, but our record of it didn't stick. */
   warning?: string;
 };
@@ -149,6 +157,7 @@ export type ClaimResult = {
  * the transaction empties the lot.
  */
 export async function claimPayout(
+  asset: PayAsset,
   signTransaction: (xdr: string) => Promise<string>,
 ): Promise<ClaimResult> {
   const prepared = await fetch("/api/claims", {
@@ -156,7 +165,7 @@ export async function claimPayout(
     // The route reads the wallet from the session, never the body — without
     // this header it is an anonymous request and rightly refused.
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ action: "build" }),
+    body: JSON.stringify({ action: "build", asset }),
   });
   const built = await prepared.json().catch(() => null);
   if (!prepared.ok) {
@@ -168,7 +177,7 @@ export async function claimPayout(
   const sent = await fetch("/api/claims", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ action: "submit", xdr: signed }),
+    body: JSON.stringify({ action: "submit", asset, xdr: signed }),
   });
   const result = await sent.json().catch(() => null);
   if (!sent.ok) {
@@ -178,6 +187,7 @@ export async function claimPayout(
   return {
     hash: result.hash as string,
     stroops: Number(built?.stroops ?? 0),
+    asset,
     warning: result?.warning,
   };
 }

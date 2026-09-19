@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { formatCount } from "@/lib/format";
-import { formatXlm } from "@/lib/stellar/config";
+import { formatMoney, isAssetConfigured } from "@/lib/stellar/config";
 import { Card } from "@/components/dashboard/primitives";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { SalesTable } from "./sales-table";
@@ -52,26 +52,38 @@ export function AdminOverview() {
       {/* The vault is the whole answer to "can we pay people" now. There used
           to be a treasury card next to it, showing the balance of the account
           payouts came from; there is no such account any more. */}
-      <VaultCard
-        pendingCount={totals.pending}
-        pendingStroops={totals.pendingStroops}
-        onCredited={reload}
-      />
+      {/* One per vault. They are separate contracts with separate balances,
+          and a single card would have to add two currencies to draw itself.
+          Shown for every asset this deployment is configured for, sales or no
+          sales: an operator needs to see an empty vault before the first one. */}
+      <div className="space-y-3">
+        {totals.perAsset
+          .filter((a) => isAssetConfigured(a.asset))
+          .map((a) => (
+            <VaultCard
+              key={a.asset}
+              asset={a.asset}
+              pendingCount={a.pending}
+              pendingStroops={a.pendingStroops}
+              onCredited={reload}
+            />
+          ))}
+      </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           label="Owed to contributors"
-          value={`${formatXlm(totals.outstanding)} XLM`}
+          value={formatMoney(totals.outstanding)}
           footnote="sold but not yet claimed"
         />
         <StatCard
           label="Paid out"
-          value={`${formatXlm(totals.claimed)} XLM`}
+          value={formatMoney(totals.claimed)}
           footnote={`to ${formatCount(totals.paidContributors)} contributor${totals.paidContributors === 1 ? "" : "s"}`}
         />
         <StatCard
           label="Gross sold"
-          value={`${formatXlm(totals.gross)} XLM`}
+          value={formatMoney(totals.gross)}
           footnote={`across ${formatCount(totals.sales)} sale${totals.sales === 1 ? "" : "s"}`}
         />
         <StatCard
@@ -87,8 +99,19 @@ export function AdminOverview() {
         <StatCard
           label="Average sale"
           value={
+            // Per asset, over that asset's own sales: an average across two
+            // currencies would be a number with no unit.
             totals.sales
-              ? `${formatXlm(Math.round(totals.gross / totals.sales))} XLM`
+              ? formatMoney(
+                  Object.fromEntries(
+                    totals.perAsset
+                      .filter((a) => a.sales > 0)
+                      .map((a) => [
+                        a.asset,
+                        Math.round((totals.gross[a.asset] ?? 0) / a.sales),
+                      ]),
+                  ),
+                )
               : "—"
           }
           footnote="mean price a dataset went for"

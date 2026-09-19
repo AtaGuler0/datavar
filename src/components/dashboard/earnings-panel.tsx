@@ -5,9 +5,11 @@ import Link from "next/link";
 import { formatDate } from "@/lib/format";
 import { claimPayout } from "@/lib/payouts";
 import {
+  configuredAssets,
   explorerTxUrl,
-  formatXlm,
+  formatAmount,
   truncateAddress,
+  type PayAsset,
 } from "@/lib/stellar/config";
 import { sourceLabel } from "@/lib/supabase/datasets";
 import {
@@ -27,15 +29,35 @@ import { useWallet } from "./wallet-provider";
  * wallet, and claiming signs a transaction that moves them out. The server
  * builds it and relays it but cannot sign it — which is the point. Nobody can
  * claim this wallet's balance except this wallet, and nobody can stop it.
+ *
+ * There is one of those contracts per asset, so a contributor who has sold in
+ * both has two balances and two claims. Nothing here adds them together: an
+ * amount is shown next to the asset it is in, always, because the alternative
+ * is a single number under a currency symbol that means neither.
  */
+
+/** The assets this deployment settles in. Env, so read once. */
+const ASSETS = configuredAssets();
+
+/**
+ * Several amounts, printed side by side rather than summed: "12.4 XLM · 3.25
+ * USDC". Anything at zero is dropped, and a contributor who has only ever been
+ * paid in one currency sees exactly what they saw before this existed.
+ */
+function money(parts: { asset: PayAsset; units: number }[]): string {
+  const said = parts
+    .filter((part) => part.units > 0)
+    .map((part) => `${formatAmount(part.units, part.asset)} ${part.asset}`);
+  return said.length > 0 ? said.join(" · ") : `0 ${parts[0]?.asset ?? "XLM"}`;
+}
 export function EarningsPanel() {
   const { address, signTransaction } = useWallet();
 
   const [loaded, setLoaded] = useState<{
     wallet: string;
     rows: SaleWithDataset[];
-    /** Stroops the payout contract holds for this wallet. Null while unread. */
-    vault: number | null;
+    /** What each vault holds for this wallet. Null where it couldn't be read. */
+    vault: Record<string, number | null>;
   } | null>(null);
   const [failed, setFailed] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -48,13 +70,22 @@ export function EarningsPanel() {
    * the ledger agrees — and the ledger is the one that pays.
    */
   const load = useCallback(async (wallet: string) => {
-    const [rows, vault] = await Promise.all([
+    const [rows, ...balances] = await Promise.all([
       listSalesForWallet(wallet),
-      fetch(`/api/payouts?wallet=${wallet}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((body) => (typeof body?.balance === "number" ? body.balance : null))
-        .catch(() => null),
+      ...ASSETS.map((asset) =>
+        fetch(`/api/payouts?wallet=${wallet}&asset=${asset}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((body) =>
+            typeof body?.balance === "number" ? body.balance : null,
+          )
+          .catch(() => null),
+      ),
     ]);
+
+    const vault: Record<string, number | null> = {};
+    ASSETS.forEach((asset, i) => {
+      vault[asset] = balances[i] as number | null;
+    });
     return { wallet, rows, vault };
   }, []);
 
@@ -74,26 +105,37 @@ export function EarningsPanel() {
   const state = address && loaded?.wallet === address ? loaded : null;
   const sales = state?.rows ?? null;
 
+  // Per asset, because the money is. `buyers` is the one figure that crosses
+  // both, since a team that licensed in either currency is the same team.
   const totals = useMemo(() => {
     if (!sales) return null;
-    const unclaimed = sales.filter((s) => s.status === "unclaimed");
-    const claimed = sales.filter((s) => s.status === "claimed");
-    const waiting = unclaimed.filter((s) => !s.credited_at);
+    const perAsset = ASSETS.map((asset) => {
+      const mine = sales.filter((s) => (s.asset ?? "XLM") === asset);
+      const unclaimed = mine.filter((s) => s.status === "unclaimed");
+      const claimed = mine.filter((s) => s.status === "claimed");
+      const waiting = unclaimed.filter((s) => !s.credited_at);
+      return {
+        asset,
+        sales: mine.length,
+        inVault: unclaimed.filter((s) => s.credited_at).length,
+        waiting: waiting.length,
+        waitingStroops: totalStroops(waiting),
+        paid: totalStroops(claimed),
+        paidCount: claimed.length,
+        lifetime: totalStroops(mine),
+      };
+    });
     return {
-      inVault: unclaimed.filter((s) => s.credited_at).length,
-      waiting: waiting.length,
-      waitingStroops: totalStroops(waiting),
-      paid: totalStroops(claimed),
-      paidCount: claimed.length,
-      lifetime: totalStroops(sales),
+      perAsset,
+      paidCount: perAsset.reduce((n, a) => n + a.paidCount, 0),
       buyers: new Set(sales.map((s) => s.buyer)).size,
     };
   }, [sales]);
 
-  const claimable = state?.vault ?? 0;
+  const claimableIn = (asset: PayAsset) => state?.vault?.[asset] ?? 0;
 
-  const claim = async () => {
-    if (!address || claiming || claimable <= 0) return;
+  const claim = async (asset: PayAsset) => {
+    if (!address || claiming || claimableIn(asset) <= 0) return;
     setClaiming(true);
     setError(null);
     setSettled(null);
@@ -101,7 +143,7 @@ export function EarningsPanel() {
       // The server prepares the call and the contract checks the signature, so
       // the wallet claimed for is the wallet that signs — not whatever this
       // request says.
-      const result = await claimPayout(signTransaction);
+      const result = await claimPayout(asset, signTransaction);
 
       setSettled(result.hash);
       if (result.warning) setError(result.warning);
@@ -146,23 +188,36 @@ export function EarningsPanel() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Available to claim"
-          value={`${formatXlm(claimable)} XLM`}
+          value={money(
+            totals.perAsset.map((a) => ({
+              asset: a.asset,
+              units: claimableIn(a.asset),
+            })),
+          )}
           footnote={
-            state?.vault === null
+            totals.perAsset.every((a) => state?.vault?.[a.asset] === null)
               ? "the payout contract is unreachable"
-              : claimable === 0
+              : totals.perAsset.every((a) => claimableIn(a.asset) === 0)
                 ? "nothing in the contract for you"
-                : `held in the contract, across ${totals.inVault} sale${totals.inVault === 1 ? "" : "s"}`
+                : `held in the contract, across ${totals.perAsset.reduce((n, a) => n + a.inVault, 0)} sale${
+                    totals.perAsset.reduce((n, a) => n + a.inVault, 0) === 1
+                      ? ""
+                      : "s"
+                  }`
           }
         />
         <StatCard
           label="Paid out"
-          value={`${formatXlm(totals.paid)} XLM`}
+          value={money(
+            totals.perAsset.map((a) => ({ asset: a.asset, units: a.paid })),
+          )}
           footnote={`${totals.paidCount} payout${totals.paidCount === 1 ? "" : "s"} settled on-chain`}
         />
         <StatCard
           label="Lifetime earned"
-          value={`${formatXlm(totals.lifetime)} XLM`}
+          value={money(
+            totals.perAsset.map((a) => ({ asset: a.asset, units: a.lifetime })),
+          )}
           footnote="every sale of your data to date"
         />
         <StatCard
@@ -172,13 +227,27 @@ export function EarningsPanel() {
         />
       </div>
 
-      <ClaimBar
-        claimable={claimable}
-        waitingStroops={totals.waitingStroops}
-        waitingCount={totals.waiting}
-        claiming={claiming}
-        onClaim={claim}
-      />
+      {/* One bar per vault, and only for a vault with something in it or
+          something coming — an empty USDC row under a contributor who has only
+          ever sold in XLM is a question they did not ask. */}
+      {totals.perAsset
+        .filter(
+          (a) =>
+            a.asset === "XLM" ||
+            a.sales > 0 ||
+            claimableIn(a.asset) > 0,
+        )
+        .map((a) => (
+          <ClaimBar
+            key={a.asset}
+            asset={a.asset}
+            claimable={claimableIn(a.asset)}
+            waitingStroops={a.waitingStroops}
+            waitingCount={a.waiting}
+            claiming={claiming}
+            onClaim={() => claim(a.asset)}
+          />
+        ))}
 
       {(error || settled) && (
         <div className="mt-3 rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink-dim">
@@ -228,12 +297,14 @@ export function EarningsPanel() {
  * signature to give.
  */
 function ClaimBar({
+  asset,
   claimable,
   waitingStroops,
   waitingCount,
   claiming,
   onClaim,
 }: {
+  asset: PayAsset;
   claimable: number;
   waitingStroops: number;
   waitingCount: number;
@@ -247,13 +318,15 @@ function ClaimBar({
       <div className="min-w-0">
         <p className="text-sm text-ink">
           {nothing
-            ? "Nothing to claim right now."
-            : `${formatXlm(claimable)} XLM is yours to withdraw.`}
+            ? `Nothing to claim in ${asset} right now.`
+            : `${formatAmount(claimable, asset)} ${asset} is yours to withdraw.`}
         </p>
         <p className="mt-0.5 text-xs text-ink-faint">
           {waitingCount > 0
-            ? `${formatXlm(waitingStroops)} XLM from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is on its way into the contract, and claimable the moment it lands.`
-            : "Claiming signs one transaction with your wallet. The contract pays it out."}
+            ? `${formatAmount(waitingStroops, asset)} ${asset} from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is on its way into the contract, and claimable the moment it lands.`
+            : asset === "USDC"
+              ? "Claiming needs a USDC trustline on your account — add one from the ramp if the transaction is refused."
+              : "Claiming signs one transaction with your wallet. The contract pays it out."}
         </p>
       </div>
       <button
@@ -330,7 +403,8 @@ function SalesTable({ sales }: { sales: SaleWithDataset[] }) {
                 {formatDate(sale.created_at)}
               </td>
               <td className="py-3 pr-4 text-right font-mono text-xs tabular-nums whitespace-nowrap text-ink">
-                {formatXlm(sale.price_stroops)} XLM
+                {formatAmount(sale.price_stroops, sale.asset ?? "XLM")}{" "}
+                {sale.asset ?? "XLM"}
               </td>
               <td className="py-3 text-right whitespace-nowrap">
                 <PayoutCell sale={sale} />

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatCount, percentDelta } from "@/lib/format";
-import { formatXlm } from "@/lib/stellar/config";
+import { formatMoney } from "@/lib/stellar/config";
 import { SOURCE_TYPES } from "@/lib/supabase/datasets";
 import { listNetworkDatasets, type NetworkRow } from "@/lib/supabase/network";
 import { loadProtocolStats, type ProtocolStats } from "@/lib/supabase/stats";
@@ -296,7 +296,12 @@ export function NetworkPanel() {
             <StatCard
               label="Sold to date"
               value={
-                totals === null ? "—" : `${formatXlm(totals.grossStroops)} XLM`
+                totals === null
+                  ? "—"
+                  : formatMoney({
+                      XLM: totals.grossStroops,
+                      USDC: totals.grossUsdc,
+                    })
               }
               footnote={
                 totals === null
@@ -309,7 +314,12 @@ export function NetworkPanel() {
             <StatCard
               label="Paid out to date"
               value={
-                totals === null ? "—" : `${formatXlm(totals.paidStroops)} XLM`
+                totals === null
+                  ? "—"
+                  : formatMoney({
+                      XLM: totals.paidStroops,
+                      USDC: totals.paidUsdc,
+                    })
               }
               footnote="claimed by contributors and settled on-chain"
             />

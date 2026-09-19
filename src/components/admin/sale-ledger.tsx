@@ -9,7 +9,7 @@ import {
   randomPriceStroops,
   sample,
 } from "@/lib/sales";
-import { formatXlm } from "@/lib/stellar/config";
+import { formatMoney, formatXlm } from "@/lib/stellar/config";
 import { createSales, type SaleDraft, type SaleStatus } from "@/lib/supabase/sales";
 import { Card } from "@/components/dashboard/primitives";
 import { useWallet } from "@/components/dashboard/wallet-provider";
@@ -79,7 +79,9 @@ export function SaleLedger() {
       // the contributor's, and leaving that to a button someone remembers to
       // press is what left contributors looking at payouts they could not take.
       try {
-        const { warning } = await creditPending(signTransaction);
+        // Operator rounds are priced and paid in XLM: these are simulated
+        // sales, and the USDC list exists for buyers who actually hold it.
+        const { warning } = await creditPending("XLM", signTransaction);
         setNote(
           warning
             ? `${sold} ${warning}`
@@ -174,12 +176,9 @@ export function SaleLedger() {
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <Figure label="Gross sold" value={`${formatXlm(totals.gross)} XLM`} />
-        <Figure label="Claimed" value={`${formatXlm(totals.claimed)} XLM`} />
-        <Figure
-          label="Awaiting claim"
-          value={`${formatXlm(totals.outstanding)} XLM`}
-        />
+        <Figure label="Gross sold" value={formatMoney(totals.gross)} />
+        <Figure label="Claimed" value={formatMoney(totals.claimed)} />
+        <Figure label="Awaiting claim" value={formatMoney(totals.outstanding)} />
       </div>
 
       <div className="mt-3">

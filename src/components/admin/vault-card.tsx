@@ -5,9 +5,10 @@ import { changeOperator, creditPending } from "@/lib/payouts";
 import {
   explorerContractUrl,
   explorerTxUrl,
-  formatXlm,
-  PAYOUT_CONTRACT_ID,
+  formatAmount,
   truncateAddress,
+  vaultFor,
+  type PayAsset,
 } from "@/lib/stellar/config";
 import { useWallet } from "@/components/dashboard/wallet-provider";
 
@@ -31,16 +32,23 @@ import { useWallet } from "@/components/dashboard/wallet-provider";
  * Being in `ADMIN_WALLETS` gets you into this panel. It does not get you past
  * the contract, which has never heard of our environment — the two lists are
  * kept in step by hand, from here.
+ *
+ * One card per vault, and they are genuinely separate contracts: separate
+ * balances, separate credited references, separate operator sets. A wallet
+ * that credits XLM has no standing in the USDC contract until it is added
+ * there too, which is why the roles are read per card rather than once.
  */
 
 /** The vault's on-chain roles, as GET /api/payouts reports them. */
 type Roles = { operators: string[] | null; admin: string | null };
 
 export function VaultCard({
+  asset,
   pendingCount,
   pendingStroops,
   onCredited,
 }: {
+  asset: PayAsset;
   pendingCount: number;
   pendingStroops: number;
   onCredited: () => void;
@@ -58,14 +66,14 @@ export function VaultCard({
   const [note, setNote] = useState<{ text: string; hash?: string } | null>(null);
 
   const read = useCallback(async () => {
-    const res = await fetch("/api/payouts");
+    const res = await fetch(`/api/payouts?asset=${asset}`);
     const body = await res.json();
     if (!res.ok) throw new Error(body?.error);
     return {
       vault: body.vault as { funded: number; owed: number; surplus: number },
       roles: (body.roles ?? { operators: null, admin: null }) as Roles,
     };
-  }, []);
+  }, [asset]);
 
   const refresh = useCallback(async () => {
     try {
@@ -104,7 +112,7 @@ export function VaultCard({
     setBusy("credit");
     setNote(null);
     try {
-      const result = await creditPending(signTransaction);
+      const result = await creditPending(asset, signTransaction);
       await refresh();
 
       const reconciled =
@@ -136,7 +144,7 @@ export function VaultCard({
     setBusy("role");
     setNote(null);
     try {
-      const hash = await changeOperator(signTransaction, action, operator);
+      const hash = await changeOperator(asset, signTransaction, action, operator);
       await refresh();
       setNote({
         text:
@@ -154,15 +162,18 @@ export function VaultCard({
     }
   };
 
-  if (!PAYOUT_CONTRACT_ID) {
+  if (!vaultFor(asset)) {
     return (
       <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950 p-7 sm:p-9">
-        <p className="eyebrow text-chalk-faint">Payout vault</p>
+        <p className="eyebrow text-chalk-faint">{asset} payout vault</p>
         <p className="mt-3 text-lg text-balance text-chalk">
           No payout contract configured.
         </p>
         <p className="mt-2 max-w-md text-sm text-pretty text-chalk-dim">
-          Set NEXT_PUBLIC_PAYOUT_CONTRACT_ID and restart. Sales can still be
+          Set {asset === "USDC"
+            ? "NEXT_PUBLIC_PAYOUT_USDC_CONTRACT_ID"
+            : "NEXT_PUBLIC_PAYOUT_CONTRACT_ID"}{" "}
+          and restart. Sales can still be
           recorded, but nothing can be credited and nobody can claim.
         </p>
       </div>
@@ -175,10 +186,16 @@ export function VaultCard({
     <div className="overflow-hidden rounded-2xl border border-ink-800 bg-ink-950">
       <div className="flex flex-col gap-7 p-7 sm:flex-row sm:items-start sm:justify-between sm:p-9">
         <div className="min-w-0">
-          <p className="eyebrow text-chalk-faint">Payout vault</p>
+          <p className="eyebrow text-chalk-faint">{asset} payout vault</p>
           <p className="mt-3 display text-[2.5rem] font-medium tabular-nums text-chalk sm:text-[3rem]">
-            {failed ? "—" : vault === null ? "…" : formatXlm(vault.funded)}
-            <span className="ml-2 text-lg font-normal text-chalk-dim">XLM</span>
+            {failed
+              ? "—"
+              : vault === null
+                ? "…"
+                : formatAmount(vault.funded, asset)}
+            <span className="ml-2 text-lg font-normal text-chalk-dim">
+              {asset}
+            </span>
           </p>
 
           <p className="mt-3 text-sm text-pretty text-chalk-dim">
@@ -186,14 +203,14 @@ export function VaultCard({
               ? "The contract didn't answer."
               : vault === null
                 ? "Reading the contract…"
-                : `${formatXlm(vault.owed)} XLM is already owed to contributors and can't be taken back. ${formatXlm(vault.surplus)} XLM is free to credit against.`}
+                : `${formatAmount(vault.owed, asset)} ${asset} is already owed to contributors and can't be taken back. ${formatAmount(vault.surplus, asset)} ${asset} is free to credit against.`}
           </p>
 
           {vault !== null && pendingCount > 0 && (
             <p className="mt-2 text-sm text-pretty text-chalk-dim">
               {short
-                ? `${formatXlm(pendingStroops)} XLM of sales is waiting and the vault is short — fund it before crediting.`
-                : `${formatXlm(pendingStroops)} XLM across ${pendingCount} sale${pendingCount === 1 ? "" : "s"} is waiting to be credited.`}
+                ? `${formatAmount(pendingStroops, asset)} ${asset} of sales is waiting and the vault is short — fund it before crediting.`
+                : `${formatAmount(pendingStroops, asset)} ${asset} across ${pendingCount} sale${pendingCount === 1 ? "" : "s"} is waiting to be credited.`}
             </p>
           )}
 
@@ -214,12 +231,12 @@ export function VaultCard({
           )}
 
           <a
-            href={explorerContractUrl(PAYOUT_CONTRACT_ID)}
+            href={explorerContractUrl(vaultFor(asset))}
             target="_blank"
             rel="noreferrer"
             className="mt-4 inline-flex items-center gap-1.5 font-mono text-xs text-chalk-faint transition-colors hover:text-chalk-dim"
           >
-            {truncateAddress(PAYOUT_CONTRACT_ID, 6, 6)}
+            {truncateAddress(vaultFor(asset), 6, 6)}
             <ExternalArrow />
           </a>
         </div>

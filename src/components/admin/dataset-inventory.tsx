@@ -11,7 +11,10 @@ import {
   xlmToStroops,
 } from "@/lib/sales";
 import {
-  formatXlm,
+  addMoney,
+  emptyMoney,
+  formatMoney,
+  type Money,
   STROOPS_PER_XLM,
   truncateAddress,
 } from "@/lib/stellar/config";
@@ -38,12 +41,19 @@ export function DatasetInventory() {
 
   // How many times each dataset has been licensed, and for how much.
   const soldIndex = useMemo(() => {
-    const index = new Map<string, { count: number; gross: number }>();
+    const index = new Map<string, { count: number; gross: Money }>();
     for (const sale of sales ?? []) {
-      const seen = index.get(sale.dataset_id) ?? { count: 0, gross: 0 };
+      const seen = index.get(sale.dataset_id) ?? {
+        count: 0,
+        gross: emptyMoney(),
+      };
       index.set(sale.dataset_id, {
         count: seen.count + 1,
-        gross: seen.gross + Number(sale.price_stroops),
+        gross: addMoney(
+          seen.gross,
+          sale.asset ?? "XLM",
+          Number(sale.price_stroops),
+        ),
       });
     }
     return index;
@@ -79,7 +89,9 @@ export function DatasetInventory() {
       // Straight into the contract, as on the Sales page: a sale that isn't
       // credited is a payout the contributor can see and cannot take.
       try {
-        const { warning } = await creditPending(signTransaction);
+        // XLM, like every operator-recorded sale: the price above is in XLM
+      // and the credit has to reach the vault that holds it.
+      const { warning } = await creditPending("XLM", signTransaction);
         if (warning) setError(warning);
       } catch (e) {
         setError(
@@ -196,7 +208,7 @@ function InventoryRow({
   onSell,
 }: {
   dataset: Dataset;
-  history?: { count: number; gross: number };
+  history?: { count: number; gross: Money };
   busy: boolean;
   disabled: boolean;
   onSell: (dataset: Dataset, priceXlm: number, buyer: string) => void;
@@ -244,7 +256,7 @@ function InventoryRow({
       <td className="py-3 pr-4 text-right whitespace-nowrap">
         {history ? (
           <span className="font-mono text-xs tabular-nums text-ink">
-            {history.count}× · {formatXlm(history.gross)} XLM
+            {history.count}× · {formatMoney(history.gross)}
           </span>
         ) : (
           <span className="font-mono text-xs text-ink-faint">—</span>

@@ -33,6 +33,10 @@ export type ProtocolStats = {
   /** Everything buyers have paid for, claimed or not, in stroops. Always at
    *  or above `paidStroops`; the gap is what contributors have yet to claim. */
   grossStroops: number;
+  /** The same two figures for the USDC vault, kept apart because they are a
+   *  different currency and nothing here holds a rate to merge them with. */
+  paidUsdc: number;
+  grossUsdc: number;
   /** Distinct datasets licensed at least once. */
   datasetsSold: number;
   /** One entry per dataset for the unit chart, capped; `sold` marks the ones
@@ -58,6 +62,8 @@ export const EMPTY_STATS: ProtocolStats = {
   payouts: 0,
   sales: 0,
   grossStroops: 0,
+  paidUsdc: 0,
+  grossUsdc: 0,
   datasetsSold: 0,
   units: [],
   unitsTruncated: false,
@@ -68,6 +74,8 @@ type TotalsRow = {
   contributors: number;
   datasets: number;
   paid_stroops: number;
+  paid_usdc?: number;
+  gross_usdc?: number;
   payouts: number;
   // Added after the first version of the view. A deployment that hasn't
   // re-run schema.sql won't have them, hence the coalescing below.
@@ -114,6 +122,8 @@ export async function loadProtocolStats(): Promise<ProtocolStats> {
     payouts: Number(totals.payouts),
     sales: Number(totals.sales ?? 0),
     grossStroops: Number(totals.gross_stroops ?? 0),
+    paidUsdc: Number(totals.paid_usdc ?? 0),
+    grossUsdc: Number(totals.gross_usdc ?? 0),
     datasetsSold: Number(totals.datasets_sold ?? 0),
     units: units.map((u) => ({ sold: u.sold })),
     unitsTruncated: Number(totals.datasets) > MAX_UNITS,

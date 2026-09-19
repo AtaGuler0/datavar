@@ -1,4 +1,4 @@
-import { formatXlm } from "@/lib/stellar/config";
+import { formatMoney } from "@/lib/stellar/config";
 import type { ProtocolStats } from "@/lib/supabase/stats";
 import { Reveal } from "./reveal";
 
@@ -18,8 +18,14 @@ export function Stats({ stats }: { stats: ProtocolStats }) {
     { value: count(stats.contributors), label: "contributors" },
     { value: count(stats.datasets), label: "datasets contributed" },
     { value: count(stats.sales), label: "licences sold" },
-    { value: `${formatXlm(stats.grossStroops)} XLM`, label: "sold to date" },
-    { value: `${formatXlm(stats.paidStroops)} XLM`, label: "paid out to date" },
+    {
+      value: formatMoney({ XLM: stats.grossStroops, USDC: stats.grossUsdc }),
+      label: "sold to date",
+    },
+    {
+      value: formatMoney({ XLM: stats.paidStroops, USDC: stats.paidUsdc }),
+      label: "paid out to date",
+    },
     { value: count(stats.payouts), label: "payouts settled on-chain" },
   ];
 

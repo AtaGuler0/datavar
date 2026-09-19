@@ -1,3 +1,9 @@
+import {
+  addMoney,
+  emptyMoney,
+  PAY_ASSETS,
+  type Money,
+} from "./stellar/config";
 import type { ConsentReceipt } from "./stellar/consent";
 import type { Dataset } from "./supabase/datasets";
 import type { Sale } from "./supabase/sales";
@@ -63,17 +69,28 @@ export type DatasetLifecycle = {
   /** Sold, but not written into the contract yet. Nobody can claim these. */
   pendingCreditSales: Sale[];
   reached: Reached;
-  /** Everything this dataset has sold for, in stroops. */
-  grossStroops: number;
+  /** Everything this dataset has sold for, per asset. */
+  grossStroops: Money;
   /** Of that, what is in the contract and unclaimed. */
-  claimableStroops: number;
+  claimableStroops: Money;
   /** And what is sold but not in the contract yet. */
-  pendingCreditStroops: number;
+  pendingCreditStroops: Money;
   next: NextAction;
 };
 
-const sum = (sales: Sale[]) =>
-  sales.reduce((total, sale) => total + Number(sale.price_stroops), 0);
+/**
+ * Adds sales up by the asset they were paid in.
+ *
+ * It used to return one number. It cannot any more: a dataset that sold once
+ * for 4 XLM and once for 1.20 USDC has earned both of those and nothing that
+ * can be written as a single figure, because nothing here knows a rate.
+ */
+const sum = (sales: Sale[]): Money =>
+  sales.reduce(
+    (total, sale) =>
+      addMoney(total, sale.asset ?? "XLM", Number(sale.price_stroops)),
+    emptyMoney(),
+  );
 
 /** Hex from two different systems; compare it in one case. */
 const key = (hash: string) => hash.trim().toLowerCase();
@@ -156,6 +173,18 @@ function nextAction(activeCount: number, claimableCount: number): NextAction {
 }
 
 /** The figures a page header quotes, derived from the same rows it lists. */
+/** Adds two per-asset amounts together, asset by asset. */
+function merge(items: DatasetLifecycle[], pick: (i: DatasetLifecycle) => Money): Money {
+  return items.reduce(
+    (total, item) =>
+      PAY_ASSETS.reduce(
+        (acc, asset) => addMoney(acc, asset, pick(item)[asset] ?? 0),
+        total,
+      ),
+    emptyMoney(),
+  );
+}
+
 export function lifecycleTotals(items: DatasetLifecycle[]) {
   return {
     datasets: items.length,
@@ -163,12 +192,9 @@ export function lifecycleTotals(items: DatasetLifecycle[]) {
     awaitingConsent: items.filter((i) => i.activeReceipts.length === 0).length,
     withStandingConsent: items.filter((i) => i.activeReceipts.length > 0).length,
     licensed: items.filter((i) => i.reached.licensed).length,
-    grossStroops: items.reduce((total, i) => total + i.grossStroops, 0),
-    claimableStroops: items.reduce((total, i) => total + i.claimableStroops, 0),
-    pendingCreditStroops: items.reduce(
-      (total, i) => total + i.pendingCreditStroops,
-      0,
-    ),
+    grossStroops: merge(items, (i) => i.grossStroops),
+    claimableStroops: merge(items, (i) => i.claimableStroops),
+    pendingCreditStroops: merge(items, (i) => i.pendingCreditStroops),
     bytes: items.reduce((total, i) => total + i.dataset.byte_size, 0),
   };
 }
