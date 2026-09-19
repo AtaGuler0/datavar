@@ -7,8 +7,8 @@ Datavar is our attempt to fix that. We are building a data protocol where people
 Two pieces of that protocol are live on Stellar testnet, both in
 [`contracts/`](contracts/README.md): a Soroban contract that holds consent
 receipts as ledger state, and a payout vault that holds contributor earnings
-until the contributor's own signature moves them out. The demand side is still
-simulated — see the caveats below for exactly what is and isn't real.
+until the contributor's own signature moves them out. The buy side runs on the
+same two contracts — see [the marketplace](#the-marketplace) below.
 
 ## Why a protocol and not just a marketplace
 
@@ -29,6 +29,96 @@ Deploy your own or point at the existing testnet deployment, then set
 nothing on the server can sign in their place. Full instructions, the contract's
 interface, and how to query it yourself are in
 [`contracts/README.md`](contracts/README.md).
+
+## The marketplace
+
+`/market` is the demand side, and it is built out of the consent contract
+rather than beside it. A dataset is listed for sale when its contributor grants
+consent to the marketplace address (`NEXT_PUBLIC_MARKET_ADDRESS`), which makes
+delisting a revoke and makes every listing checkable against the ledger by
+someone who does not trust us.
+
+What a buyer sees is deliberately thin: the category, the format, the size, when
+it was contributed, the consent behind it and the price. No title, no
+description, no contributor address — those are what someone wrote in their own
+dashboard about a file from their own life, and buying attributes is enough to
+buy a cohort. Filters run in Postgres against `market_listings`, so a catalogue
+of any size narrows in one query.
+
+Paying is one signature for the whole basket: the buyer calls `fund` on the
+payout vault, their own money into the same contract every contributor claims
+from. The server checks the transaction it is about to relay — right function,
+right signer, exact total — and re-reads every consent receipt on-chain before
+it writes a licence. A licence expires when the consent behind it does, and
+storage enforces that: the bucket hands a buyer their file for exactly as long
+as the receipt holds.
+
+Prices are not typed by anyone. `internal.list_price` computes them from the
+source type and the size, a trigger applies it on every insert, and only an
+operator can override a single row.
+
+Two currencies, two vaults. A basket is paid in XLM or in USDC, the buyer
+picks at the top of the catalogue, and the choice decides three things at once:
+which price list the basket is read against, which vault the money lands in,
+and which vault the contributor later claims from. The vaults are two
+deployments of the same contract — its token is fixed at construction, so an
+asset is a deployment rather than a setting — and they share nothing: separate
+balances, separate credited references, separate operator sets.
+
+The USDC list is a second list rather than a conversion: the XLM rates at 0.25
+USD per XLM, fixed when they were written. Nothing here holds a price feed, and
+a marketplace that repriced itself from one would have to answer what a
+checkout does when the oracle is stale. Two published lists answer it by not
+asking. The cost is stated in `internal.list_price_usdc`: when XLM moves, one
+list is the cheaper way to buy the same file, and that is the day to put a
+quote engine there.
+
+## Turkish lira
+
+`/anchor` is a TRY ⇄ USDC ramp, and it exists because the marketplace takes
+USDC and a team with a budget in lira has no way to hold any. It works the
+other way for contributors, who earn USDC and pay their bills in lira.
+
+It is the ecosystem's own standard rather than an integration with one company:
+SEP-1 discovery, SEP-10 auth, SEP-12 KYC, SEP-38 quotes and SEP-6 transfers,
+against `NEXT_PUBLIC_ANCHOR_HOME_DOMAIN`. Two values are the whole handoff — a
+home domain and an asset code — and everything else is read from that domain's
+stellar.toml at runtime, so pointing this at a real Turkish anchor on mainnet
+is a change to two lines and the network.
+
+The browser talks to the anchor directly; datavar's own API is not in the path.
+That is the honest shape of it: the user's key is the identity on both sides,
+so a server in the middle would only be somewhere for a token to leak. The
+anchor learns a Stellar address and nothing else — no name reaches it, and none
+of it is written to our database.
+
+Two things are worth knowing before using it. The bank leg is simulated, and
+the deposit screen says so on the button that stands in for it. And a SEP-10
+challenge is a transaction the wallet will sign without reading, so
+`assertIsChallenge` in `lib/anchor/session.ts` refuses anything that is not one
+before the wallet is asked — sequence zero, the anchor's declared signing key,
+this domain, open timebounds. Without that check a login button is a signing
+oracle.
+
+## What gets in
+
+Uploads are checked before they happen, in the contributor's browser
+([`src/lib/scan`](src/lib/scan)). It reads the file's own header and measures
+the image: a generator that named itself in the metadata, a Stable Diffusion
+prompt block, an IPTC field declaring synthetic media, a screenshot, a blank, an
+empty export, the same file twice. Anything it refuses is never uploaded — the
+bytes stay on the machine they came from.
+
+It claims only what it checks. There is no AI-image detector in it, because a
+browser cannot honestly run one; what it finds are files that *declare* how they
+were made. A generated image with its metadata stripped gets in, and every
+sentence in the interface says so.
+
+The verdict lands on the row (`quality`), and the catalogue drops anything
+flagged. Rows filed before the scanner existed say `unscanned`, stay listed, and
+are marked as such — buyers can filter them out, and their contributor can
+recheck them from `/dashboard/data` (they hold the file; nobody else, operators
+included, can read it).
 
 ## Running locally
 
@@ -89,11 +179,49 @@ it is an operator, inside the signed token, and never gets to decide — and the
 same claim is checked again by row-level security on every query the panel
 makes.
 
+### Google sign-in
+
+A wallet is still the identity: a dataset is owned by an address, a payout is
+addressed to one, a receipt names one. Google is a second door to the same
+wallet, not a way to do without one.
+
+It is attached once. Sign in with Google, connect the wallet, sign the SEP-10
+challenge — both proofs arrive in the same request, and `public.identities`
+records that the account and the address belong together. After that the Google
+session alone is traded at `/api/auth/google` for exactly the token a signature
+would have produced, which is what makes the second visit a click instead of a
+browser extension.
+
+What it deliberately cannot do is sign. The server holds no key, before this
+and after it, so granting consent, funding a purchase and claiming a payout all
+still ask the wallet — `canSign` in the wallet context is false until one is
+connected, and every surface that spends money reads it before offering a
+button. Signing in with Google gets you to your data; it does not spend your
+money.
+
+Turning it on is three steps in two dashboards, and no new environment
+variables:
+
+1. Google Cloud Console → APIs & Services → Credentials → OAuth client ID, type
+   **Web application**. Authorised redirect URI:
+   `https://<project-ref>.supabase.co/auth/v1/callback`.
+2. Supabase → Authentication → Providers → Google: paste the client ID and
+   secret, enable it.
+3. Supabase → Authentication → URL Configuration: add your dev origin
+   (`http://localhost:3000`, or whichever port `npm run dev` picked) and the
+   deployed origin to **Redirect URLs**. The browser comes back to
+   `/auth/callback` on whichever origin it left from.
+
+The Google session is verified server-side against the same
+`SUPABASE_JWT_SECRET` the wallet sessions are signed with, so the asymmetric-key
+caveat above applies to both. The two token kinds are told apart by issuer —
+see `src/lib/auth/google.ts`, which refuses one of ours wearing the other's hat.
+
 ### Payouts on testnet
 
-Sales are simulated, but the payout is real: earnings are held in a Soroban
-contract on testnet and leave it only on the contributor's own signature. To
-turn it on:
+Earnings are held in a Soroban contract on testnet and leave it only on the
+contributor's own signature. Sales reach it two ways: a buyer paying for a
+licence at `/market`, or an operator recording one by hand. To turn it on:
 
 1. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
    command is in `.env.example`, and the contract's interface is in
@@ -107,8 +235,9 @@ turn it on:
 4. Put test XLM into the vault by calling `fund` from any funded key. There is
    no button for this: the server holds no money and cannot move any.
 
-Then sell a dataset from `/admin` (by hand on the Datasets page, or a random
-round on the Sales page) and claim it from `/dashboard/earnings`. Selling
+Then sell a dataset — from `/market` as a buyer, or from `/admin` by hand on
+the Datasets page or as a random round on the Sales page — and claim it from
+`/dashboard/earnings`. Selling
 credits the sale into the vault in the same step, which takes one signature from
 the operator's wallet; the vault card credits anything left over. The claim
 returns a transaction hash that resolves on
