@@ -42,10 +42,17 @@ export const RATE_LIMITS = {
   authChallenge: { bucket: "auth:challenge", limit: 20, windowSeconds: 60 },
   /** No session. Also the ceiling on grinding at the 5-minute replay window. */
   authSession: { bucket: "auth:session", limit: 20, windowSeconds: 60 },
+  /** No session; verifies a Google token and mints one of ours from a link. */
+  authGoogle: { bucket: "auth:google", limit: 20, windowSeconds: 60 },
+  /** Has a session on both sides, and writes the link between them. */
+  authLink: { bucket: "auth:link", limit: 10, windowSeconds: 60 },
   /** Has a session, so counted per wallet: a claim is a payment. */
   claims: { bucket: "claims", limit: 30, windowSeconds: 60 },
   /** No session by design — the vault is public — but it reads the chain. */
   payoutsRead: { bucket: "payouts:read", limit: 60, windowSeconds: 60 },
+  /** Has a session, so counted per wallet: a checkout is a payment, and each
+   *  one asks the consent contract about every dataset in the basket. */
+  market: { bucket: "market", limit: 30, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Long enough to make the call, and useless for anything else. */

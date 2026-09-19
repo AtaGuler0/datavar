@@ -60,7 +60,7 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
  * signs in the same way.
  */
 export function SidebarWallet() {
-  const { address, status, connect, disconnect } = useWallet();
+  const { address, status, connect, disconnect, canSign } = useWallet();
 
   if (status === "loading") {
     return <div className="h-11 animate-pulse rounded-xl bg-paper-sunken" />;
@@ -74,15 +74,27 @@ export function SidebarWallet() {
         disabled={status === "connecting"}
         className="inline-flex w-full items-center justify-center rounded-xl bg-slate-deep px-4 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
       >
-        {status === "connecting" ? "Connecting…" : "Connect wallet"}
+        {status === "connecting" ? "Opening…" : "Sign in"}
       </button>
     );
   }
 
   return (
     <div className="flex items-center justify-between gap-2 rounded-xl border border-rule bg-paper px-3 py-2.5">
-      <span className="truncate font-mono text-xs tabular-nums text-ink">
+      <span className="min-w-0 truncate font-mono text-xs tabular-nums text-ink">
         {truncateAddress(address)}
+        {/* Signed in through Google, with no wallet attached here. Said in the
+            place the address is, because that is where somebody looks to find
+            out why nothing will sign. */}
+        {!canSign && (
+          <button
+            type="button"
+            onClick={connect}
+            className="mt-0.5 block font-sans text-[0.6875rem] text-ink-faint transition-colors hover:text-ink"
+          >
+            Connect wallet to sign
+          </button>
+        )}
       </span>
       <button
         type="button"

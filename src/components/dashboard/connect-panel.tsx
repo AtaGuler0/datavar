@@ -1,5 +1,6 @@
 "use client";
 
+import { GoogleLink } from "@/components/auth/google-link";
 import { truncateAddress } from "@/lib/stellar/config";
 import { useWallet } from "./wallet-provider";
 
@@ -13,8 +14,15 @@ import { useWallet } from "./wallet-provider";
  * the wrong claim — nothing keyed to that address would load.
  */
 export function ConnectPanel() {
-  const { address, status, session, connect, disconnect, signIn, signInError } =
-    useWallet();
+  const {
+    address,
+    status,
+    session,
+    connect,
+    disconnect,
+    signIn,
+    signInError,
+  } = useWallet();
   const connected = status === "connected" && address;
   const signedIn = connected && !!session;
 
@@ -55,11 +63,12 @@ export function ConnectPanel() {
           ) : (
             <>
               <p className="mt-3 text-lg text-balance text-chalk">
-                Connect a Stellar wallet to sign in.
+                Sign in with a Stellar wallet, or with Google.
               </p>
               <p className="mt-2 text-sm text-pretty text-chalk-dim">
-                Your wallet is your identity and where payouts land. We&apos;re
-                on testnet, so no real funds move yet.
+                Your wallet is your identity and where payouts land. Google
+                reaches a wallet you attached to it. We&apos;re on testnet, so
+                no real funds move yet.
               </p>
             </>
           )}
@@ -71,7 +80,7 @@ export function ConnectPanel() {
             onClick={disconnect}
             className="inline-flex shrink-0 items-center justify-center rounded-lg border border-ink-800 bg-ink-900 px-5 py-3 text-sm font-medium text-chalk-dim transition-colors hover:border-rule-dark-strong hover:text-chalk"
           >
-            Disconnect
+            Sign out
           </button>
         ) : (
           <button
@@ -87,13 +96,16 @@ export function ConnectPanel() {
             {status === "authenticating"
               ? "Waiting for your wallet…"
               : status === "connecting"
-                ? "Connecting…"
-                : connected
-                  ? "Sign in"
-                  : "Connect wallet"}
+                ? "Opening…"
+                : "Sign in"}
           </button>
         )}
       </div>
+
+      {/* The second door, on the account panel. Shared with the buyer's
+          profile page so both say the same thing about what Google can and
+          cannot do — see components/auth/google-link.tsx. */}
+      {signedIn && <GoogleLink tone="dark" />}
     </div>
   );
 }

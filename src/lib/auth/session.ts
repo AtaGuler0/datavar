@@ -20,3 +20,18 @@ export function readSession(request: Request): SessionClaims | null {
     throw e;
   }
 }
+
+/**
+ * The raw token, for a route that needs to act *as* the caller rather than
+ * merely know who they are.
+ *
+ * Used where the answer should be exactly what the caller could have got for
+ * themselves — a buyer's own profile, a buyer's own licences. Passing their
+ * token to Supabase means row-level security applies unchanged, so the route
+ * cannot accidentally read further than the person who asked.
+ */
+export function bearerToken(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) return null;
+  return header.slice(7).trim() || null;
+}

@@ -10,7 +10,8 @@ import { useWallet } from "./wallet-provider";
  * small menu to copy it or disconnect.
  */
 export function WalletButton() {
-  const { address, status, connect, disconnect } = useWallet();
+  const { address, status, session, connect, disconnect, canSign, google, signIn } =
+    useWallet();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -33,6 +34,28 @@ export function WalletButton() {
     );
   }
 
+  // Signed in with Google, with no wallet attached to it yet. There is no
+  // address to show and "Sign in" would be a lie — they just did, and pressing
+  // it again would offer them the same account they are already holding. So
+  // the bar says who they are and what is missing.
+  if (!address && google && !google.linked) {
+    return (
+      <button
+        type="button"
+        onClick={connect}
+        disabled={status === "connecting"}
+        className="inline-flex items-center gap-2 rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink transition-colors hover:border-rule-strong disabled:opacity-70"
+      >
+        <span className="max-w-32 truncate text-xs text-ink-dim">
+          {google.email}
+        </span>
+        <span className="text-xs font-medium">Connect wallet</span>
+      </button>
+    );
+  }
+
+  // One button, because there is one question: are you signed in. Which of
+  // the two doors they take is asked inside the sheet.
   if (!address) {
     return (
       <button
@@ -41,7 +64,27 @@ export function WalletButton() {
         disabled={status === "connecting"}
         className="inline-flex items-center rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
       >
-        {status === "connecting" ? "Connecting…" : "Connect wallet"}
+        Sign in
+      </button>
+    );
+  }
+
+  // Connected, unproved. The bar used to show the address here, which reads as
+  // "signed in" while every page behind it asks for a signature — the state
+  // this button exists to make legible. So it says what is missing and does
+  // it: the wallet is already chosen, so this is the signature, not the picker.
+  if (!session) {
+    return (
+      <button
+        type="button"
+        onClick={signIn}
+        disabled={status === "authenticating"}
+        className="inline-flex items-center gap-2 rounded-lg bg-slate-deep px-3.5 py-2 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
+      >
+        <span className="font-mono text-[0.6875rem] font-normal opacity-70">
+          {truncateAddress(address)}
+        </span>
+        {status === "authenticating" ? "Waiting…" : "Sign in"}
       </button>
     );
   }
@@ -75,7 +118,21 @@ export function WalletButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-44 overflow-hidden rounded-xl border border-rule bg-paper py-1 shadow-lg shadow-ink/5">
+        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-rule bg-paper py-1 shadow-lg shadow-ink/5">
+          {/* Under a Google session there is an address but no key attached,
+              and this is the only route back to one from the top bar. */}
+          {!canSign && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                connect();
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-paper-raised"
+            >
+              Connect wallet to sign
+            </button>
+          )}
           <button
             type="button"
             onClick={copy}
@@ -94,7 +151,7 @@ export function WalletButton() {
             }}
             className="w-full px-3 py-2 text-left text-sm text-ink-dim transition-colors hover:bg-paper-raised hover:text-ink"
           >
-            Disconnect
+            Sign out
           </button>
         </div>
       )}

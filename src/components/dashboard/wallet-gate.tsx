@@ -14,6 +14,12 @@ import { useWallet } from "./wallet-provider";
  * Rendering the dashboard for a merely-connected wallet would show empty
  * panels and blame the network for it.
  *
+ * Google adds a fourth state and it is the one worth being careful about: an
+ * account signed in here but never attached to a wallet. It is not a failure
+ * and the panel does not treat it as one, but it cannot be the way in either —
+ * there is no address behind it yet, and an address is what everything below
+ * this gate is keyed to.
+ *
  * Loading and mid-signature both render the skeleton, so a restored session
  * doesn't flash the gate on the way in.
  */
@@ -24,7 +30,8 @@ export function WalletGate({
   children: ReactNode;
   message?: string;
 }) {
-  const { status, session, connect, signIn, signInError } = useWallet();
+  const { status, session, connect, signIn, signInError, google, googleError } =
+    useWallet();
 
   if (status === "loading" || status === "authenticating") {
     return (
@@ -51,12 +58,32 @@ export function WalletGate({
     );
   }
 
+  // Signed in with Google, with nothing behind it yet. Said plainly, because
+  // the alternative is a person who believes they are signed in looking at an
+  // empty dashboard and concluding their data is gone.
+  if (google && !google.linked) {
+    return (
+      <Panel
+        message={
+          googleError ??
+          `Signed in as ${google.email}. Connect the Stellar wallet that owns your data to finish — after this once, Google is enough to get back in.`
+        }
+        label="Connect wallet"
+        onClick={connect}
+      />
+    );
+  }
+
   return (
     <Panel
-      message={message ?? "Connect your wallet to see this."}
-      label={status === "connecting" ? "Connecting…" : "Connect wallet"}
+      message={message ?? "Sign in to see this."}
+      label={status === "connecting" ? "Opening…" : "Sign in"}
       onClick={connect}
       disabled={status === "connecting"}
+      note={
+        googleError ??
+        "A Stellar wallet, or the Google account you attached to one."
+      }
     />
   );
 }
@@ -66,11 +93,13 @@ function Panel({
   label,
   onClick,
   disabled,
+  note,
 }: {
   message: string;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  note?: string;
 }) {
   return (
     <div className="mt-10 rounded-2xl border border-rule bg-paper px-6 py-14 text-center shadow-sm shadow-ink/[0.03]">
@@ -99,6 +128,11 @@ function Panel({
       >
         {label}
       </button>
+      {note && (
+        <p className="mx-auto mt-4 max-w-sm text-pretty text-xs text-ink-faint">
+          {note}
+        </p>
+      )}
     </div>
   );
 }

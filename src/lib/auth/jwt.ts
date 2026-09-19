@@ -79,6 +79,27 @@ export function issueToken(claims: {
    * indistinguishable from a contributor's own — see `can_seed()` in schema.sql.
    */
   seed?: boolean;
+  /**
+   * Permission to record a purchase as this wallet. Minted by /api/market once
+   * the buyer's funding transaction has landed, and never handed to a browser:
+   * a sale is somebody's payout, so writing one stays a thing only a route that
+   * watched the money move can do. See `can_market()` in schema.sql.
+   */
+  market?: boolean;
+  /**
+   * Permission to update this database's copy of the consent ledger for this
+   * wallet. Minted by the consent routes right after reading the contract, so
+   * what it writes is what the ledger said. See `can_mirror()` in schema.sql.
+   */
+  mirror?: boolean;
+  /**
+   * Permission to attach a Google account to this wallet, or detach one.
+   * Minted by the sign-in routes once they have checked both proofs in the
+   * same request, and never handed to a browser. See `can_link()` in
+   * schema.sql — the policy also demands that the row's wallet is the wallet
+   * in the token, so this claim cannot reach anybody else's address.
+   */
+  link?: boolean;
 }): { token: string; expiresAt: number } {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + claims.ttlSeconds;
@@ -88,11 +109,15 @@ export function issueToken(claims: {
       // Supabase reads these two.
       role: ROLE,
       aud: ROLE,
-      // Ours. Policies read `wallet`, `admin`, `settle` and `seed`.
+      // Ours. Policies read `wallet`, `admin`, `settle`, `seed`, `market`,
+      // `mirror` and `link`.
       wallet: claims.wallet,
       admin: claims.admin,
       ...(claims.settle ? { settle: true } : {}),
       ...(claims.seed ? { seed: true } : {}),
+      ...(claims.market ? { market: true } : {}),
+      ...(claims.mirror ? { mirror: true } : {}),
+      ...(claims.link ? { link: true } : {}),
       iss: ISSUER,
       iat: now,
       exp,
@@ -125,11 +150,16 @@ export function issueRateLimitToken(ttlSeconds: number): string {
 }
 
 /**
- * Verifies a token we minted. Returns null for anything that fails — a bad
- * signature, a wrong issuer, an expired token and a malformed string are all
- * the same answer to the caller: there is no session here.
+ * The claims of any token signed with Supabase's secret, or null.
+ *
+ * Two kinds of token are signed with it: the ones minted above, and the ones
+ * Supabase Auth itself issues when somebody signs in with Google. This checks
+ * the signature and the expiry, which is everything they have in common, and
+ * says nothing about which kind it is holding — that is the caller's question,
+ * and getting it wrong is how a Google session would be mistaken for a proved
+ * wallet. `verifyToken` demands our issuer; see auth/google.ts for the other.
  */
-export function verifyToken(token: string): SessionClaims | null {
+export function verifySigned(token: string): Record<string, unknown> | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
 
@@ -149,14 +179,27 @@ export function verifyToken(token: string): SessionClaims | null {
     return null;
   }
 
-  if (claims.iss !== ISSUER) return null;
-  if (typeof claims.wallet !== "string" || !claims.wallet) return null;
   if (typeof claims.exp !== "number") return null;
   if (claims.exp <= Math.floor(Date.now() / 1000)) return null;
+
+  return claims;
+}
+
+/**
+ * Verifies a token we minted. Returns null for anything that fails — a bad
+ * signature, a wrong issuer, an expired token and a malformed string are all
+ * the same answer to the caller: there is no session here.
+ */
+export function verifyToken(token: string): SessionClaims | null {
+  const claims = verifySigned(token);
+  if (!claims) return null;
+
+  if (claims.iss !== ISSUER) return null;
+  if (typeof claims.wallet !== "string" || !claims.wallet) return null;
 
   return {
     wallet: claims.wallet,
     admin: claims.admin === true,
-    exp: claims.exp,
+    exp: claims.exp as number,
   };
 }
