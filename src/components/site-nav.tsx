@@ -160,8 +160,10 @@ export function SiteNav() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            <SectionLink
-              href="/#buyers"
+            {/* Was a fragment to the pitch block, back when there was nothing
+                to send anyone to. It goes to the catalogue now. */}
+            <Link
+              href="/market"
               className={`rounded-lg px-3.5 py-2 text-sm transition-colors duration-300 ${
                 inverted
                   ? "text-chalk-dim hover:text-chalk"
@@ -169,7 +171,7 @@ export function SiteNav() {
               }`}
             >
               Buy data
-            </SectionLink>
+            </Link>
             {/* Slate on ink-950 is nearly the same value, so the button would
                 read as a hole in the bar. Over a dark block it flips to the
                 paper side of the palette and keeps its weight. */}
@@ -235,6 +237,13 @@ export function SiteNav() {
               className="border-b border-rule py-4 text-lg text-ink"
             >
               Protocol
+            </Link>
+            <Link
+              href="/market"
+              onClick={() => setOpen(false)}
+              className="border-b border-rule py-4 text-lg text-ink"
+            >
+              Buy data
             </Link>
           </div>
           <Link

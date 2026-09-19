@@ -9,7 +9,10 @@ export type Sale = {
   dataset_id: string;
   owner_wallet: string;
   buyer: string;
+  /** The amount, in the units of `asset` — both have seven decimals. */
   price_stroops: number;
+  /** What it was paid in. Rows filed before the second vault are all XLM. */
+  asset: "XLM" | "USDC";
   status: SaleStatus;
   tx_hash: string | null;
   claimed_at: string | null;
@@ -19,6 +22,20 @@ export type Sale = {
   /** The transaction that credited it — public, like every other hash here. */
   credit_tx: string | null;
   created_at: string;
+  /**
+   * Where the sale came from: `operator` for a recorded round, `market` for a
+   * buyer who paid for it themselves. Everything below is null on the first.
+   */
+  channel: "operator" | "market";
+  /** The address that paid, as opposed to `buyer`, which is what they call
+   *  themselves. */
+  buyer_wallet: string | null;
+  purpose: string | null;
+  licence_expires_at: string | null;
+  /** The buyer's payment into the payout vault. */
+  fund_tx: string | null;
+  /** The consent receipt the licence stands on. */
+  consent_receipt_id: number | null;
 };
 
 /** A sale with the dataset it sold, for rows that need a title to show. */
@@ -79,7 +96,11 @@ export async function createSales(drafts: SaleDraft[]): Promise<Sale[]> {
   return (data ?? []) as Sale[];
 }
 
-/** Sum of a set of sales, in stroops. */
+/**
+ * Adds up a list of sales. The caller has to have narrowed them to one asset
+ * first — this cannot check, and a total across two currencies is a number
+ * with no unit. Every call site groups by `asset` before reaching here.
+ */
 export function totalStroops(sales: Sale[]): number {
   return sales.reduce((sum, s) => sum + Number(s.price_stroops), 0);
 }

@@ -8,16 +8,31 @@ import {
   type DatasetLifecycle,
 } from "@/lib/lifecycle";
 import { claimPayout } from "@/lib/payouts";
-import { explorerTxUrl, formatXlm, truncateAddress } from "@/lib/stellar/config";
+import { flagLabel, scanFile, type ScanReport } from "@/lib/scan";
+import {
+  explorerTxUrl,
+  addMoney,
+  emptyMoney,
+  formatAmount,
+  formatMoney,
+  moneyTotal,
+  PAY_ASSETS,
+  type Money,
+  MARKET_ADDRESS,
+  truncateAddress,
+} from "@/lib/stellar/config";
 import type { ConsentReceipt } from "@/lib/stellar/consent";
 import {
+  downloadOwnDataset,
   listDatasets,
+  recordScan,
   sourceLabel,
   type Dataset,
 } from "@/lib/supabase/datasets";
 import { listSalesForWallet, type Sale } from "@/lib/supabase/sales";
 import { ConsentGrantForm } from "./consent-grant-form";
 import { ConsentView } from "./consent-view";
+import { ScanPanel } from "./scan-panel";
 import { LifecycleStrip } from "./lifecycle-strip";
 import { Card } from "./primitives";
 import { UploadCard } from "./upload-flow";
@@ -192,15 +207,15 @@ export function DataPanel() {
         <Figure
           label="Licensed"
           value={formatCount(totals.licensed)}
-          note={`${formatXlm(totals.grossStroops)} XLM gross`}
+          note={`${formatMoney(totals.grossStroops)} gross`}
         />
         <Figure
           label="Ready to claim"
-          value={`${formatXlm(totals.claimableStroops)} XLM`}
+          value={formatMoney(totals.claimableStroops)}
           note={
-            totals.pendingCreditStroops > 0
-              ? `${formatXlm(totals.pendingCreditStroops)} XLM still reaching the contract`
-              : totals.claimableStroops === 0
+            moneyTotal(totals.pendingCreditStroops) > 0
+              ? `${formatMoney(totals.pendingCreditStroops)} still reaching the contract`
+              : moneyTotal(totals.claimableStroops) === 0
                 ? "nothing waiting"
                 : "yours to take"
           }
@@ -343,13 +358,34 @@ function LifecycleRow({
 }) {
   const { address, signTransaction } = useWallet();
   const [granting, setGranting] = useState(false);
+  /**
+   * Listing is the same grant with the marketplace as its buyer, so it shares
+   * the form — but not the button. "Grant consent" asks who; this one already
+   * knows, and the difference to a contributor is the difference between
+   * permitting one company and putting it up for sale.
+   */
+  const [listing, setListing] = useState(false);
+  /**
+   * Re-running the upload check on a dataset that predates it, or arguing with
+   * a flag. Only the contributor can: the scan needs the file, and the storage
+   * policy hands the bytes to nobody else, operators included.
+   */
+  const [checking, setChecking] = useState(false);
+  const [report, setReport] = useState<ScanReport | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [settled, setSettled] = useState<{ hash: string; stroops: number } | null>(
+  const [settled, setSettled] = useState<{ hash: string; money: Money } | null>(
     null,
   );
 
   const { dataset, activeReceipts } = item;
+
+  // Listed means exactly one thing, and it is on-chain: a live receipt naming
+  // the marketplace address. Nothing in this database can make a dataset
+  // listed, and revoking that receipt delists it without asking us.
+  const listed =
+    MARKET_ADDRESS.length > 0 &&
+    activeReceipts.some((receipt) => receipt.buyer === MARKET_ADDRESS);
 
   /**
    * The contract holds one balance per wallet, so this claims everything in it,
@@ -363,14 +399,51 @@ function LifecycleRow({
     setError(null);
     setSettled(null);
     try {
-      const result = await claimPayout(signTransaction);
-      setSettled({ hash: result.hash, stroops: result.stroops });
-      if (result.warning) setError(result.warning);
+      // One claim per vault holding something for this wallet. Usually one
+      // signature; two when they have been paid in both, and asking for two is
+      // the honest shape — a single transaction cannot empty two contracts.
+      const owed = PAY_ASSETS.filter(
+        (asset) => (item.claimableStroops[asset] ?? 0) > 0,
+      );
+      let money = emptyMoney();
+      let hash = "";
+      let warning: string | undefined;
+      for (const asset of owed) {
+        const result = await claimPayout(asset, signTransaction);
+        money = addMoney(money, asset, result.stroops);
+        hash = hash || result.hash;
+        warning = result.warning ?? warning;
+      }
+      setSettled({ hash, money });
+      if (warning) setError(warning);
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The payout didn't go through.");
     } finally {
       setClaiming(false);
+    }
+  };
+
+  /**
+   * Fetches the file back, checks it the way the upload form would, and writes
+   * the verdict down. A dataset that fails is kept and delisted rather than
+   * deleted — it is still the contributor's file, and deleting other people's
+   * data on a heuristic is not a power this product should have.
+   */
+  const recheck = async () => {
+    if (checking) return;
+    setChecking(true);
+    setError(null);
+    try {
+      const file = await downloadOwnDataset(dataset);
+      const result = await scanFile({ file, sha256: dataset.sha256 });
+      setReport(result);
+      await recordScan(dataset.id, result);
+      onChanged();
+    } catch {
+      setError("Couldn't fetch that file to check it. Try again in a moment.");
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -394,9 +467,9 @@ function LifecycleRow({
             <span>{formatDate(dataset.created_at)}</span>
           </p>
         </div>
-        {item.grossStroops > 0 && (
+        {moneyTotal(item.grossStroops) > 0 && (
           <p className="shrink-0 font-mono text-xs tabular-nums text-ink-dim">
-            {formatXlm(item.grossStroops)} XLM earned
+            {formatMoney(item.grossStroops)} earned
           </p>
         )}
       </div>
@@ -442,11 +515,114 @@ function LifecycleRow({
         )}
       </div>
 
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="text-xs text-pretty text-ink-dim">
+          {dataset.quality === "flagged" ? (
+            <>
+              Held back by the upload check
+              {dataset.quality_flags.length > 0 && (
+                <>: {dataset.quality_flags.map(flagLabel).join(", ").toLowerCase()}</>
+              )}
+              . It stays yours, and buyers never see it.
+            </>
+          ) : dataset.quality === "clean" ? (
+            <>Checked at upload. Nothing was found against this file.</>
+          ) : (
+            <>
+              Filed before uploads were checked. Buyers can filter these out, so
+              checking it is worth a click.
+            </>
+          )}
+        </p>
+
+        {dataset.quality !== "clean" && (
+          <button
+            type="button"
+            onClick={recheck}
+            disabled={checking}
+            className="inline-flex shrink-0 items-center rounded-lg border border-rule-strong px-3.5 py-1.5 text-xs font-medium text-ink transition-colors duration-200 hover:bg-paper-raised disabled:opacity-50"
+          >
+            {checking ? "Checking…" : "Check this file"}
+          </button>
+        )}
+      </div>
+
+      {(checking || report) && (
+        <div className="mt-3">
+          <ScanPanel report={report} scanning={checking} compact />
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {listed ? (
+          <p className="text-xs text-pretty text-ink-dim">
+            Listed on the marketplace
+            {dataset.price_stroops !== null && (
+              <> at {formatAmount(dataset.price_stroops, "XLM")} XLM</>
+            )}
+            {dataset.price_usdc !== null && (
+              <> or {formatAmount(dataset.price_usdc, "USDC")} USDC</>
+            )}
+            . Revoke that receipt to take it down.
+          </p>
+        ) : (
+          <p className="text-xs text-pretty text-ink-faint">
+            {dataset.quality === "flagged"
+              ? "Not listed, and it can't be: the catalogue leaves out anything the upload check held back"
+              : "Not listed. Buyers can only find datasets whose consent names the marketplace"}
+            {dataset.quality !== "flagged" && dataset.price_stroops !== null && (
+              <>
+                , and this one would list at{" "}
+                {formatAmount(dataset.price_stroops, "XLM")} XLM
+                {dataset.price_usdc !== null && (
+                  <> or {formatAmount(dataset.price_usdc, "USDC")} USDC</>
+                )}
+              </>
+            )}
+            .
+          </p>
+        )}
+
+        {!listed && dataset.quality !== "flagged" && MARKET_ADDRESS.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setListing((open) => !open)}
+            aria-expanded={listing}
+            className="inline-flex shrink-0 items-center rounded-lg border border-rule-strong px-3.5 py-1.5 text-xs font-medium text-ink transition-colors duration-200 hover:bg-paper-raised"
+          >
+            {listing ? "Cancel" : "List on the marketplace"}
+          </button>
+        )}
+      </div>
+
+      {listing && (
+        <div className="mt-4 rounded-xl border border-rule bg-paper-raised/40 p-4">
+          <p className="mb-1 text-xs font-medium text-ink">
+            List this dataset for sale
+          </p>
+          <p className="mb-3 text-xs text-pretty text-ink-faint">
+            This signs an ordinary consent receipt naming the marketplace, so
+            anyone may license it on the terms below until the date you set.
+            Buyers never see the title or description — only the category, size,
+            format and these terms.
+          </p>
+          <ConsentGrantForm
+            bare
+            listing
+            fixed={dataset}
+            onGranted={() => {
+              setListing(false);
+              onChanged();
+            }}
+          />
+        </div>
+      )}
+
       {(error || settled) && (
         <div className="mt-3 rounded-lg border border-rule bg-paper-raised/60 px-3.5 py-2.5 text-sm text-ink-dim">
           {settled && (
             <p>
-              Claimed {formatXlm(settled.stroops)} XLM.{" "}
+              Claimed {formatMoney(settled.money)}.{" "}
               <a
                 href={explorerTxUrl(settled.hash)}
                 target="_blank"
@@ -502,7 +678,7 @@ function StatusLine({ item }: { item: DatasetLifecycle }) {
         {pending > 0 && (
           <>
             {" "}
-            · {formatXlm(item.pendingCreditStroops)} XLM reaching the contract
+            · {formatMoney(item.pendingCreditStroops)} reaching the contract
           </>
         )}
       </p>

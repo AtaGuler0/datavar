@@ -135,6 +135,16 @@ export type ExpectedCall = {
   method: string;
   /** Addresses the call must name, matched against its leading arguments. */
   addresses?: string[];
+  /**
+   * An amount the call must carry, by argument position and to the stroop.
+   *
+   * Only one call needs this so far, and it is the one where the number is the
+   * whole point: a buyer funding the vault for the basket they are buying. The
+   * price is read from the catalogue on the server, so checking it here is what
+   * closes the gap between "this transaction pays for those datasets" and "this
+   * transaction pays something, and then we wrote the licences anyway".
+   */
+  amount?: { index: number; stroops: number };
 };
 
 /**
@@ -191,6 +201,25 @@ function assertCallTo(
   }
 
   const args = invocation.args();
+
+  if (expected.amount) {
+    const arg = args[expected.amount.index];
+    if (!arg) {
+      throw new SorobanError("That call is missing its amount.");
+    }
+    let paid: bigint;
+    try {
+      paid = BigInt(scValToNative(arg) as bigint | number | string);
+    } catch {
+      throw new SorobanError("That call's amount isn't a number.");
+    }
+    if (paid !== BigInt(expected.amount.stroops)) {
+      throw new SorobanError(
+        "That transaction pays a different amount than the order it was built for.",
+      );
+    }
+  }
+
   (expected.addresses ?? []).forEach((address, i) => {
     const arg = args[i];
     if (!arg || arg.switch() !== xdr.ScValType.scvAddress()) {
@@ -308,3 +337,21 @@ export async function submitSigned(
  * in their own wallet: a contributor claims, an operator credits, an admin hands
  * the role on. This module builds and relays; it never holds the means to sign.
  */
+
+/**
+ * The account a signed transaction was built for, or null if that isn't a
+ * transaction at all.
+ *
+ * Used where a route needs to know who acted without being told: a consent
+ * grant is signed by the contributor, so the source account is the contributor,
+ * and reading it here beats trusting a wallet address in the request body next
+ * to the XDR.
+ */
+export function sourceAccount(signedXdr: string): string | null {
+  try {
+    const tx = TransactionBuilder.fromXDR(signedXdr, STELLAR.networkPassphrase);
+    return "innerTransaction" in tx ? null : tx.source;
+  } catch {
+    return null;
+  }
+}

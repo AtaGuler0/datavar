@@ -1,3 +1,4 @@
+import { SCAN_VERSION, storableFlags, type ScanReport } from "@/lib/scan";
 import { DATASETS_BUCKET, supabase } from "./client";
 
 /**
@@ -65,8 +66,27 @@ export type Dataset = {
   content_type: string | null;
   storage_path: string;
   created_at: string;
- 
+
   synthetic: boolean;
+  /**
+   * What it costs to license, in stroops. Computed by the database from the
+   * source type and the size — see `internal.list_price` in schema.sql — so it
+   * is never something this code, or a contributor, asserts. Null only on a
+   * deployment whose schema predates the marketplace.
+   */
+  price_stroops: number | null;
+  /** The same dataset on the USDC list. Set by the same trigger. */
+  price_usdc: number | null;
+  /**
+   * What the upload scanner made of the file: `clean` if it found nothing
+   * against it, `flagged` if it did, `unscanned` for rows filed before the
+   * scanner existed. Flagged datasets are kept and never listed.
+   */
+  quality: "unscanned" | "clean" | "flagged";
+  /** Why it was flagged — ids from lib/scan, labelled by `flagLabel`. */
+  quality_flags: string[];
+  scanned_at: string | null;
+  scan_version: number | null;
 };
 
 /**
@@ -121,7 +141,20 @@ export async function createDataset(input: {
   sourceType: SourceTypeId;
   description: string;
   file: File;
+  /**
+   * The upload scanner's verdict on these exact bytes. Required rather than
+   * optional: a dataset filed without one would be indistinguishable from a
+   * scanned clean one, which is the state this column exists to prevent.
+   */
+  scan: ScanReport;
 }): Promise<Dataset> {
+  // The form does not offer the button for a rejected file, so reaching this
+  // is a bug rather than a user action — and uploading anyway would put the
+  // bytes in storage before anything could refuse them.
+  if (input.scan.status === "rejected") {
+    throw new Error("That file didn't pass the check, so it wasn't uploaded.");
+  }
+
   const sha256 = await hashFile(input.file);
   // Content-addressed name keeps identical files from overwriting each other
   // meaningfully while staying stable per (wallet, content). The schema checks
@@ -148,10 +181,78 @@ export async function createDataset(input: {
       byte_size: input.file.size,
       content_type: input.file.type || null,
       storage_path: storagePath,
+      quality: input.scan.status,
+      quality_flags: storableFlags(input.scan),
+      scanned_at: new Date().toISOString(),
+      scan_version: input.scan.version,
     })
     .select()
     .single();
 
   if (error) throw error;
   return data as Dataset;
+}
+
+/**
+ * Every digest this wallet has already filed.
+ *
+ * The duplicate test, and deliberately scoped to one wallet. Asking whether
+ * *anyone* has this file would be a more thorough check and a worse idea: it
+ * would turn the upload form into an oracle for "is this exact file on
+ * Datavar", which in a product about consent is a question no stranger should
+ * be able to ask.
+ */
+export async function ownHashes(wallet: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("datasets")
+    .select("sha256")
+    .eq("owner_wallet", wallet);
+
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.sha256 as string));
+}
+
+/**
+ * Records a rescan of a dataset that already exists.
+ *
+ * Only its owner can call this and mean anything by it: the scan needs the
+ * file, and the storage policy hands the bytes to nobody else. The price
+ * cannot ride along — a trigger puts it back — so this writes exactly what it
+ * says it does.
+ */
+export async function recordScan(
+  id: string,
+  report: ScanReport,
+): Promise<Dataset> {
+  const { data, error } = await supabase
+    .from("datasets")
+    .update({
+      quality: report.status === "rejected" ? "flagged" : report.status,
+      quality_flags: storableFlags(report),
+      scanned_at: new Date().toISOString(),
+      scan_version: SCAN_VERSION,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Dataset;
+}
+
+/**
+ * Fetches a dataset's own file back out of storage, so it can be scanned.
+ *
+ * The same read the owner has always had — this is their file — and the reason
+ * a rescan is a contributor action rather than an operator one.
+ */
+export async function downloadOwnDataset(dataset: Dataset): Promise<File> {
+  const { data, error } = await supabase.storage
+    .from(DATASETS_BUCKET)
+    .download(dataset.storage_path);
+
+  if (error) throw error;
+  return new File([data], dataset.storage_path.split("/").pop() ?? "dataset", {
+    type: dataset.content_type ?? "application/octet-stream",
+  });
 }

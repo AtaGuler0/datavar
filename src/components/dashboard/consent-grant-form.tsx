@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { formatBytes } from "@/lib/format";
+import { MARKET_ADDRESS, truncateAddress } from "@/lib/stellar/config";
 import { listDatasets, sourceLabel, type Dataset } from "@/lib/supabase/datasets";
 import { Card } from "./primitives";
 import { useWallet } from "./wallet-provider";
@@ -21,6 +22,17 @@ import { useWallet } from "./wallet-provider";
 const DEFAULT_TERM_DAYS = 90;
 const MAX_PURPOSE_LEN = 200;
 
+/**
+ * What a listing's receipt says when the contributor doesn't write their own.
+ *
+ * A marketplace listing is an ordinary grant — same contract, same signature,
+ * same expiry — whose buyer happens to be the marketplace address. Which means
+ * delisting is a revoke, and a buyer can check the permission they paid for
+ * without asking anyone. The purpose is editable because it is the contributor's
+ * sentence, not ours; this is only the sentence most of them would write.
+ */
+const LISTING_PURPOSE = "Commercial licensing through the Datavar marketplace";
+
 /** "2026-11-06" → the last second of that day, UTC, as a unix timestamp. */
 function endOfDay(date: string): number {
   return Math.floor(Date.parse(`${date}T23:59:59Z`) / 1000);
@@ -35,6 +47,7 @@ export function ConsentGrantForm({
   onGranted,
   fixed,
   bare = false,
+  listing = false,
 }: {
   onGranted: () => void;
   /** Grant for this dataset only — the picker disappears and the form is
@@ -42,6 +55,12 @@ export function ConsentGrantForm({
   fixed?: Dataset;
   /** Drop the Card chrome, for when this renders inside another surface. */
   bare?: boolean;
+  /**
+   * List it for sale rather than consent to one named buyer. The buyer becomes
+   * the marketplace address and stops being a field — everything else about the
+   * grant is unchanged, because it *is* the same grant.
+   */
+  listing?: boolean;
 }) {
   const { address, signTransaction } = useWallet();
   // Ids have to be unique per instance: the data page can mount this inside a
@@ -51,8 +70,8 @@ export function ConsentGrantForm({
 
   const [datasets, setDatasets] = useState<Dataset[] | null>(null);
   const [datasetId, setDatasetId] = useState("");
-  const [buyer, setBuyer] = useState("");
-  const [purpose, setPurpose] = useState("");
+  const [buyer, setBuyer] = useState(listing ? MARKET_ADDRESS : "");
+  const [purpose, setPurpose] = useState(listing ? LISTING_PURPOSE : "");
   // Computed once, on mount. Safe to read the clock here because WalletGate
   // only renders this form after a wallet connects, which never happens during
   // a server render — so there is no prerendered date to disagree with.
@@ -112,8 +131,8 @@ export function ConsentGrantForm({
       const result = await sent.json();
       if (!sent.ok) throw new Error(result?.error ?? "The grant didn't go through.");
 
-      setBuyer("");
-      setPurpose("");
+      setBuyer(listing ? MARKET_ADDRESS : "");
+      setPurpose(listing ? LISTING_PURPOSE : "");
       setDatasetId("");
       onGranted();
     } catch (e) {
@@ -191,22 +210,33 @@ export function ConsentGrantForm({
           </Field>
         )}
 
-        <Field
-          label="Buyer"
-          htmlFor={`consent-buyer-${uid}`}
-          hint="The Stellar address allowed to use it"
-        >
-          <input
-            id={`consent-buyer-${uid}`}
-            value={buyer}
-            onChange={(e) => setBuyer(e.target.value)}
-            placeholder="G…"
-            spellCheck={false}
-            disabled={busy}
-            required
-            className="w-full rounded-lg border border-rule bg-paper-raised px-3 py-2 font-mono text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-rule-strong disabled:opacity-50"
-          />
-        </Field>
+        {listing ? (
+          <Field label="Buyer" hint="Anyone licensing through the marketplace">
+            <p className="rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink">
+              Datavar marketplace
+              <span className="ml-2 font-mono text-[0.6875rem] text-ink-faint">
+                {MARKET_ADDRESS ? truncateAddress(MARKET_ADDRESS, 6, 6) : "not configured"}
+              </span>
+            </p>
+          </Field>
+        ) : (
+          <Field
+            label="Buyer"
+            htmlFor={`consent-buyer-${uid}`}
+            hint="The Stellar address allowed to use it"
+          >
+            <input
+              id={`consent-buyer-${uid}`}
+              value={buyer}
+              onChange={(e) => setBuyer(e.target.value)}
+              placeholder="G…"
+              spellCheck={false}
+              disabled={busy}
+              required
+              className="w-full rounded-lg border border-rule bg-paper-raised px-3 py-2 font-mono text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-rule-strong disabled:opacity-50"
+            />
+          </Field>
+        )}
 
         <Field
           label="Purpose"
@@ -249,13 +279,13 @@ export function ConsentGrantForm({
 
         <button
           type="submit"
-          disabled={busy || !dataset || !expires}
+          disabled={busy || !dataset || !expires || (listing && !MARKET_ADDRESS)}
           className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-4 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-50 sm:w-auto"
         >
           {step === "building" && "Preparing…"}
           {step === "signing" && "Waiting for your wallet…"}
           {step === "sending" && "Recording on Stellar…"}
-          {step === "idle" && "Sign the receipt"}
+          {step === "idle" && (listing ? "Sign and list it" : "Sign the receipt")}
         </button>
       </form>
   );
@@ -279,7 +309,9 @@ function Field({
   children,
 }: {
   label: string;
-  htmlFor: string;
+  /** Omitted where the field has no control to point at — a listing's buyer
+   *  is a statement, not an input. */
+  htmlFor?: string;
   hint?: string;
   children: React.ReactNode;
 }) {

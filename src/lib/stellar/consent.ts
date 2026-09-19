@@ -180,3 +180,25 @@ export function buildRevoke(input: {
 export function submit(signedXdr: string): Promise<string> {
   return submitSigned(signedXdr, contractId(), CONSENT_ERRORS);
 }
+
+/**
+ * Whether one receipt is still good, asked of the contract rather than of our
+ * copy of it. The purchase route calls this per dataset before it relays a
+ * payment: the catalogue is a mirror, and a mirror can be a second out of date
+ * — which is fine for browsing and not fine for selling.
+ */
+export async function isReceiptValid(receiptId: string | number): Promise<boolean> {
+  return (await read("is_valid", [
+    nativeToScVal(BigInt(receiptId), { type: "u64" }),
+  ])) as boolean;
+}
+
+/** One receipt, as the contract holds it. */
+export async function readReceipt(
+  receiptId: string | number,
+): Promise<ConsentReceipt> {
+  const raw = (await read("receipt", [
+    nativeToScVal(BigInt(receiptId), { type: "u64" }),
+  ])) as RawReceipt;
+  return toReceipt(raw, Math.floor(Date.now() / 1000));
+}

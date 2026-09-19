@@ -3,7 +3,7 @@
 import { formatDate } from "@/lib/format";
 import {
   explorerTxUrl,
-  formatXlm,
+  formatAmount,
   truncateAddress,
 } from "@/lib/stellar/config";
 import { sourceLabel } from "@/lib/supabase/datasets";
@@ -60,12 +60,26 @@ export function SalesTable({
               </td>
               <td className="py-3 pr-4 whitespace-nowrap text-ink-dim">
                 {sale.buyer}
+                {/* A recorded round and a purchase are both rows here, and
+                    only one of them involved somebody paying. Worth saying so
+                    on the ledger the operator reads the numbers off. */}
+                {sale.channel === "market" && (
+                  <span className="ml-2 rounded border border-rule bg-paper-raised/60 px-1.5 py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.1em] text-ink-faint">
+                    bought
+                  </span>
+                )}
+                {sale.buyer_wallet && (
+                  <span className="mt-0.5 block font-mono text-[0.625rem] text-ink-faint">
+                    {truncateAddress(sale.buyer_wallet)}
+                  </span>
+                )}
               </td>
               <td className="py-3 pr-4 text-right font-mono text-xs tabular-nums whitespace-nowrap text-ink-dim">
                 {formatDate(sale.created_at)}
               </td>
               <td className="py-3 pr-4 text-right font-mono text-xs tabular-nums whitespace-nowrap text-ink">
-                {formatXlm(sale.price_stroops)} XLM
+                {formatAmount(sale.price_stroops, sale.asset ?? "XLM")}{" "}
+                {sale.asset ?? "XLM"}
               </td>
               <td className="py-3 text-right whitespace-nowrap">
                 <PayoutStatus sale={sale} />

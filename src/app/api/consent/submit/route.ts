@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
+import { mirrorQuietly } from "@/lib/consent-mirror";
 import { ConsentError, isConsentConfigured, submit } from "@/lib/stellar/consent";
+import { sourceAccount } from "@/lib/stellar/soroban";
 
 /**
  * Sends a transaction the contributor's wallet has already signed, and waits
@@ -11,6 +13,13 @@ import { ConsentError, isConsentConfigured, submit } from "@/lib/stellar/consent
  * server only because submitting means carrying the SDK. A transaction that
  * arrives here unsigned, or signed by the wrong wallet, is rejected by the
  * network rather than by us.
+ *
+ * Once it lands, this database's copy of the contributor's receipts is brought
+ * up to date from the contract — which is what puts a newly consented dataset
+ * into the marketplace catalogue, and what takes a revoked one out of it. The
+ * mirror is read back from the ledger rather than assembled from the request,
+ * and a failure to write it is reported as a lag, not as a failed grant: the
+ * consent is on-chain either way. See lib/consent-mirror.ts.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -44,7 +53,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    return NextResponse.json({ hash: await submit(body.xdr) });
+    const hash = await submit(body.xdr);
+
+    // The contributor is the account the transaction was built for; both calls
+    // this route relays — grant and revoke — are signed by them.
+    const contributor = sourceAccount(body.xdr);
+    const warning = contributor
+      ? await mirrorQuietly(contributor, "submit")
+      : undefined;
+
+    return NextResponse.json({ hash, ...(warning ? { warning } : {}) });
   } catch (e) {
     // A contributor has already signed by the time this runs, so a failure here
     // is a grant they authorised and did not get. Worth a line either way.

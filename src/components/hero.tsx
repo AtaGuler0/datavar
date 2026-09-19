@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CrowdField } from "./crowd-field";
 import { PendingDot } from "./link-progress";
-import { SectionLink } from "./section-link";
 
 export function Hero() {
   return (
@@ -55,8 +54,8 @@ export function Hero() {
           >
             Become a contributor
           </Link>
-          <SectionLink
-            href="#buyers"
+          <Link
+            href="/market"
             className="group inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rule bg-paper-raised px-6 py-3 text-sm font-medium text-ink transition-colors duration-200 hover:bg-paper-sunken sm:w-auto"
           >
             License datasets
@@ -69,7 +68,7 @@ export function Hero() {
             >
               <path d="M6 3l5 5-5 5" strokeLinecap="round" />
             </svg>
-          </SectionLink>
+          </Link>
         </div>
       </div>
     </section>
