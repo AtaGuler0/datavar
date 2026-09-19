@@ -2,13 +2,16 @@
 
 import { useRef, useState } from "react";
 import { formatBytes } from "@/lib/format";
+import { scanFile, type ScanReport } from "@/lib/scan";
 import {
   createDataset,
   hashFile,
+  ownHashes,
   SOURCE_TYPES,
   type Dataset,
   type SourceTypeId,
 } from "@/lib/supabase/datasets";
+import { ScanPanel } from "./scan-panel";
 import { useWallet } from "./wallet-provider";
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — plenty for a testnet demo.
@@ -32,6 +35,13 @@ export function UploadCard({
 
   const [staged, setStaged] = useState<Staged | null>(null);
   const [hashing, setHashing] = useState(false);
+  /**
+   * What the scanner made of the chosen file. Nothing is uploaded until this
+   * exists, and nothing at all is uploaded when it says `rejected` — the bytes
+   * stay on the contributor's machine, which is the point of checking there.
+   */
+  const [scan, setScan] = useState<ScanReport | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [title, setTitle] = useState("");
   const [sourceType, setSourceType] = useState<SourceTypeId>("browsing");
   const [description, setDescription] = useState("");
@@ -42,6 +52,7 @@ export function UploadCard({
 
   const reset = () => {
     setStaged(null);
+    setScan(null);
     setTitle("");
     setSourceType("browsing");
     setDescription("");
@@ -51,6 +62,7 @@ export function UploadCard({
 
   const onFile = async (file: File | undefined) => {
     setError(null);
+    setScan(null);
     if (!file) return;
     if (file.size > MAX_BYTES) {
       setError(`That file is ${formatBytes(file.size)}. The limit is 50 MB.`);
@@ -61,15 +73,26 @@ export function UploadCard({
       const sha256 = await hashFile(file);
       setStaged({ file, sha256 });
       if (!title) setTitle(file.name.replace(/\.[^.]+$/, ""));
+
+      // The digests this wallet already holds, so the same file twice is
+      // caught here rather than becoming two contributions. A failure to read
+      // them costs the duplicate test and nothing else.
+      setScanning(true);
+      const known = address
+        ? await ownHashes(address).catch(() => undefined)
+        : undefined;
+      setScan(await scanFile({ file, sha256, knownHashes: known }));
     } catch {
       setError("Couldn't read that file. Try another.");
     } finally {
       setHashing(false);
+      setScanning(false);
     }
   };
 
   const submit = async () => {
     if (!address || !staged || !title.trim()) return;
+    if (!scan || scan.status === "rejected") return;
     setSubmitting(true);
     setError(null);
     try {
@@ -79,6 +102,7 @@ export function UploadCard({
         sourceType,
         description,
         file: staged.file,
+        scan,
       });
       onUploaded(created);
       reset();
@@ -102,7 +126,8 @@ export function UploadCard({
           <div>
             <label className="text-sm font-medium text-ink">File</label>
             <p className="mt-1 text-sm text-ink-faint">
-              Hashed on your device before anything leaves. Up to 50 MB.
+              Hashed and checked on your device before anything leaves. Up to
+              50 MB.
             </p>
 
             <input
@@ -146,6 +171,12 @@ export function UploadCard({
                     {staged.sha256}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {(scanning || scan) && (
+              <div className="mt-3">
+                <ScanPanel report={scan} scanning={scanning} />
               </div>
             )}
           </div>
@@ -209,13 +240,23 @@ export function UploadCard({
           )}
 
           <div className="flex items-center justify-between gap-4 border-t border-rule pt-6">
-            <p className="text-xs text-ink-faint">
-              The file goes to your private store. The receipt comes next.
+            <p className="text-xs text-pretty text-ink-faint">
+              {scan?.status === "rejected"
+                ? "Nothing was uploaded. Choose a different file."
+                : "The file goes to your private store. The receipt comes next."}
             </p>
             <button
               type="button"
               onClick={submit}
-              disabled={!staged || !title.trim() || submitting || hashing}
+              disabled={
+                !staged ||
+                !title.trim() ||
+                submitting ||
+                hashing ||
+                scanning ||
+                !scan ||
+                scan.status === "rejected"
+              }
               className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-deep px-5 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-50"
             >
               {submitting ? "Uploading…" : "Upload dataset"}
