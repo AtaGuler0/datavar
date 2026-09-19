@@ -32,6 +32,23 @@ const supabaseOrigins = supabaseHost
   : [];
 
 /**
+ * The anchor the TRY ramp talks to.
+ *
+ * `/anchor` calls it from the browser on purpose — the user's key is the
+ * identity, so a server of ours in the middle would only be somewhere for a
+ * token to leak — which means the domain has to be named here or every call it
+ * makes is refused. And refused quietly: a blocked fetch rejects like a network
+ * failure, so the section would report that the anchor "could not be reached"
+ * while the anchor was fine and the policy was the thing saying no.
+ *
+ * Read from the same variable the client reads, so pointing the ramp at a real
+ * anchor moves both together.
+ */
+const anchorOrigin = process.env.NEXT_PUBLIC_ANCHOR_HOME_DOMAIN
+  ? [`https://${process.env.NEXT_PUBLIC_ANCHOR_HOME_DOMAIN}`]
+  : [];
+
+/**
  * Content Security Policy.
  *
  * The reason this exists: the session token lives in localStorage, which is a
@@ -53,6 +70,11 @@ const supabaseOrigins = supabaseHost
  * what it took. Loading an attacker's script from their origin is out too;
  * `object-src`, `base-uri` and `frame-ancestors` close the classic rest.
  *
+ * The wallet icons used to come from `stellar.creit.tech` and were blocked by
+ * `img-src` — four empty squares in the sign-in sheet. They are served from
+ * `public/wallets` now rather than allowlisted, because opening a sign-in sheet
+ * should not tell a third party that somebody opened a sign-in sheet.
+ *
  * Checked against the four wallets this product loads before being written.
  * Freighter, xBull and Lobstr all talk to their extension over `postMessage`,
  * which no policy here touches. Albedo is a web wallet and opens an iframe to
@@ -71,7 +93,12 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob:${supabaseHost ? ` https://${supabaseHost}` : ""}`,
   "font-src 'self' data:",
-  ["connect-src 'self'", ...supabaseOrigins, ...STELLAR_ORIGINS].join(" "),
+  [
+    "connect-src 'self'",
+    ...supabaseOrigins,
+    ...STELLAR_ORIGINS,
+    ...anchorOrigin,
+  ].join(" "),
   // Albedo signs in an iframe it owns; the other three wallets need nothing.
   "frame-src https://albedo.link",
   "worker-src 'self' blob:",
