@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SITE_URL } from "@/lib/site";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://datavar.xyz"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Datavar: The consented data layer for AI",
     template: "%s · Datavar",
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
     title: "Datavar: The consented data layer for AI",
     description:
       "Get paid for the data you already produce. License consented, auditable datasets from real people.",
-    url: "https://datavar.xyz",
+    url: SITE_URL,
     siteName: "Datavar",
     type: "website",
   },

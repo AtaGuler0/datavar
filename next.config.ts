@@ -141,6 +141,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  /**
+   * Next announces itself in `x-powered-by` on every response. It tells an
+   * attacker which framework's advisories to go and read, and it tells a
+   * visitor nothing, so it is the cheapest header on the page to remove.
+   */
+  poweredByHeader: false,
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

@@ -260,7 +260,7 @@ Open an issue on the repository. There's no support address yet, and pointing yo
         title: "Terms & Privacy",
         summary:
           "You licence your data, you don't sell it, and nothing promises you an income. Here is everything we hold.",
-        body: `*Last updated: 27 August 2026. One document, because the two halves are the same subject: what you agree to, and what we hold. It covers datavar.ai, the contributor dashboard and the protocol contracts.*
+        body: `*Last updated: 27 August 2026. One document, because the two halves are the same subject: what you agree to, and what we hold. It covers datavar.xyz, the contributor dashboard and the protocol contracts.*
 
 Datavar is a marketplace for consented data. You contribute data you hold the rights to, you decide who may use it and for what, and you are paid when someone licenses it. Sections 1 to 11 are the terms of that arrangement. Sections 12 to 20 are the privacy half: what we collect, what we cannot see, and what the ledger keeps forever.
 
