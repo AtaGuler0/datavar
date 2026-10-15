@@ -13,6 +13,8 @@ import { supabase } from "./client";
  *
  * The counts cover the whole deployment, generated load included — see the
  * note above the views in schema.sql for why the synthetic filter came off.
+ * `generatedDatasets` and `generatedSales` say how much of that came from our
+ * own load-test bot, and every page that prints a total prints those beside it.
  */
 
 /** How many unit-chart dots the page will draw before it stops adding them. */
@@ -50,6 +52,15 @@ export type ProtocolStats = {
    * than inventing a rate for it.
    */
   avgStroopsBySource: Record<string, number>;
+  /** Datasets filed by our load-test bot rather than a person. Null when the
+   *  view predates the column, so the page can still say the totals include
+   *  the load test without a figure. */
+  generatedDatasets: number | null;
+  /** Sales of those datasets. */
+  generatedSales: number | null;
+  /** Protocol fees settled to the treasury by the licence contract. */
+  feesStroops: number;
+  feesUsdc: number;
 };
 
 /** Zeros. What the page renders when there is no data, or when Supabase is
@@ -68,6 +79,10 @@ export const EMPTY_STATS: ProtocolStats = {
   units: [],
   unitsTruncated: false,
   avgStroopsBySource: {},
+  generatedDatasets: 0,
+  generatedSales: 0,
+  feesStroops: 0,
+  feesUsdc: 0,
 };
 
 type TotalsRow = {
@@ -82,6 +97,10 @@ type TotalsRow = {
   sales?: number | null;
   gross_stroops?: number | null;
   datasets_sold?: number | null;
+  generated_datasets?: number | null;
+  generated_sales?: number | null;
+  fees_stroops?: number | null;
+  fees_usdc?: number | null;
 };
 
 type RateRow = { source_type: string; avg_price_stroops: number };
@@ -128,5 +147,11 @@ export async function loadProtocolStats(): Promise<ProtocolStats> {
     units: units.map((u) => ({ sold: u.sold })),
     unitsTruncated: Number(totals.datasets) > MAX_UNITS,
     avgStroopsBySource,
+    generatedDatasets:
+      totals.generated_datasets == null ? null : Number(totals.generated_datasets),
+    generatedSales:
+      totals.generated_sales == null ? null : Number(totals.generated_sales),
+    feesStroops: Number(totals.fees_stroops ?? 0),
+    feesUsdc: Number(totals.fees_usdc ?? 0),
   };
 }

@@ -188,6 +188,25 @@ export function ProtocolView() {
             note={`${paid.unit} · claimed and settled on-chain`}
           />
         </dl>
+        {/* These totals count our own load-test traffic. Said here, next to
+            the numbers, so they are not read as adoption. */}
+        {totals && totals.generatedDatasets !== 0 && (
+          <p className="mt-4 max-w-3xl text-[0.8125rem] leading-relaxed text-pretty text-star-faint">
+            Testnet only. These totals include a load test we ran ourselves
+            {totals.generatedDatasets !== null && totals.generatedSales !== null ? (
+              <>
+                : {formatCount(totals.generatedDatasets)} of the{" "}
+                {formatCount(totals.datasets)} datasets were filed by wallets
+                our bot generated, and {formatCount(totals.generatedSales)} of
+                the {formatCount(totals.sales)} licences are sales of those
+                datasets
+              </>
+            ) : (
+              " with wallets our bot generated"
+            )}
+            . Those rows are our own traffic, not outside adoption.
+          </p>
+        )}
       </Reveal>
 
       {totals && totals.units.length > 0 && (
