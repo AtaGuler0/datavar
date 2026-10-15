@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { changeOperator, creditPending } from "@/lib/payouts";
+import { changeOperator, creditPending, settleLicences } from "@/lib/payouts";
 import {
   explorerContractUrl,
   explorerTxUrl,
   formatAmount,
+  licenceFor,
   truncateAddress,
   vaultFor,
   type PayAsset,
@@ -46,11 +47,14 @@ export function VaultCard({
   asset,
   pendingCount,
   pendingStroops,
+  escrowCount,
   onCredited,
 }: {
   asset: PayAsset;
   pendingCount: number;
   pendingStroops: number;
+  /** Licence sales whose payment is still held by the licence contract. */
+  escrowCount: number;
   onCredited: () => void;
 }) {
   const { address, signTransaction } = useWallet();
@@ -62,7 +66,7 @@ export function VaultCard({
   } | null>(null);
   const [roles, setRoles] = useState<Roles | null>(null);
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState<"credit" | "role" | null>(null);
+  const [busy, setBusy] = useState<"credit" | "role" | "settle" | null>(null);
   const [note, setNote] = useState<{ text: string; hash?: string } | null>(null);
 
   const read = useCallback(async () => {
@@ -125,6 +129,36 @@ export function VaultCard({
           (result.credited === 0
             ? `Nothing was waiting to be credited.${reconciled}`
             : `${result.credited} sale${result.credited === 1 ? "" : "s"} credited on-chain.${reconciled}`),
+        hash: result.hashes[0],
+      });
+      onCredited();
+    } catch (e) {
+      setNote({ text: e instanceof Error ? e.message : "That didn't go through." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * Closes licences whose hold is over or whose receipt was revoked. Any
+   * wallet may sign this; the licence contract decides where the money goes.
+   */
+  const settle = async () => {
+    if (busy) return;
+    setBusy("settle");
+    setNote(null);
+    try {
+      const result = await settleLicences(asset, signTransaction);
+      await refresh();
+      const reconciled =
+        result.reconciled > 0 ? ` ${result.reconciled} were already closed on-chain.` : "";
+      const held =
+        result.held > 0 ? ` ${result.held} still inside their hold.` : "";
+      setNote({
+        text:
+          result.closed === 0
+            ? `Nothing was ready to settle.${held}${reconciled}`
+            : `${result.closed} licence${result.closed === 1 ? "" : "s"} settled.${held}${reconciled}`,
         hash: result.hashes[0],
       });
       onCredited();
@@ -254,6 +288,21 @@ export function VaultCard({
                 ? "Nothing to credit"
                 : `Credit ${pendingCount} sale${pendingCount === 1 ? "" : "s"}`}
           </button>
+
+          {licenceFor(asset) && (
+            <button
+              type="button"
+              onClick={settle}
+              disabled={busy !== null || escrowCount === 0 || !address}
+              className="inline-flex items-center rounded-lg border border-ink-800 px-5 py-2.5 text-sm font-medium text-chalk transition-colors duration-200 hover:bg-ink-800/60 disabled:opacity-40"
+            >
+              {busy === "settle"
+                ? "Waiting for your wallet…"
+                : escrowCount === 0
+                  ? "No licences held"
+                  : `Settle licences (${escrowCount} held)`}
+            </button>
+          )}
 
           {isContractAdmin && !isOperator && (
             <button

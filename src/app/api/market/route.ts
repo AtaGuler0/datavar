@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { StrKey } from "@stellar/stellar-sdk";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
@@ -5,7 +6,22 @@ import { bearerToken, readSession } from "@/lib/auth/session";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { ConsentError, isConsentConfigured, readReceipt } from "@/lib/stellar/consent";
-import { isPayAsset, type PayAsset } from "@/lib/stellar/config";
+import {
+  configuredAssets,
+  isPayAsset,
+  licenceFor,
+  type PayAsset,
+} from "@/lib/stellar/config";
+import {
+  buildPurchase,
+  feeOf,
+  isLicenceConfigured,
+  licenceForSale,
+  readTerms,
+  submitPurchase,
+  type LicenceTerms,
+  type PurchaseItem,
+} from "@/lib/stellar/licence";
 import {
   buildFund,
   isAssetConfigured,
@@ -46,6 +62,15 @@ import { supabase, supabaseForToken } from "@/lib/supabase/client";
  * money goes into, and which vault the contributor will later claim from. They
  * have to agree — a payment into the XLM vault against USDC prices would credit
  * contributors out of a contract nobody paid.
+ *
+ * Where a licence contract is configured for the asset, the payment goes to it
+ * instead of straight into the vault. The contract checks each receipt itself,
+ * holds the money through the hold period, takes the protocol fee and refunds
+ * the buyer if the contributor revokes during the hold. The sale ids are made
+ * here at build time because their hashes go into the transaction as the
+ * references the contract and the vault key on, so the buyer's browser carries
+ * them from the build call to the submit call and this side checks they match
+ * what was signed.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -78,6 +103,33 @@ function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
+/**
+ * What a buyer is agreeing to, per asset: whether purchases go through the
+ * licence contract, and if so its fee and hold. The checkout states these
+ * before the buyer pays. Read from the contract, not from configuration, so
+ * the screen cannot drift from what the contract will do.
+ */
+export async function GET(request: Request) {
+  const limited = await enforceRateLimit(request, RATE_LIMITS.payoutsRead);
+  if (limited) return limited;
+
+  const terms: Partial<Record<PayAsset, LicenceTerms | null>> = {};
+  await Promise.all(
+    configuredAssets().map(async (asset) => {
+      if (!isLicenceConfigured(asset)) {
+        terms[asset] = null;
+        return;
+      }
+      terms[asset] = await readTerms(asset).catch((e) => {
+        logFailure(`market terms ${asset}`, e);
+        return null;
+      });
+    }),
+  );
+
+  return NextResponse.json({ terms });
+}
+
 export async function POST(request: Request) {
   const session = readSession(request);
   const token = bearerToken(request);
@@ -100,6 +152,7 @@ export async function POST(request: Request) {
     datasetIds?: unknown;
     xdr?: unknown;
     asset?: unknown;
+    saleIds?: unknown;
   };
   try {
     body = await request.json();
@@ -131,7 +184,14 @@ export async function POST(request: Request) {
       if (typeof body.xdr !== "string" || !body.xdr) {
         return fail("A signed transaction is required.", 400);
       }
-      return await settle(session.wallet, token, ids, asset, body.xdr);
+      return await settle(
+        session.wallet,
+        token,
+        ids,
+        asset,
+        body.xdr,
+        body.saleIds,
+      );
     }
 
     return fail("Unknown action.", 400);
@@ -170,7 +230,44 @@ async function basket(ids: string[]): Promise<ListingRow[]> {
     .in("id", ids);
 
   if (error) throw error;
-  return (data ?? []) as ListingRow[];
+  // Sorted so a licence purchase lists its items in the same order at build
+  // and at submit. The contract call is checked item by item.
+  return ((data ?? []) as ListingRow[]).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/**
+ * The sale ids the build call handed out, as the browser sends them back:
+ * one fresh UUID per listing, keyed by dataset id. Null if that isn't what
+ * arrived.
+ */
+function readSaleIds(
+  value: unknown,
+  rows: ListingRow[],
+): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const map = value as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const id = map[row.id];
+    if (typeof id !== "string" || !UUID.test(id)) return null;
+    out[row.id] = id;
+  }
+  if (new Set(Object.values(out)).size !== rows.length) return null;
+  return out;
+}
+
+function itemsOf(
+  rows: ListingRow[],
+  asset: PayAsset,
+  saleIds: Record<string, string>,
+): PurchaseItem[] {
+  return rows.map((row) => ({
+    receiptId: row.consent_receipt_id,
+    stroops: priceOf(row, asset),
+    saleId: saleIds[row.id],
+  }));
 }
 
 function totalOf(rows: ListingRow[], asset: PayAsset): number {
@@ -260,6 +357,23 @@ async function prepare(
   if (stale) return fail(stale, 409);
 
   const stroops = totalOf(rows, asset);
+
+  if (isLicenceConfigured(asset)) {
+    const saleIds = Object.fromEntries(rows.map((row) => [row.id, randomUUID()]));
+    const terms = await readTerms(asset);
+    return NextResponse.json({
+      xdr: await buildPurchase(asset, wallet, itemsOf(rows, asset, saleIds)),
+      stroops,
+      asset,
+      datasets: rows.length,
+      saleIds,
+      feeStroops: rows.reduce(
+        (sum, row) => sum + feeOf(priceOf(row, asset), terms.feeBps),
+        0,
+      ),
+    });
+  }
+
   return NextResponse.json({
     xdr: await buildFund(asset, wallet, stroops),
     stroops,
@@ -283,6 +397,7 @@ async function settle(
   ids: string[],
   asset: PayAsset,
   xdr: string,
+  rawSaleIds: unknown,
 ) {
   const org = await buyerOrg(token, wallet);
   if (!org) {
@@ -312,7 +427,37 @@ async function settle(
   // against the signed transaction has to be one this side computed just now,
   // or the check is only asking the client to agree with itself.
   const stroops = totalOf(rows, asset);
-  const hash = await submitFund(asset, xdr, wallet, stroops);
+
+  // Through the licence contract when there is one: the transaction has to
+  // carry exactly these items, and the rows are written under the sale ids
+  // whose hashes it carries.
+  const viaLicence = isLicenceConfigured(asset);
+  let saleIds: Record<string, string> | null = null;
+  let feeBps = 0;
+  let hash: string;
+  if (viaLicence) {
+    saleIds = readSaleIds(rawSaleIds, rows);
+    if (!saleIds) {
+      return fail("That checkout is missing its sale ids. Nothing was charged.", 400);
+    }
+    feeBps = (await readTerms(asset)).feeBps;
+    hash = await submitPurchase(asset, xdr, wallet, itemsOf(rows, asset, saleIds));
+  } else {
+    hash = await submitFund(asset, xdr, wallet, stroops);
+  }
+
+  // Best effort: the licence ids make the settle round cheaper, and a row
+  // without one is looked up by its reference later.
+  const licenceIds: Record<string, number | null> = {};
+  if (viaLicence && saleIds) {
+    await Promise.all(
+      rows.map(async (row) => {
+        licenceIds[row.id] = await licenceForSale(asset, saleIds![row.id]).catch(
+          () => null,
+        );
+      }),
+    );
+  }
 
   const { token: marketToken } = issueToken({
     wallet,
@@ -338,6 +483,14 @@ async function settle(
         licence_expires_at: row.consent_expires_at,
         consent_receipt_id: row.consent_receipt_id,
         fund_tx: hash,
+        ...(viaLicence && saleIds
+          ? {
+              id: saleIds[row.id],
+              fee_stroops: feeOf(priceOf(row, asset), feeBps),
+              licence_contract: licenceFor(asset),
+              licence_id: licenceIds[row.id] ?? null,
+            }
+          : {}),
       })),
     )
     .select("id");

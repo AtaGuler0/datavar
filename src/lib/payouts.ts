@@ -107,6 +107,54 @@ export async function creditPending(
   return { credited, hashes, reconciled, warning };
 }
 
+/** What a settle run did. */
+export type SettleResult = {
+  /** Licences closed by this run, paid out or refunded. */
+  closed: number;
+  hashes: string[];
+  /** Still inside their hold, with the receipt standing. */
+  held: number;
+  /** Closed on-chain earlier and only now copied onto our rows. */
+  reconciled: number;
+};
+
+/**
+ * Closes every licence that can be closed: hold over, or receipt revoked.
+ * The licence contract decides who gets what; the signer only pays the fee.
+ */
+export async function settleLicences(
+  asset: PayAsset,
+  signTransaction: (xdr: string) => Promise<string>,
+): Promise<SettleResult> {
+  let closed = 0;
+  let held = 0;
+  let reconciled = 0;
+  const hashes: string[] = [];
+
+  for (let batch = 0; batch < MAX_BATCHES; batch++) {
+    const built = await post(
+      { action: "settle-build", asset },
+      "The licences couldn't be prepared.",
+    );
+    held = Number(built?.held ?? 0);
+    reconciled += Number(built?.reconciled ?? 0);
+    if (!built?.xdr) break;
+
+    const signed = await signTransaction(built.xdr);
+    const done = await post(
+      { action: "settle-submit", asset, xdr: signed, saleIds: built.saleIds },
+      "The settle didn't go through.",
+    );
+    const now = Number(done?.closed ?? 0);
+    closed += now;
+    if (done?.hash) hashes.push(done.hash as string);
+    // A batch that closed nothing would be offered again unchanged.
+    if (now === 0) break;
+  }
+
+  return { closed, hashes, held, reconciled };
+}
+
 /**
  * Lets a wallet credit, or stops it. Only the contract's admin can sign either,
  * and the wallet defaults to the one signing — which is how a deployment gets

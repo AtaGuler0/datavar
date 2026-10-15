@@ -13,6 +13,7 @@ import {
 } from "@/lib/stellar/config";
 import { sourceLabel } from "@/lib/supabase/datasets";
 import {
+  earnedStroops,
   listSalesForWallet,
   totalStroops,
   type SaleWithDataset,
@@ -403,7 +404,7 @@ function SalesTable({ sales }: { sales: SaleWithDataset[] }) {
                 {formatDate(sale.created_at)}
               </td>
               <td className="py-3 pr-4 text-right font-mono text-xs tabular-nums whitespace-nowrap text-ink">
-                {formatAmount(sale.price_stroops, sale.asset ?? "XLM")}{" "}
+                {formatAmount(earnedStroops(sale), sale.asset ?? "XLM")}{" "}
                 {sale.asset ?? "XLM"}
               </td>
               <td className="py-3 text-right whitespace-nowrap">

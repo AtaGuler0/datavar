@@ -145,6 +145,11 @@ export type ExpectedCall = {
    * transaction pays something, and then we wrote the licences anyway".
    */
   amount?: { index: number; stroops: number };
+  /**
+   * Any further check on the arguments, for calls whose arguments are a
+   * structure rather than one amount. Throws a SorobanError to refuse.
+   */
+  check?: (args: xdr.ScVal[]) => void;
 };
 
 /**
@@ -229,6 +234,8 @@ function assertCallTo(
       throw new SorobanError("That call is for a different wallet.");
     }
   });
+
+  expected.check?.(args);
 }
 
 /** How long to wait for a ledger to close on a submitted transaction. */

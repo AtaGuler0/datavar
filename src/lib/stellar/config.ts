@@ -91,6 +91,28 @@ export function isAssetConfigured(asset: PayAsset): boolean {
   return vaultFor(asset).length > 0;
 }
 
+/**
+ * The licence contracts, one per asset like the vaults.
+ *
+ * When one is set, a purchase in that asset goes through `purchase` on the
+ * licence contract instead of `fund` on the vault: the payment is held for the
+ * hold period, a protocol fee is taken, and a revocation during the hold
+ * refunds the buyer. When it is empty the old direct-to-vault path is used,
+ * so a deployment without the contract keeps working as before.
+ */
+export const LICENCE_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_LICENCE_CONTRACT_ID ?? "";
+export const LICENCE_USDC_CONTRACT_ID =
+  process.env.NEXT_PUBLIC_LICENCE_USDC_CONTRACT_ID ?? "";
+
+export function licenceFor(asset: PayAsset): string {
+  return asset === "USDC" ? LICENCE_USDC_CONTRACT_ID : LICENCE_CONTRACT_ID;
+}
+
+export function isLicenceConfigured(asset: PayAsset): boolean {
+  return licenceFor(asset).length > 0;
+}
+
 /** The assets this deployment can actually take money in. */
 export function configuredAssets(): PayAsset[] {
   return PAY_ASSETS.filter(isAssetConfigured);

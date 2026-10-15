@@ -1,7 +1,7 @@
 import { supabase } from "./client";
 
 /** Where a payout stands. See the `sales` table in schema.sql. */
-export type SaleStatus = "unclaimed" | "claiming" | "claimed";
+export type SaleStatus = "unclaimed" | "claiming" | "claimed" | "refunded";
 
 /** One dataset licensed to a buyer, and the payout owed for it. */
 export type Sale = {
@@ -36,6 +36,15 @@ export type Sale = {
   fund_tx: string | null;
   /** The consent receipt the licence stands on. */
   consent_receipt_id: number | null;
+  /** Protocol fee inside `price_stroops`. Zero on sales made before the
+   *  licence contract, which took no fee. */
+  fee_stroops?: number;
+  /** Returned to the buyer after a revocation during the hold. */
+  refunded_stroops?: number;
+  /** The licence contract that holds or held the payment, if it went
+   *  through one. Null for a payment made straight into the vault. */
+  licence_contract?: string | null;
+  licence_id?: number | null;
 };
 
 /** A sale with the dataset it sold, for rows that need a title to show. */
@@ -102,5 +111,22 @@ export async function createSales(drafts: SaleDraft[]): Promise<Sale[]> {
  * with no unit. Every call site groups by `asset` before reaching here.
  */
 export function totalStroops(sales: Sale[]): number {
-  return sales.reduce((sum, s) => sum + Number(s.price_stroops), 0);
+  return sales.reduce((sum, s) => sum + earnedStroops(s), 0);
+}
+
+/**
+ * What the contributor gets from a sale: the price, less the protocol fee and
+ * anything refunded to the buyer. Equal to the price on every sale made
+ * straight into the vault.
+ */
+export function earnedStroops(sale: {
+  price_stroops: number;
+  fee_stroops?: number | null;
+  refunded_stroops?: number | null;
+}): number {
+  return (
+    Number(sale.price_stroops) -
+    Number(sale.fee_stroops ?? 0) -
+    Number(sale.refunded_stroops ?? 0)
+  );
 }

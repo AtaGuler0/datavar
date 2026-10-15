@@ -33,7 +33,33 @@ export type Quote = {
   stroops: number;
   asset: PayAsset;
   datasets: number;
+  /** Set when the purchase goes through the licence contract: the sale ids
+   *  the transaction carries, which the submit call has to send back. */
+  saleIds?: Record<string, string>;
+  /** The protocol fee inside `stroops`, when there is one. */
+  feeStroops?: number;
 };
+
+/** A licence contract's terms, as GET /api/market reports them. */
+export type LicenceTerms = {
+  feeBps: number;
+  holdSecs: number;
+  treasury: string;
+};
+
+/**
+ * Whether each asset's purchases go through a licence contract, and on what
+ * terms. Null for an asset paid straight into the vault, with no hold and no
+ * refund.
+ */
+export async function fetchTerms(): Promise<
+  Partial<Record<PayAsset, LicenceTerms | null>>
+> {
+  const res = await fetch("/api/market");
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.error ?? "Couldn't read the licence terms.");
+  return (body?.terms ?? {}) as Partial<Record<PayAsset, LicenceTerms | null>>;
+}
 
 async function post(body: unknown, fallback: string) {
   const res = await fetch("/api/market", {
@@ -73,7 +99,7 @@ export async function licenseBasket(
   const quote = await quoteBasket(datasetIds, asset);
   const signed = await signTransaction(quote.xdr);
   const done = await post(
-    { action: "submit", datasetIds, asset, xdr: signed },
+    { action: "submit", datasetIds, asset, xdr: signed, saleIds: quote.saleIds },
     "The payment didn't go through.",
   );
 

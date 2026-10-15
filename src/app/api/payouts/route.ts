@@ -5,7 +5,17 @@ import { readSession } from "@/lib/auth/session";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import { supabaseForToken } from "@/lib/supabase/client";
-import { isPayAsset, type PayAsset } from "@/lib/stellar/config";
+import { isPayAsset, licenceFor, type PayAsset } from "@/lib/stellar/config";
+import {
+  buildSettle,
+  isLicenceConfigured,
+  licenceForSale,
+  readLicence,
+  SETTLE_BATCH,
+  submitSettle,
+  type Licence,
+} from "@/lib/stellar/licence";
+import { readReceipt } from "@/lib/stellar/consent";
 import {
   balanceOf,
   buildAddOperator,
@@ -48,6 +58,11 @@ import {
  * references, their own operator sets. So the asset travels on every call, and
  * a credit round only ever gathers sales that were paid in the asset of the
  * vault it is about to be signed against.
+ *
+ * Sales bought through the licence contract never enter a credit round. Their
+ * money is in the licence contract, not the vault, and the contract credits
+ * the vault itself when the licence is settled. The `settle` actions below
+ * close those licences and copy the outcome onto our rows.
  */
 
 // stellar-sdk needs Node built-ins; the edge runtime can't carry it.
@@ -155,6 +170,28 @@ export async function POST(request: Request) {
   try {
     if (body.action === "build") return await buildRound(wallet, asset);
 
+    if (body.action === "settle-build") return await buildSettleRound(wallet, asset);
+
+    if (body.action === "settle-submit") {
+      if (typeof body.xdr !== "string" || !body.xdr) {
+        return fail("A signed transaction is required.", 400);
+      }
+      const saleIds = readSaleIds(body.saleIds);
+      if (saleIds === null || saleIds.length === 0) {
+        return fail("That isn't a list of licences to settle.", 400);
+      }
+      if (!isLicenceConfigured(asset)) {
+        return fail("No licence contract is configured for that asset.", 503);
+      }
+      const hash = await submitSettle(asset, body.xdr);
+      const supabase = operatorClient(wallet);
+      if (!supabase.client) {
+        return NextResponse.json({ hash, closed: 0, warning: `Settled in ${hash}, but ${supabase.error}` });
+      }
+      const closed = await reconcileLicences(supabase.client, asset, saleIds, hash);
+      return NextResponse.json({ hash, asset, closed, vault: await vault(asset) });
+    }
+
     if (body.action === "add-operator" || body.action === "remove-operator") {
       // Defaults to the caller, which is the common case: an admin giving
       // themselves the role on a deployment that has nobody in it yet.
@@ -230,6 +267,10 @@ async function buildRound(wallet: string, asset: PayAsset) {
     .from("sales")
     .select("id, owner_wallet, price_stroops", { count: "exact" })
     .is("credited_at", null)
+    // Licence sales are credited by the licence contract when they settle.
+    // Crediting them here would pay the contributor out of vault surplus while
+    // the buyer's money is still held in the licence contract.
+    .is("licence_contract", null)
     // One asset per round: the batch is signed against one vault, and a sale
     // paid in the other one has no money behind it there.
     .eq("asset", asset)
@@ -425,4 +466,133 @@ async function vault(asset: PayAsset) {
     logFailure("payouts vault refresh", e);
     return null;
   });
+}
+
+type EscrowSale = {
+  id: string;
+  licence_id: number | null;
+  consent_receipt_id: number | null;
+};
+
+/**
+ * Prepares one `settle_many` for licences that can be closed: hold over, or
+ * receipt revoked. Licences the contract has already closed are copied onto
+ * our rows on the way past, without a signature.
+ *
+ * Any wallet can sign a settle; the operator does it from the panel because
+ * the operator is the one watching the queue. The contract decides where the
+ * money goes, not the signer.
+ */
+async function buildSettleRound(wallet: string, asset: PayAsset) {
+  if (!isLicenceConfigured(asset)) {
+    return NextResponse.json({ xdr: null, saleIds: [], held: 0 });
+  }
+
+  const supabase = operatorClient(wallet);
+  if (!supabase.client) return fail(supabase.error, 503);
+
+  const { data, error } = await supabase.client
+    .from("sales")
+    .select("id, licence_id, consent_receipt_id")
+    .eq("licence_contract", licenceFor(asset))
+    .is("credited_at", null)
+    .neq("status", "refunded")
+    .order("created_at", { ascending: true })
+    .limit(100);
+
+  if (error) {
+    logFailure("payouts escrow sales", error);
+    return fail("Couldn't read the licences waiting to settle.", 502);
+  }
+
+  const rows = (data ?? []) as EscrowSale[];
+  const now = Math.floor(Date.now() / 1000);
+  const ready: { saleId: string; licenceId: number }[] = [];
+  const closed: string[] = [];
+  let held = 0;
+
+  for (const row of rows) {
+    const id = row.licence_id ?? (await licenceForSale(asset, row.id).catch(() => null));
+    if (id === null) continue;
+
+    const licence = await readLicence(asset, id).catch(() => null);
+    if (!licence) continue;
+
+    if (licence.state !== "Held") {
+      closed.push(row.id);
+      continue;
+    }
+
+    const revoked =
+      row.consent_receipt_id !== null &&
+      (await readReceipt(row.consent_receipt_id)
+        .then((r) => r.status === "revoked")
+        .catch(() => false));
+    if (now >= licence.dueAt || revoked) {
+      if (ready.length < SETTLE_BATCH) ready.push({ saleId: row.id, licenceId: id });
+    } else {
+      held += 1;
+    }
+  }
+
+  const reconciled = closed.length
+    ? await reconcileLicences(supabase.client, asset, closed, "")
+    : 0;
+
+  if (ready.length === 0) {
+    return NextResponse.json({ xdr: null, saleIds: [], held, reconciled });
+  }
+
+  return NextResponse.json({
+    xdr: await buildSettle(
+      asset,
+      wallet,
+      ready.map((r) => r.licenceId),
+    ),
+    saleIds: ready.map((r) => r.saleId),
+    held,
+    reconciled,
+  });
+}
+
+/**
+ * Copies what the licence contract says about each sale onto its row: what
+ * the contributor was credited, the fee actually taken, and any refund. Asks
+ * the contract rather than trusting the transaction, the same as `record`.
+ * Returns how many rows were closed.
+ */
+async function reconcileLicences(
+  client: ReturnType<typeof supabaseForToken>,
+  asset: PayAsset,
+  saleIds: string[],
+  hash: string,
+): Promise<number> {
+  let closed = 0;
+  for (const saleId of saleIds) {
+    const id = await licenceForSale(asset, saleId).catch(() => null);
+    if (id === null) continue;
+    const licence: Licence | null = await readLicence(asset, id).catch(() => null);
+    if (!licence || licence.state === "Held") continue;
+
+    const fee = licence.paid - licence.credited - licence.refunded;
+    const { error } = await client
+      .from("sales")
+      .update({
+        licence_id: id,
+        fee_stroops: fee,
+        refunded_stroops: licence.refunded,
+        credited_at: new Date().toISOString(),
+        ...(hash ? { credit_tx: hash } : {}),
+        // Nothing was credited, so there is nothing for the contributor to
+        // claim and the row should not sit in their unclaimed total.
+        ...(licence.credited === 0 ? { status: "refunded" } : {}),
+      })
+      .eq("id", saleId);
+    if (error) {
+      logFailure("payouts reconcile licence", error);
+      continue;
+    }
+    closed += 1;
+  }
+  return closed;
 }

@@ -269,6 +269,44 @@ alter table public.sales drop constraint if exists sales_asset_ck;
 alter table public.sales add constraint sales_asset_ck
   check (asset in ('XLM', 'USDC')) not valid;
 
+-- Sales bought through the licence contract (contracts/contracts/licence).
+-- `price_stroops` stays the listed price the buyer paid, because the market
+-- trigger checks it against the catalogue. The contributor's share is
+-- price - fee - refunded, which is what the dashboard shows as earned.
+--
+-- `fee_stroops` is the protocol fee. It is written at purchase from the
+-- contract's fee rate and corrected at settle from what the contract actually
+-- took, which is less when a revocation during the hold refunded part of the
+-- price. `refunded_stroops` is what went back to the buyer.
+--
+-- `licence_contract` is set when the payment went to a licence contract rather
+-- than straight into the vault. Those rows are credited by the contract when
+-- the licence settles, never by an operator round.
+--
+-- Sits here, before the views, for the same reason `asset` does.
+alter table public.sales add column if not exists fee_stroops      bigint not null default 0;
+alter table public.sales add column if not exists refunded_stroops bigint not null default 0;
+alter table public.sales add column if not exists licence_contract text;
+alter table public.sales add column if not exists licence_id       bigint;
+
+alter table public.sales drop constraint if exists sales_split_ck;
+alter table public.sales add constraint sales_split_ck
+  check (
+    fee_stroops >= 0
+    and refunded_stroops >= 0
+    and fee_stroops + refunded_stroops <= price_stroops
+  ) not valid;
+
+-- `refunded` is a licence sale whose receipt was revoked so early that nothing
+-- was credited. There is nothing for the contributor to claim.
+alter table public.sales drop constraint if exists sales_status_check;
+alter table public.sales add constraint sales_status_check
+  check (status in ('unclaimed', 'claiming', 'claimed', 'refunded')) not valid;
+
+create index if not exists sales_escrow_idx
+  on public.sales (licence_contract, created_at)
+  where licence_contract is not null and credited_at is null;
+
 
 create index if not exists sales_owner_idx
   on public.sales (owner_wallet, created_at desc);
@@ -641,20 +679,40 @@ create view public.protocol_totals as
     -- Split by asset rather than summed across them. Adding stroops to USDC
     -- units because both are seven-decimal integers would produce a number
     -- with no unit, printed under a currency symbol.
-    (select coalesce(sum(price_stroops), 0)
+    -- Paid is the contributor's share; gross is what buyers paid and kept
+    -- paying, so refunds come out of it.
+    (select coalesce(sum(price_stroops - fee_stroops - refunded_stroops), 0)
        from public.sales
       where status = 'claimed' and asset = 'XLM')                   as paid_stroops,
-    (select coalesce(sum(price_stroops), 0)
+    (select coalesce(sum(price_stroops - fee_stroops - refunded_stroops), 0)
        from public.sales
       where status = 'claimed' and asset = 'USDC')                  as paid_usdc,
     (select count(*)
        from public.sales where status = 'claimed')                  as payouts,
     (select count(*) from public.sales)                             as sales,
-    (select coalesce(sum(price_stroops), 0)
+    (select coalesce(sum(price_stroops - refunded_stroops), 0)
        from public.sales where asset = 'XLM')                       as gross_stroops,
-    (select coalesce(sum(price_stroops), 0)
+    (select coalesce(sum(price_stroops - refunded_stroops), 0)
        from public.sales where asset = 'USDC')                      as gross_usdc,
-    (select count(distinct dataset_id) from public.sales)           as datasets_sold;
+    (select count(distinct dataset_id) from public.sales)           as datasets_sold,
+    -- Fees the licence contract has actually paid to the treasury. Only
+    -- settled licences count: a fee still held can still be refunded.
+    (select coalesce(sum(fee_stroops), 0)
+       from public.sales
+      where licence_contract is not null and credited_at is not null
+        and asset = 'XLM')                                          as fees_stroops,
+    (select coalesce(sum(fee_stroops), 0)
+       from public.sales
+      where licence_contract is not null and credited_at is not null
+        and asset = 'USDC')                                         as fees_usdc,
+    -- How much of the above came from our own load-test bot. The public pages
+    -- print these next to the totals so nobody reads generated traffic as
+    -- adoption. metrics/excluded-wallets.txt lists the bot's wallets.
+    (select count(*) from public.datasets where synthetic)          as generated_datasets,
+    (select count(*)
+       from public.sales s
+       join public.datasets d on d.id = s.dataset_id
+      where d.synthetic)                                            as generated_sales;
 
 -- What each kind of data has actually fetched. A category with no sales is
 -- absent — the landing page shows a dash rather than inventing a rate for it.
@@ -1816,8 +1874,8 @@ create view public.market_pulse as
     count(*)                                                   as licences,
     count(distinct buyer_wallet)                               as buyers,
     count(distinct dataset_id)                                 as datasets,
-    coalesce(sum(price_stroops) filter (where asset = 'XLM'), 0)  as gross_stroops,
-    coalesce(sum(price_stroops) filter (where asset = 'USDC'), 0) as gross_usdc,
+    coalesce(sum(price_stroops - refunded_stroops) filter (where asset = 'XLM'), 0)  as gross_stroops,
+    coalesce(sum(price_stroops - refunded_stroops) filter (where asset = 'USDC'), 0) as gross_usdc,
     count(*) filter (where created_at > now() - interval '24 hours') as last_day,
     max(created_at)                                            as last_at
   from public.sales

@@ -6,7 +6,7 @@ import {
 } from "./stellar/config";
 import type { ConsentReceipt } from "./stellar/consent";
 import type { Dataset } from "./supabase/datasets";
-import type { Sale } from "./supabase/sales";
+import { earnedStroops, type Sale } from "./supabase/sales";
 
 /**
  * One dataset's whole life, assembled from the three places it is recorded.
@@ -88,7 +88,7 @@ export type DatasetLifecycle = {
 const sum = (sales: Sale[]): Money =>
   sales.reduce(
     (total, sale) =>
-      addMoney(total, sale.asset ?? "XLM", Number(sale.price_stroops)),
+      addMoney(total, sale.asset ?? "XLM", earnedStroops(sale)),
     emptyMoney(),
   );
 

@@ -67,7 +67,12 @@ export function marketTotals(datasets: Dataset[], sales: SaleWithDataset[]) {
   const unclaimed = sales.filter((s) => s.status !== "claimed");
   const claimed = sales.filter((s) => s.status === "claimed");
   // Sold, but not yet written into the payout contract — the operator's queue.
-  const pending = unclaimed.filter((s) => !s.credited_at);
+  // Licence sales are not in it: the licence contract credits those itself.
+  const pending = unclaimed.filter((s) => !s.credited_at && !s.licence_contract);
+  // Bought through the licence contract and still held there.
+  const escrow = sales.filter(
+    (s) => !!s.licence_contract && !s.credited_at && s.status !== "refunded",
+  );
 
   // Per asset, because each queue is credited against its own vault and each
   // total is money in a different currency. `perAsset` is what the vault cards
@@ -80,6 +85,7 @@ export function marketTotals(datasets: Dataset[], sales: SaleWithDataset[]) {
       asset,
       pending: queue.length,
       pendingStroops: totalStroops(queue),
+      escrow: escrow.filter((s) => (s.asset ?? "XLM") === asset).length,
       sales: mine.length,
     };
   });

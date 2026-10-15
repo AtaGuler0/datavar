@@ -65,6 +65,7 @@ export function AdminOverview() {
               asset={a.asset}
               pendingCount={a.pending}
               pendingStroops={a.pendingStroops}
+              escrowCount={a.escrow}
               onCredited={reload}
             />
           ))}

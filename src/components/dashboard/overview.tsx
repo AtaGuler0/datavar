@@ -17,6 +17,7 @@ import {
   type Dataset,
 } from "@/lib/supabase/datasets";
 import {
+  earnedStroops,
   listSalesForWallet,
   type SaleWithDataset,
 } from "@/lib/supabase/sales";
@@ -131,7 +132,7 @@ export function Overview() {
     const money = (rows: typeof sales) =>
       rows.reduce(
         (total, sale) =>
-          addMoney(total, sale.asset ?? "XLM", Number(sale.price_stroops)),
+          addMoney(total, sale.asset ?? "XLM", earnedStroops(sale)),
         emptyMoney(),
       );
     const earned = money(sales);
