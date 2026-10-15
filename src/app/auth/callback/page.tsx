@@ -23,11 +23,19 @@ export default function AuthCallbackPage() {
     let live = true;
 
     const params = new URLSearchParams(window.location.search);
+    // Resolved against our own origin and kept only if it stays there. A
+    // prefix check on the raw string misses `/\\evil.com` and `/%09/evil.com`,
+    // which browsers read as another host.
     const requested = params.get("next") ?? "/dashboard";
-    const next =
-      requested.startsWith("/") && !requested.startsWith("//")
-        ? requested
-        : "/dashboard";
+    let next = "/dashboard";
+    try {
+      const url = new URL(requested, window.location.origin);
+      if (url.origin === window.location.origin) {
+        next = url.pathname + url.search + url.hash;
+      }
+    } catch {
+      // Not a URL at all: keep the default.
+    }
 
     // Google's own refusal — a declined consent screen — comes back as a
     // query parameter rather than as a missing session, and is the same

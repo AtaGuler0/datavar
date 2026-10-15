@@ -13,6 +13,7 @@ import type { ISupportedWallet } from "@creit.tech/stellar-wallets-kit";
 import {
   googleSession,
   signOutGoogle,
+  takeGoogleIntent,
   startGoogleSignIn,
 } from "@/lib/auth/google-client";
 import {
@@ -200,6 +201,8 @@ async function refreshSession(current: Session): Promise<void> {
  * them their sign-in failed. It didn't.
  */
 async function attachGoogle(token: string): Promise<GoogleAccount | null> {
+  // Only a Google sign-in this person started in this tab gets attached.
+  if (!takeGoogleIntent()) return null;
   const google = await googleSession();
   if (!google) return null;
 
@@ -271,6 +274,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const stored = getSession();
       if (stored && connected && stored.wallet !== connected) {
         clearSession();
+        // The Google session belonged to the previous account's person. Left
+        // here, it would sign the next one in, or get attached to their wallet.
+        await signOutGoogle();
       } else if (stored) {
         // Still theirs, and still good. Restart its clock rather than let it
         // run out under somebody who is here every day — signing in once

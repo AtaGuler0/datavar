@@ -5,6 +5,7 @@ import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
 import {
   UNIQUE_VIOLATION,
+  identityByUser,
   identityByWallet,
   linkIdentity,
   unlinkIdentity,
@@ -29,6 +30,15 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Sign in with your wallet first." },
       { status: 401 },
+    );
+  }
+
+  // Attaching an account needs the wallet's own signature behind the session.
+  // A session opened through Google can't use itself to add a Google account.
+  if (session.via !== "wallet") {
+    return NextResponse.json(
+      { error: "Sign in with your wallet to attach a Google account." },
+      { status: 403 },
     );
   }
 
@@ -70,6 +80,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: `This wallet is already attached to ${existing.email ?? "another Google account"}. Sign in with that account, or detach it first.`,
+        },
+        { status: 409 },
+      );
+    }
+
+    // And the other direction: this Google account already reaches a different
+    // wallet. Moving it would be a silent takeover on a shared browser, so it
+    // has to be detached from that wallet first.
+    const current = await identityByUser(account.userId);
+    if (current && current.wallet !== session.wallet) {
+      return NextResponse.json(
+        {
+          error:
+            "That Google account is already attached to a different wallet. Detach it there first.",
         },
         { status: 409 },
       );

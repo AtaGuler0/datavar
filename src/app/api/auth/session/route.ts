@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Keypair, WebAuth } from "@stellar/stellar-sdk";
+import { Horizon, Keypair, NotFoundError, WebAuth } from "@stellar/stellar-sdk";
 import { adminListEmpty, isAdminWallet } from "@/lib/auth/admins";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { logFailure } from "@/lib/log";
@@ -75,16 +75,32 @@ export async function POST(request: Request) {
       domain,
     );
 
-    // The signer list is the wallet the challenge was issued to, so this proves
-    // that specific key signed — not merely that someone did.
-    WebAuth.verifyChallengeTxSigners(
-      body.challenge,
-      serverAccount,
-      STELLAR.networkPassphrase,
-      [clientAccountID],
-      domain,
-      domain,
-    );
+    // An account that exists on the network has its own signers and
+    // thresholds, and those decide who may act for it: a master key whose
+    // weight was set to 0 after a leak must not still sign in. SEP-10 asks for
+    // the account's medium threshold. An account not on the network yet has
+    // only its master key, so the signature has to be that key's.
+    const onChain = await signersOf(clientAccountID);
+    if (onChain) {
+      WebAuth.verifyChallengeTxThreshold(
+        body.challenge,
+        serverAccount,
+        STELLAR.networkPassphrase,
+        onChain.threshold,
+        onChain.signers,
+        domain,
+        domain,
+      );
+    } else {
+      WebAuth.verifyChallengeTxSigners(
+        body.challenge,
+        serverAccount,
+        STELLAR.networkPassphrase,
+        [clientAccountID],
+        domain,
+        domain,
+      );
+    }
 
     wallet = clientAccountID;
   } catch (e) {
@@ -106,6 +122,7 @@ export async function POST(request: Request) {
       wallet,
       admin,
       ttlSeconds: SESSION_TTL_SECONDS,
+      via: "wallet",
     });
 
     return NextResponse.json({
@@ -128,5 +145,25 @@ export async function POST(request: Request) {
       },
       { status: 503 },
     );
+  }
+}
+
+/**
+ * The account's signers and the weight a sign-in needs, or null when the
+ * account doesn't exist on the network. Any other Horizon failure throws: a
+ * sign-in we couldn't check is refused, not waved through.
+ */
+async function signersOf(
+  account: string,
+): Promise<{ signers: Horizon.ServerApi.AccountRecordSigners[]; threshold: number } | null> {
+  try {
+    const record = await new Horizon.Server(STELLAR.horizonUrl).loadAccount(account);
+    return {
+      signers: record.signers,
+      threshold: Math.max(record.thresholds.med_threshold, 1),
+    };
+  } catch (e) {
+    if (e instanceof NotFoundError) return null;
+    throw e;
   }
 }

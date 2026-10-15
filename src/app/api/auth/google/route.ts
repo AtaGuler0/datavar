@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminListEmpty, isAdminWallet } from "@/lib/auth/admins";
+import { adminListEmpty } from "@/lib/auth/admins";
 import { verifyAuthToken } from "@/lib/auth/google";
 import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
 import { logFailure } from "@/lib/log";
@@ -69,11 +69,16 @@ export async function POST(request: Request) {
 
     await refreshIdentityEmail(identity, account.email);
 
-    const admin = isAdminWallet(identity.wallet);
+    // Never an operator session. A Google account is a second way into a
+    // contributor's dashboard, and operator rights need the wallet's own
+    // signature: whoever takes over an operator's Google account should get
+    // that operator's datasets, not the admin panel.
+    const admin = false;
     const { token, expiresAt } = issueToken({
       wallet: identity.wallet,
       admin,
       ttlSeconds: SESSION_TTL_SECONDS,
+      via: "google",
     });
 
     return NextResponse.json({

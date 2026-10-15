@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminListEmpty, isAdminWallet } from "@/lib/auth/admins";
-import { AuthConfigError, issueToken } from "@/lib/auth/jwt";
+import { AuthConfigError, MAX_SESSION_AGE_SECONDS, issueToken } from "@/lib/auth/jwt";
 import { readSession } from "@/lib/auth/session";
 import { logFailure } from "@/lib/log";
 import { RATE_LIMITS, enforceRateLimit } from "@/lib/rate-limit";
@@ -47,12 +47,29 @@ export async function POST(request: Request) {
   );
   if (limited) return limited;
 
+  // A refresh extends a session, it doesn't start one. Past the maximum age
+  // the browser has to sign in again, so a token copied once can't be kept
+  // alive forever by refreshing it.
+  const now = Math.floor(Date.now() / 1000);
+  if (now - session.authTime > MAX_SESSION_AGE_SECONDS) {
+    return NextResponse.json(
+      { error: "This session is too old to refresh. Sign in again." },
+      { status: 401 },
+    );
+  }
+
   try {
-    const admin = isAdminWallet(session.wallet);
+    // Operator rights only for a session opened with the wallet's signature.
+    // A Google session, or a token from before `via` existed, refreshes as a
+    // contributor session.
+    const via = session.via ?? "google";
+    const admin = via === "wallet" && isAdminWallet(session.wallet);
     const { token, expiresAt } = issueToken({
       wallet: session.wallet,
       admin,
       ttlSeconds: SESSION_TTL_SECONDS,
+      via,
+      authTime: session.authTime,
     });
 
     return NextResponse.json({

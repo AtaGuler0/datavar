@@ -29,7 +29,20 @@ export type SessionClaims = {
   admin: boolean;
   /** Expiry, unix seconds. */
   exp: number;
+  /**
+   * How the session was first opened: a wallet signature, or a Google sign-in
+   * linked to the wallet. Operator rights need the first. Null on tokens
+   * minted before the claim existed, which are treated like Google ones.
+   */
+  via: "wallet" | "google" | null;
+  /** When that first sign-in happened, unix seconds. Refresh carries it over
+   *  unchanged, so a session has a fixed maximum age however often it is
+   *  refreshed. Falls back to `iat` on older tokens. */
+  authTime: number;
 };
+
+/** How long a session may be refreshed for before a new sign-in is needed. */
+export const MAX_SESSION_AGE_SECONDS = 7 * 24 * 60 * 60;
 
 const ISSUER = "datavar-web-auth";
 /** PostgREST maps this claim to a Postgres role. */
@@ -100,6 +113,10 @@ export function issueToken(claims: {
    * in the token, so this claim cannot reach anybody else's address.
    */
   link?: boolean;
+  /** How the browser session was opened. Only set on browser sessions. */
+  via?: "wallet" | "google";
+  /** The original sign-in time to carry; defaults to now. */
+  authTime?: number;
 }): { token: string; expiresAt: number } {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + claims.ttlSeconds;
@@ -118,6 +135,7 @@ export function issueToken(claims: {
       ...(claims.market ? { market: true } : {}),
       ...(claims.mirror ? { mirror: true } : {}),
       ...(claims.link ? { link: true } : {}),
+      ...(claims.via ? { via: claims.via, auth_time: claims.authTime ?? now } : {}),
       iss: ISSUER,
       iat: now,
       exp,
@@ -201,5 +219,12 @@ export function verifyToken(token: string): SessionClaims | null {
     wallet: claims.wallet,
     admin: claims.admin === true,
     exp: claims.exp as number,
+    via: claims.via === "wallet" || claims.via === "google" ? claims.via : null,
+    authTime:
+      typeof claims.auth_time === "number"
+        ? claims.auth_time
+        : typeof claims.iat === "number"
+          ? claims.iat
+          : 0,
   };
 }

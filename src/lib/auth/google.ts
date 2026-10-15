@@ -58,12 +58,17 @@ export function verifyAuthToken(token: string): AuthAccount | null {
 
   if (claims.iss !== expected) return null;
   if (claims.role !== "authenticated") return null;
+  if (claims.aud !== "authenticated") return null;
   if (claims.is_anonymous === true) return null;
 
   const userId = claims.sub;
   if (typeof userId !== "string" || !UUID.test(userId)) return null;
 
   const metadata = (claims.app_metadata ?? {}) as Record<string, unknown>;
+  // Google only. If another sign-in method is ever switched on in Supabase
+  // Auth (email, magic link, phone), its sessions must not reach a wallet
+  // linked through Google.
+  if (metadata.provider !== "google") return null;
 
   return {
     userId,

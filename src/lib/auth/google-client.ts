@@ -50,12 +50,41 @@ export type GoogleSession = {
  * replaced — and what comes back lands on /auth/callback.
  */
 export async function startGoogleSignIn(next: string): Promise<void> {
+  markGoogleIntent();
   const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const { error } = await authClient().auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo },
   });
   if (error) throw error;
+}
+
+/**
+ * Whether the person started a Google sign-in in this tab. A Google session
+ * is only attached to a wallet when they did: one left in local storage by
+ * somebody else on a shared browser must not be linked to whoever signs in
+ * with a wallet next. Kept in sessionStorage so it survives the OAuth
+ * redirect but not a closed tab.
+ */
+const INTENT_KEY = "datavar.google.intent";
+
+function markGoogleIntent(): void {
+  try {
+    sessionStorage.setItem(INTENT_KEY, "1");
+  } catch {
+    // Storage blocked: no attach, which is the safe way to be wrong.
+  }
+}
+
+/** True once per deliberate Google sign-in, then cleared. */
+export function takeGoogleIntent(): boolean {
+  try {
+    const intended = sessionStorage.getItem(INTENT_KEY) === "1";
+    sessionStorage.removeItem(INTENT_KEY);
+    return intended;
+  } catch {
+    return false;
+  }
 }
 
 /** The stored Google session, refreshed if it needed it. Null when signed out. */

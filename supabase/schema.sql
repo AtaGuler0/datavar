@@ -420,6 +420,18 @@ create policy "datasets download"
 create schema if not exists internal;
 revoke all on schema internal from public, anon, authenticated;
 
+-- The public aggregates. Each one is a view here, owned by the database owner,
+-- so it can count rows that row-level security hides from the visitor, and a
+-- view of the same name in `public` with security_invoker that selects from
+-- it. PostgREST only exposes `public`, so this schema can't be queried
+-- directly, and the visitor can only reach the columns each view chose to
+-- publish. Before this the public views themselves ran as their owner, which
+-- is what the Supabase linter flags as a security definer view: any column
+-- added to one later would have bypassed RLS without anyone deciding it should.
+create schema if not exists reporting;
+revoke all on schema reporting from public;
+grant usage on schema reporting to anon, authenticated;
+
 create table if not exists internal.secrets (
   name  text primary key,
   value text not null
@@ -653,7 +665,8 @@ create trigger datasets_insert_limit
 -- report one contributor. Same rule as everywhere else here — fall to zero,
 -- never to a made-up number.
 drop view if exists public.network_activity;
-create view public.network_activity as
+drop view if exists reporting.network_activity;
+create view reporting.network_activity as
   select
     left(
       encode(sha256(convert_to(salt.value || d.owner_wallet, 'UTF8')), 'hex'),
@@ -672,7 +685,8 @@ create view public.network_activity as
 -- paid is the part a contributor has actually claimed and settled on-chain.
 -- Neither is the other, so nothing renders one under the other's label.
 drop view if exists public.protocol_totals;
-create view public.protocol_totals as
+drop view if exists reporting.protocol_totals;
+create view reporting.protocol_totals as
   select
     (select count(distinct owner_wallet) from public.datasets)      as contributors,
     (select count(*) from public.datasets)                          as datasets,
@@ -717,7 +731,8 @@ create view public.protocol_totals as
 -- What each kind of data has actually fetched. A category with no sales is
 -- absent — the landing page shows a dash rather than inventing a rate for it.
 drop view if exists public.source_rates;
-create view public.source_rates as
+drop view if exists reporting.source_rates;
+create view reporting.source_rates as
   select
     d.source_type,
     round(avg(s.price_stroops))::bigint as avg_price_stroops,
@@ -736,9 +751,18 @@ create view public.source_rates as
 -- and this drop clears it from deployments that already ran that version.
 drop view if exists public.testnet_totals;
 
+grant select on reporting.network_activity to anon, authenticated;
+create view public.network_activity with (security_invoker = true) as
+  select * from reporting.network_activity;
 grant select on public.network_activity to anon, authenticated;
-grant select on public.protocol_totals  to anon, authenticated;
-grant select on public.source_rates     to anon, authenticated;
+grant select on reporting.protocol_totals to anon, authenticated;
+create view public.protocol_totals with (security_invoker = true) as
+  select * from reporting.protocol_totals;
+grant select on public.protocol_totals to anon, authenticated;
+grant select on reporting.source_rates to anon, authenticated;
+create view public.source_rates with (security_invoker = true) as
+  select * from reporting.source_rates;
+grant select on public.source_rates to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Table: posts
@@ -843,9 +867,13 @@ drop policy if exists "post images write"  on storage.objects;
 drop policy if exists "post images update" on storage.objects;
 drop policy if exists "post images delete" on storage.objects;
 
+-- A public bucket serves its files by URL without any select policy. This
+-- policy only decides who may list the bucket's contents through the API,
+-- and that is operators: a stranger has no use for a directory of every
+-- upload, drafts' images included.
 create policy "post images read"
   on storage.objects for select
-  using (bucket_id = 'post-images');
+  using (bucket_id = 'post-images' and public.is_operator());
 
 create policy "post images write"
   on storage.objects for insert
@@ -1152,8 +1180,9 @@ $$;
 drop policy if exists "datasets update" on public.datasets;
 create policy "datasets update"
   on public.datasets for update
-  using (public.is_operator())
-  with check (public.is_operator());
+  to authenticated
+  using ((select public.is_operator()))
+  with check ((select public.is_operator()));
 
 grant update (price_stroops, price_usdc) on public.datasets to authenticated;
 
@@ -1574,11 +1603,23 @@ alter table public.datasets add constraint datasets_quality_flags_ck
 -- policy hands them to — operators included, deliberately. See the bucket
 -- policies above, and `datasets_guard_update` below for why an update policy
 -- here does not let a contributor price their own data.
+-- One update policy for both writers. Two permissive policies on the same
+-- action are OR-ed anyway, and Postgres evaluates both on every row, which is
+-- what the linter warns about. Which columns each writer may change is still
+-- decided by the column grants and by datasets_guard_update below.
 drop policy if exists "datasets quality" on public.datasets;
-create policy "datasets quality"
+drop policy if exists "datasets update" on public.datasets;
+create policy "datasets update"
   on public.datasets for update
-  using (owner_wallet = public.current_wallet())
-  with check (owner_wallet = public.current_wallet());
+  to authenticated
+  using (
+    owner_wallet = (select public.current_wallet())
+    or (select public.is_operator())
+  )
+  with check (
+    owner_wallet = (select public.current_wallet())
+    or (select public.is_operator())
+  );
 
 grant update (quality, quality_flags, scanned_at, scan_version)
   on public.datasets to authenticated;
@@ -1641,8 +1682,10 @@ create trigger datasets_guard_update
 -- door.
 -- ---------------------------------------------------------------------------
 drop view if exists public.market_facets;
+drop view if exists reporting.market_facets;
 drop view if exists public.market_listings;
-create view public.market_listings as
+drop view if exists reporting.market_listings;
+create view reporting.market_listings as
   select
     d.id,
     left(
@@ -1695,9 +1738,12 @@ create view public.market_listings as
     and d.price_usdc   is not null
     and d.quality <> 'flagged';
 
+grant select on reporting.market_listings to anon, authenticated;
+create view public.market_listings with (security_invoker = true) as
+  select * from reporting.market_listings;
 grant select on public.market_listings to anon, authenticated;
 
-create view public.market_facets as
+create view reporting.market_facets as
   select
     source_type,
     count(*)                                        as listings,
@@ -1709,9 +1755,12 @@ create view public.market_facets as
     min(byte_size)                                  as min_bytes,
     max(byte_size)                                  as max_bytes,
     max(created_at)                                 as newest
-  from public.market_listings
+  from reporting.market_listings
   group by source_type;
 
+grant select on reporting.market_facets to anon, authenticated;
+create view public.market_facets with (security_invoker = true) as
+  select * from reporting.market_facets;
 grant select on public.market_facets to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -1783,9 +1832,9 @@ drop policy if exists "identities delete" on public.identities;
 create policy "identities read"
   on public.identities for select
   using (
-    public.can_link()
-    or user_id = auth.uid()
-    or wallet = public.current_wallet()
+    (select public.can_link())
+    or user_id = (select auth.uid())
+    or wallet = (select public.current_wallet())
   );
 
 -- The row's wallet has to be the wallet in the token, so a route holding a
@@ -1805,8 +1854,8 @@ create policy "identities update"
 create policy "identities delete"
   on public.identities for delete
   using (
-    (public.can_link() and wallet = public.current_wallet())
-    or user_id = auth.uid()
+    ((select public.can_link()) and wallet = (select public.current_wallet()))
+    or user_id = (select auth.uid())
   );
 
 grant select, insert, update, delete on public.identities to authenticated;
@@ -1834,9 +1883,17 @@ grant select, insert, update, delete on public.identities to authenticated;
 -- a different product with a different consent behind it.
 -- ---------------------------------------------------------------------------
 drop view if exists public.market_activity;
-create view public.market_activity as
+drop view if exists reporting.market_activity;
+create view reporting.market_activity as
   select
-    s.id,
+    -- A digest of the sale id, not the id. The vault and licence contracts
+    -- key each sale on sha256(sale id), next to the contributor's and buyer's
+    -- addresses, so publishing the raw id here would let anyone turn the
+    -- salted ids below back into wallets.
+    left(
+      encode(sha256(convert_to(salt.value || s.id::text, 'UTF8')), 'hex'),
+      16
+    )                          as id,
     left(
       encode(sha256(convert_to(salt.value || s.buyer_wallet, 'UTF8')), 'hex'),
       12
@@ -1863,13 +1920,17 @@ create view public.market_activity as
   order by s.created_at desc
   limit 60;
 
+grant select on reporting.market_activity to anon, authenticated;
+create view public.market_activity with (security_invoker = true) as
+  select * from reporting.market_activity;
 grant select on public.market_activity to anon, authenticated;
 
 -- The same trade, counted. Separate from the feed because a view can be a list
 -- or a total and this product needs both: the strip above the catalogue says
 -- how much has moved, the feed under it says what moved last.
 drop view if exists public.market_pulse;
-create view public.market_pulse as
+drop view if exists reporting.market_pulse;
+create view reporting.market_pulse as
   select
     count(*)                                                   as licences,
     count(distinct buyer_wallet)                               as buyers,
@@ -1881,6 +1942,9 @@ create view public.market_pulse as
   from public.sales
   where channel = 'market';
 
+grant select on reporting.market_pulse to anon, authenticated;
+create view public.market_pulse with (security_invoker = true) as
+  select * from reporting.market_pulse;
 grant select on public.market_pulse to anon, authenticated;
 
 notify pgrst, 'reload schema';

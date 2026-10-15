@@ -98,8 +98,18 @@ function report(bucket: string, detail: string) {
  * may already have put entries into. Behind a proxy that sets neither, every
  * caller shares one bucket — a limit that is too strict rather than absent,
  * which is the right way for this to be wrong.
+ *
+ * The headers are only trusted where something in front of the app sets them:
+ * on Vercel, or behind a proxy named by TRUST_PROXY_HEADERS=true. Anywhere
+ * else they come straight from the client, and a random value per request
+ * would give every request a fresh budget.
  */
+const TRUST_PROXY_HEADERS =
+  !!process.env.VERCEL || process.env.TRUST_PROXY_HEADERS === "true";
+
 function clientAddress(request: Request): string {
+  if (!TRUST_PROXY_HEADERS) return "unknown";
+
   const real = request.headers.get("x-real-ip")?.trim();
   if (real) return real;
 
