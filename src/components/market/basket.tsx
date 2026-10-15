@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/components/dashboard/wallet-provider";
+import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate } from "@/lib/format";
-import { licenseBasket } from "@/lib/market";
+import { fetchTerms, licenseBasket, type LicenceTerms } from "@/lib/market";
 import {
   explorerTxUrl,
   formatAmount,
@@ -26,7 +27,36 @@ import { BuyerProfileForm } from "./buyer-profile";
  * The panel says what the licence is before asking for the signature: the term
  * comes from the consent behind each dataset and cannot outlive it, which is a
  * sentence worth reading *before* paying rather than finding in a receipt.
+ *
+ * It also says what happens if a contributor withdraws consent, as a figure:
+ * what this basket would get back if every receipt in it were revoked
+ * tomorrow. That figure comes from the licence contract's own fee and hold,
+ * read from the contract. Where there is no licence contract the answer is
+ * nothing, and the panel says that instead.
  */
+
+const DAY_MS = 86_400_000;
+
+/**
+ * What the buyer gets back if every receipt in the basket is revoked one day
+ * from now, by the rule in the licence contract: the unused part of each
+ * licence's term, but only while the payment is still held.
+ */
+function refundIfRevokedTomorrow(
+  items: Listing[],
+  asset: PayAsset,
+  terms: LicenceTerms,
+  now: number,
+): number {
+  return items.reduce((sum, item) => {
+    const expires = new Date(item.consent_expires_at).getTime();
+    const term = expires - now;
+    const hold = Math.min(terms.holdSecs * 1000, term);
+    if (term <= DAY_MS || hold <= DAY_MS) return sum;
+    const price = priceOf(item, asset);
+    return sum + (price - Math.floor((price * DAY_MS) / term));
+  }, 0);
+}
 
 type Step = "idle" | "paying" | "done";
 
@@ -61,6 +91,8 @@ export function Basket({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Undefined while loading, null when this asset pays straight into the vault.
+  const [terms, setTerms] = useState<LicenceTerms | null | undefined>(undefined);
   const [receipt, setReceipt] = useState<{
     hash: string;
     licences: number;
@@ -81,6 +113,17 @@ export function Basket({
         : earliest,
     null,
   );
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetchTerms()
+      .then((all) => !cancelled && setTerms(all[asset] ?? null))
+      .catch(() => !cancelled && setTerms(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, asset]);
 
   // Escape closes the sheet, except while a payment is in flight — the wallet
   // has the signature at that point and closing would only hide the outcome.
@@ -257,9 +300,49 @@ export function Basket({
                         resolves on the consent contract.
                       </li>
                       <li>
-                        Your payment lands in the {asset} payout vault; the
-                        contributors claim it from there with their own
-                        signatures.
+                        {terms
+                          ? `Your payment is held by the licence contract for ${Math.round(terms.holdSecs / 86_400)} days, then paid into the ${asset} payout vault, where contributors claim it with their own signatures.`
+                          : `Your payment goes straight into the ${asset} payout vault, where contributors claim it with their own signatures.`}
+                        {terms && terms.feeBps > 0 && (
+                          <> {terms.feeBps / 100}% of the price is Datavar&apos;s fee.</>
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-rule bg-paper-raised/60 p-4">
+                    <h3 className="eyebrow text-ink-faint">If consent is withdrawn</h3>
+                    <ul className="mt-2.5 space-y-1.5 text-[0.8125rem] text-ink-dim">
+                      <li>
+                        Each contributor can withdraw consent before the end
+                        date. Your access to that file ends when they do.
+                      </li>
+                      <li>
+                        {terms === undefined ? (
+                          "Reading the refund terms…"
+                        ) : terms ? (
+                          <>
+                            If every receipt here were withdrawn tomorrow, you
+                            would get back{" "}
+                            <span className="text-ink tabular-nums">
+                              {formatAmount(
+                                refundIfRevokedTomorrow(items, asset, terms, SESSION_NOW),
+                                asset,
+                              )}{" "}
+                              {asset}
+                            </span>
+                            . A withdrawal after the{" "}
+                            {Math.round(terms.holdSecs / 86_400)}-day hold
+                            returns nothing.
+                          </>
+                        ) : (
+                          "There is no refund on this deployment. A withdrawal ends access and the payment stays with the contributor."
+                        )}
+                      </li>
+                      <li>
+                        Files you have already downloaded can&apos;t be
+                        recalled. After a withdrawal, the licence terms govern
+                        what you may do with them, not the protocol.
                       </li>
                     </ul>
                   </div>
