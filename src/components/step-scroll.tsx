@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Plate } from "./night";
+import { useActiveStep } from "./use-active-step";
 
 export type Step = {
   title: string;
@@ -21,12 +22,8 @@ export type Step = {
  * Steps told by scrolling. On a wide screen the drawing for the step in the
  * middle of the viewport stays pinned on the left, under a progress bar, and
  * swaps as the reader moves through the list on the right; a rail between the
- * two marks the place. On anything narrower the pinning would cost more room
- * than it saves, so each step simply carries its own drawing.
- *
- * Which step is active is read from the steps themselves crossing the
- * viewport's middle line, not computed from scroll offsets, so it stays right
- * whatever the steps' heights turn out to be.
+ * two marks the place. On a phone the same stage is pinned across the top,
+ * under the nav, and the steps scroll up beneath it.
  */
 export function StepScroll({
   steps,
@@ -36,58 +33,39 @@ export function StepScroll({
   /** What the progress bar follows through the stages. */
   label?: string;
 }) {
-  const [active, setActive] = useState(0);
-  const items = useRef<(HTMLLIElement | null)[]>([]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActive(Number((entry.target as HTMLElement).dataset.i));
-          }
-        }
-      },
-      // A zero-height band across the middle: exactly one step is in it.
-      { rootMargin: "-50% 0px -50% 0px" },
-    );
-    for (const item of items.current) if (item) observer.observe(item);
-    return () => observer.disconnect();
-  }, []);
-
-  const goTo = (i: number) => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    items.current[i]?.scrollIntoView({
-      block: "center",
-      behavior: reduced ? "auto" : "smooth",
-    });
-  };
+  const { active, items, stage, goTo } = useActiveStep<HTMLLIElement>();
 
   const plate = (step: Step) => (
     <Plate
       fig={step.fig}
       tag={step.tag}
+      // Dropped on a phone, where the pinned stage has to leave room for
+      // the step under it.
       caption={
         <>
-          <span>{step.caption[0]}</span>
-          <span>{step.caption[1]}</span>
+          <span className="max-sm:hidden">{step.caption[0]}</span>
+          <span className="max-sm:hidden">{step.caption[1]}</span>
         </>
       }
-      bodyClassName="px-3 py-2 sm:px-6"
+      bodyClassName="px-3 py-1 sm:px-6 sm:py-2"
     >
       {step.figure}
     </Plate>
   );
 
   return (
-    <div className="mt-20 grid gap-8 lg:mt-28 lg:grid-cols-[minmax(0,1.2fr)_2.5rem_minmax(0,1fr)]">
-      {/* The pinned stage. */}
-      <div className="hidden lg:block">
-        <div className="sticky top-24">
+    <div className="mt-20 grid lg:mt-28 lg:grid-cols-[minmax(0,1.2fr)_2.5rem_minmax(0,1fr)] lg:gap-8">
+      {/* The pinned stage: across the top on a phone, opaque so the steps
+          pass under it, with a short fade where they disappear. */}
+      <div
+        ref={stage}
+        className="sticky top-16 z-10 -mx-6 bg-night px-6 pt-4 pb-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-10 after:bg-gradient-to-b after:from-night after:to-transparent lg:static lg:z-auto lg:mx-0 lg:bg-transparent lg:p-0 lg:after:hidden"
+      >
+        <div className="lg:sticky lg:top-24">
           <ProgressBar steps={steps} active={active} label={label} />
           {/* Every drawing occupies the same cell, so the stage is as tall
               as the tallest and nothing jumps when they swap. */}
-          <div className="mt-5 grid">
+          <div className="mt-3 grid lg:mt-5">
             {steps.map((step, i) => (
               <div
                 key={step.fig}
@@ -150,12 +128,10 @@ export function StepScroll({
               items.current[i] = el;
             }}
             data-i={i}
-            className={`flex flex-col justify-center py-10 transition-opacity duration-500 lg:min-h-[78vh] lg:py-0 ${
-              i === active ? "" : "lg:opacity-25"
+            className={`flex flex-col justify-center py-12 transition-opacity duration-500 lg:min-h-[78vh] lg:py-0 ${
+              i === active ? "" : "opacity-25"
             }`}
           >
-            <div className="mb-8 lg:hidden">{plate(step)}</div>
-
             <button
               type="button"
               onClick={() => goTo(i)}

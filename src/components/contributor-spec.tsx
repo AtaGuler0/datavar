@@ -114,11 +114,15 @@ export function ContributorSpec() {
           {TERMS.map((term, i) => (
             <div
               key={term.key}
-              className={`border-line py-6 pr-4 lg:border-l lg:py-7 lg:pl-6 lg:first:border-l-0 lg:first:pl-0 ${
+              className={`border-line px-2 py-6 text-center sm:px-0 sm:pr-4 sm:text-left lg:border-l lg:py-7 lg:pl-6 lg:first:border-l-0 lg:first:pl-0 ${
                 i < TERMS.length - 1 ? "border-b lg:border-b-0" : ""
+              } ${
+                // Two to a row on a phone leaves the fifth alone: it takes
+                // the whole row, so it sits in the middle.
+                i === TERMS.length - 1 ? "max-sm:col-span-2" : ""
               }`}
             >
-              <dt className="flex items-center gap-2.5 font-mono text-[0.75rem] tracking-[0.12em] text-star-faint uppercase">
+              <dt className="flex items-center justify-center gap-2.5 font-mono text-[0.75rem] tracking-[0.12em] text-star-faint uppercase sm:justify-start">
                 <span className="text-star-ghost">{String(i + 1).padStart(2, "0")}</span>
                 {term.key}
               </dt>

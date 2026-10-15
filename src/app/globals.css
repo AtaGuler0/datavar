@@ -90,6 +90,13 @@ body {
   background-color: var(--color-night);
   color: var(--color-star);
   -webkit-font-smoothing: antialiased;
+  /* No grey box flashed over whatever a finger taps. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A click or a tap leaves no ring behind; the keyboard still gets one. */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Inside the app panel (components/app-shell.tsx) the ground is a step up

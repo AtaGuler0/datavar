@@ -52,8 +52,10 @@ export function SiteFooter() {
   return (
     <footer className="overflow-hidden border-t border-line bg-night">
       <div className="mx-auto max-w-6xl px-6 pt-16 pb-10">
-        <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
-          <div>
+        {/* Centred on a phone, where the columns don't fill the width;
+            split left and right from sm up. */}
+        <div className="flex flex-col items-center gap-10 text-center sm:items-stretch sm:text-left md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col items-center sm:block">
             <Logo />
             <p className="mt-4 max-w-xs text-sm text-pretty text-star-dim">
               The consented data layer for AI.
@@ -89,7 +91,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-line pt-6 font-mono text-xs text-star-faint sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col items-center gap-3 border-t border-line pt-6 text-center font-mono text-xs text-star-faint sm:flex-row sm:justify-between sm:text-left">
           <p>
             © {new Date().getFullYear()} Datavar Labs
             <span aria-hidden="true" className="mx-3 text-star-ghost">

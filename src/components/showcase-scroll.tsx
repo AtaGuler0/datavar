@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Arrow } from "./night";
+import { useActiveStep } from "./use-active-step";
 
 export type Showcase = {
   /** The tab's name, and the label over the step. */
@@ -18,7 +19,8 @@ export type Showcase = {
  * and the right column holds a row of tabs over one large screen, pinned
  * while the reader moves through them. The step crossing the middle of the
  * viewport picks the tab and the screen; a tab can be clicked to jump to its
- * step. On anything narrower each step carries its own screen under its text.
+ * step. On a phone the tabs and a shorter screen are pinned across the top,
+ * under the nav, and the steps scroll up beneath them.
  */
 export function ShowcaseScroll({
   items,
@@ -28,39 +30,12 @@ export function ShowcaseScroll({
   /** Set under the last step, on the left. */
   action?: ReactNode;
 }) {
-  const [active, setActive] = useState(0);
-  const steps = useRef<(HTMLLIElement | null)[]>([]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActive(Number((entry.target as HTMLElement).dataset.i));
-          }
-        }
-      },
-      // A zero-height band across the middle: exactly one step is in it.
-      { rootMargin: "-50% 0px -50% 0px" },
-    );
-    for (const step of steps.current) if (step) observer.observe(step);
-    return () => observer.disconnect();
-  }, []);
-
-  const goTo = (i: number) => {
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    steps.current[i]?.scrollIntoView({
-      block: "center",
-      behavior: reduced ? "auto" : "smooth",
-    });
-  };
+  const { active, items: steps, stage, goTo } = useActiveStep<HTMLLIElement>();
 
   return (
     <>
-      <div className="mt-20 grid gap-10 lg:mt-24 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-14">
-        <ol>
+      <div className="mt-16 grid lg:mt-24 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-14">
+        <ol className="order-2 lg:order-none">
           {items.map((item, i) => (
             <li
               key={item.tab}
@@ -68,8 +43,8 @@ export function ShowcaseScroll({
                 steps.current[i] = el;
               }}
               data-i={i}
-              className={`flex flex-col justify-center py-10 transition-opacity duration-500 lg:min-h-[72vh] lg:py-0 ${
-                i === active ? "" : "lg:opacity-25"
+              className={`flex flex-col justify-center py-12 transition-opacity duration-500 lg:min-h-[72vh] lg:py-0 ${
+                i === active ? "" : "opacity-25"
               }`}
             >
               <p className="font-mono text-[0.8125rem] tracking-[0.1em] text-star-dim uppercase">
@@ -97,20 +72,21 @@ export function ShowcaseScroll({
               {action && i === items.length - 1 && (
                 <div className="mt-10 hidden lg:block">{action}</div>
               )}
-
-              {/* As tall as the screen's own content: a fixed frame left
-                  most of a phone's screen empty under the shorter ones. */}
-              <div className="mt-8 lg:hidden">{item.screen}</div>
             </li>
           ))}
         </ol>
 
-        <div className="hidden lg:block">
-          <div className="sticky top-24">
+        {/* The pinned stage: across the top on a phone, opaque so the steps
+            pass under it, with a short fade where they disappear. */}
+        <div
+          ref={stage}
+          className="sticky top-16 z-10 order-1 -mx-6 bg-night px-6 pt-4 pb-3 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-10 after:bg-gradient-to-b after:from-night after:to-transparent lg:static lg:z-auto lg:order-none lg:mx-0 lg:bg-transparent lg:p-0 lg:after:hidden"
+        >
+          <div className="lg:sticky lg:top-24">
             <div
               role="tablist"
               aria-label="Screens"
-              className="grid grid-cols-4 gap-3"
+              className="grid grid-cols-4 gap-2 sm:gap-3"
             >
               {items.map((item, i) => (
                 <button
@@ -119,7 +95,7 @@ export function ShowcaseScroll({
                   role="tab"
                   aria-selected={i === active}
                   onClick={() => goTo(i)}
-                  className={`border-t-2 pt-3 text-left font-mono text-[0.75rem] tracking-[0.1em] uppercase transition-colors duration-300 ${
+                  className={`border-t-2 pt-3 text-left font-mono text-[0.625rem] tracking-[0.06em] uppercase sm:text-[0.75rem] sm:tracking-[0.1em] transition-colors duration-300 ${
                     i === active
                       ? "border-star text-star"
                       : "border-line-strong text-star-faint hover:text-star-dim"
@@ -132,8 +108,9 @@ export function ShowcaseScroll({
 
             {/* Every screen occupies the same cell, so nothing jumps when they
               swap. Sized to the viewport so the frame never runs under the
-              fold while it is pinned. */}
-            <div className="mt-5 grid h-[min(34rem,calc(100vh-15rem))]">
+              fold while it is pinned, and on a phone leaves the lower half
+              for the text. */}
+            <div className="mt-3 grid h-[min(22rem,42svh)] lg:mt-5 lg:h-[min(34rem,calc(100vh-15rem))]">
               {items.map((item, i) => (
                 <div
                   key={item.tab}
@@ -149,7 +126,7 @@ export function ShowcaseScroll({
               ))}
             </div>
 
-            <p className="mt-3 text-right font-mono text-[0.6875rem] text-star-ghost">
+            <p className="mt-3 hidden text-right font-mono text-[0.6875rem] text-star-ghost lg:block">
               Sample data · Stellar testnet
             </p>
           </div>

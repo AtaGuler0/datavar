@@ -111,6 +111,43 @@ export function Earnings({
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
 
+  /** The total and the line under it, set large in the right column and
+   *  smaller under the slider on a phone. */
+  const estimate = (big: boolean) => (
+    <>
+      <p className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase">
+        Estimate · if each sells once
+      </p>
+      {priced ? (
+        <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${big ? "mt-4" : "mt-3"}`}>
+          <p
+            className={`font-medium tracking-[-0.055em] text-star tabular-nums ${
+              big ? "text-6xl sm:text-[5.5rem] sm:leading-none" : "text-5xl leading-none"
+            }`}
+          >
+            {shown.toFixed(2)}
+          </p>
+          <span className="rounded-full border border-line-strong px-3 py-1 font-mono text-sm text-star-dim">
+            USDC
+          </span>
+        </div>
+      ) : (
+        <p
+          className={`font-medium tracking-[-0.055em] text-star-ghost ${
+            big ? "mt-4 text-6xl sm:text-[5.5rem] sm:leading-none" : "mt-3 text-5xl leading-none"
+          }`}
+        >
+          —
+        </p>
+      )}
+      <p className={`font-mono text-xs text-star-faint ${big ? "mt-4" : "mt-3"}`}>
+        {priced
+          ? `${selected.length} source${selected.length === 1 ? "" : "s"} · ${datasetsEach} dataset${datasetsEach === 1 ? "" : "s"} each · from testnet sales`
+          : "no settled sales to average yet"}
+      </p>
+    </>
+  );
+
   /** A source's average, or a dash when nothing in that category has sold. */
   const rateLabel = (id: string) =>
     avgStroopsBySource[id] ? `${toUsdc(avgStroopsBySource[id]).toFixed(2)} USDC` : "—";
@@ -178,7 +215,13 @@ export function Earnings({
                 <span>10</span>
               </div>
 
-              <div className="mt-10 flex items-baseline justify-between">
+              {/* On a phone the total answers the slider straight under it,
+                  and the chart that explains it waits for a wider screen. */}
+              <div className="mt-8 border-t border-line pt-6 sm:hidden">
+                {estimate(false)}
+              </div>
+
+              <div className="mt-8 flex items-baseline justify-between sm:mt-10">
                 <p className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase">
                   Sources
                 </p>
@@ -196,7 +239,7 @@ export function Earnings({
                         role="switch"
                         aria-checked={active}
                         onClick={() => toggle(source.id)}
-                        className="group flex w-full items-center gap-3.5 py-2.5 text-left"
+                        className="group flex w-full items-center gap-3.5 py-2 text-left sm:py-2.5"
                       >
                         <span
                           className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200 ${
@@ -229,32 +272,14 @@ export function Earnings({
                 Paid out in <span className="text-star-dim">USDC</span>, claimed
                 from the payout contract
               </p>
+              <PillLink href="/dashboard" className="mt-5 sm:hidden">
+                Claim your payout
+              </PillLink>
             </div>
 
             {/* Right: the number, and how it's built */}
-            <div className="flex min-w-0 flex-col border-t border-line p-5 pt-7 sm:p-8 lg:border-t-0">
-              <p className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase">
-                Estimate · if each sells once
-              </p>
-              {priced ? (
-                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <p className="text-6xl font-medium tracking-[-0.055em] text-star tabular-nums sm:text-[5.5rem] sm:leading-none">
-                    {shown.toFixed(2)}
-                  </p>
-                  <span className="rounded-full border border-line-strong px-3 py-1 font-mono text-sm text-star-dim">
-                    USDC
-                  </span>
-                </div>
-              ) : (
-                <p className="mt-4 text-6xl font-medium tracking-[-0.055em] text-star-ghost sm:text-[5.5rem] sm:leading-none">
-                  —
-                </p>
-              )}
-              <p className="mt-4 font-mono text-xs text-star-faint">
-                {priced
-                  ? `${selected.length} source${selected.length === 1 ? "" : "s"} · ${datasetsEach} dataset${datasetsEach === 1 ? "" : "s"} each · from testnet sales`
-                  : "no settled sales to average yet"}
-              </p>
+            <div className="hidden min-w-0 flex-col border-t border-line p-8 sm:flex lg:border-t-0">
+              {estimate(true)}
 
               <div className="mt-8 flex-1">
                 {priced && selected.length > 0 ? (
@@ -278,8 +303,7 @@ export function Earnings({
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
                 <p className="font-mono text-[0.6875rem] text-star-faint">
-                  <span className="hidden sm:inline">Hover a column · ruled in tenths of the total</span>
-                  <span className="sm:hidden">Ruled in tenths of the total</span>
+                  Hover a column · ruled in tenths of the total
                 </p>
                 <PillLink href="/dashboard">Claim your payout</PillLink>
               </div>
