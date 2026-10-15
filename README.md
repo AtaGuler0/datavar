@@ -1,97 +1,121 @@
 # datavar.xyz
 
-Your data already trains AI models. You just never see a cent of it.
+Your data already trains AI models, and you are not paid for it.
 
-Datavar is our attempt to fix that. We are building a data protocol where people contribute data on their own terms and get paid when it gets used. Every record carries a signed consent receipt, so an AI team licensing a dataset knows exactly who agreed to what, for which purpose, and until when. Nothing in it is scraped or pulled from some legal gray area.
+Datavar is a data protocol where people contribute data on their own terms and get paid when it is used. Every record carries a signed consent receipt, so an AI team licensing a dataset knows who agreed to what, for which purpose, and until when. Nothing in it is scraped.
 
-Two pieces of that protocol are live on Stellar testnet, both in
-[`contracts/`](contracts/README.md): a Soroban contract that holds consent
-receipts as ledger state, and a payout vault that holds contributor earnings
-until the contributor's own signature moves them out. The buy side runs on the
-same two contracts — see [the marketplace](#the-marketplace) below.
+The protocol is three Soroban contracts, all in
+[`contracts/`](contracts/README.md). Two are deployed on Stellar testnet: a
+consent contract that holds receipts as ledger state, and a payout vault that
+holds contributor earnings until the contributor signs to move them out. The
+third, a licence contract, is written and tested but not deployed. The three
+have 66 tests between them (consent 19, payout 28, licence 19). The buy side
+runs on the two deployed contracts; see [the marketplace](#the-marketplace)
+below.
 
-## Why a protocol and not just a marketplace
+## Why a protocol
 
-A marketplace can sell you a dataset. It can't prove consent, and it can't revoke access when consent expires. We want consent, licensing terms, and payouts to live at the record level, enforced by the protocol rather than by a PDF nobody reads. That's the part we think is actually hard, and the part worth building.
+A marketplace can sell a dataset, but on its own it can't prove consent or cut off access when consent expires. We want consent, licensing terms and payouts attached to each record and enforced by contracts, instead of by a terms PDF that nobody reads. We think that is the hard part, and it is the part we are building.
 
 ## Consent receipts on Stellar
 
-A receipt says who allowed which dataset to be used by whom, for what purpose,
-and until when. It lives in contract state rather than in our database, which is
-the whole argument: a buyer can check a receipt without an account with us, and
-revoking one ends it somewhere we cannot quietly edit. Two rules are enforced by
-the contract rather than by policy — consent always has an end date, and only the
-contributor who granted it can withdraw it.
+A receipt records who allowed which dataset to be used by whom, for what
+purpose, and until when. It is stored in contract state on Stellar, so a buyer
+can check it without an account with us, and a revocation is recorded somewhere
+we cannot quietly edit. The contract enforces two rules: consent always has an
+end date, and only the contributor who granted it can withdraw it.
 
 Deploy your own or point at the existing testnet deployment, then set
 `NEXT_PUBLIC_CONSENT_CONTRACT_ID`. Grant and revoke from
-`/dashboard/data`; the signature comes from the contributor's wallet, and
-nothing on the server can sign in their place. Full instructions, the contract's
+`/dashboard/data`; the signature comes from the contributor's wallet, and the
+server cannot sign in their place. Full instructions, the contract's
 interface, and how to query it yourself are in
 [`contracts/README.md`](contracts/README.md).
 
+To check the numbers we report, [`metrics/compute.mjs`](metrics/README.md)
+computes on-chain metrics from contract events alone and leaves out the 120
+wallets our load-test bot generated (listed in `metrics/excluded-wallets.txt`).
+
 ## The marketplace
 
-`/market` is the demand side, and it is built out of the consent contract
-rather than beside it. A dataset is listed for sale when its contributor grants
-consent to the marketplace address (`NEXT_PUBLIC_MARKET_ADDRESS`), which makes
-delisting a revoke and makes every listing checkable against the ledger by
-someone who does not trust us.
+`/market` is the demand side, and it is built on the consent contract. A
+dataset is listed for sale when its contributor grants consent to the
+marketplace address (`NEXT_PUBLIC_MARKET_ADDRESS`). Delisting is a revoke, and
+anyone who does not trust us can check every listing against the ledger.
 
-What a buyer sees is deliberately thin: the category, the format, the size, when
-it was contributed, the consent behind it and the price. No title, no
-description, no contributor address — those are what someone wrote in their own
-dashboard about a file from their own life, and buying attributes is enough to
-buy a cohort. Filters run in Postgres against `market_listings`, so a catalogue
-of any size narrows in one query.
+A buyer sees the category, the format, the size, when it was contributed, the
+consent behind it and the price. Titles, descriptions and contributor addresses
+are hidden. Contributors write those in their own dashboard about files from
+their own lives, and a buyer only needs the attributes to buy a cohort. Filters
+run in Postgres against `market_listings`, so a catalogue of any size narrows
+in one query.
 
-Paying is one signature for the whole basket: the buyer calls `fund` on the
-payout vault, their own money into the same contract every contributor claims
-from. The server checks the transaction it is about to relay — right function,
-right signer, exact total — and re-reads every consent receipt on-chain before
-it writes a licence. A licence expires when the consent behind it does, and
-storage enforces that: the bucket hands a buyer their file for exactly as long
-as the receipt holds.
+Paying takes one signature for the whole basket. On the live deployment the
+buyer calls `fund` on the payout vault, so their money goes into the same
+contract every contributor claims from. Before relaying the transaction, the
+server checks that it calls the right function, is signed by the right
+account and pays the exact total, and it re-reads every consent receipt
+on-chain before it writes a licence. A licence expires when the consent behind
+it does, and storage enforces that: the bucket serves a buyer their file only
+while the receipt holds.
 
-Prices are not typed by anyone. `internal.list_price` computes them from the
-source type and the size, a trigger applies it on every insert, and only an
-operator can override a single row.
+The licence contract in `contracts/contracts/licence` changes where the money
+goes first. When `NEXT_PUBLIC_LICENCE_CONTRACT_ID` (or
+`NEXT_PUBLIC_LICENCE_USDC_CONTRACT_ID`) is set, a purchase pays into that
+contract instead of the vault. It holds the money for a hold period (planned at
+7 days, or until the receipt expires if that is sooner) and takes a protocol
+fee (planned at 10%). If the contributor revokes during the hold, the buyer is
+refunded the unused share of the term. After the hold, the contributor's share
+is credited into the payout vault and the fee goes to the treasury, and a
+revocation from then on refunds nothing. Without either variable, purchases pay
+straight into the vault with no fee and no refund. That is how datavar.xyz
+works today.
 
-Two currencies, two vaults. A basket is paid in XLM or in USDC, the buyer
-picks at the top of the catalogue, and the choice decides three things at once:
-which price list the basket is read against, which vault the money lands in,
-and which vault the contributor later claims from. The vaults are two
-deployments of the same contract — its token is fixed at construction, so an
-asset is a deployment rather than a setting — and they share nothing: separate
-balances, separate credited references, separate operator sets.
+Before the buyer pays, checkout says that a contributor can withdraw before
+the end date and that access ends then, how much a withdrawal tomorrow would
+refund, that a withdrawal after the hold returns nothing, and that downloaded
+files can't be recalled and are governed by the licence terms from then on.
+On a deployment without the licence contract it says there is no refund.
 
-The USDC list is a second list rather than a conversion: the XLM rates at 0.25
-USD per XLM, fixed when they were written. Nothing here holds a price feed, and
-a marketplace that repriced itself from one would have to answer what a
-checkout does when the oracle is stale. Two published lists answer it by not
-asking. The cost is stated in `internal.list_price_usdc`: when XLM moves, one
-list is the cheaper way to buy the same file, and that is the day to put a
-quote engine there.
+Nobody types a price. `internal.list_price` computes it from the source type
+and the size, a trigger applies it on every insert, and only an operator can
+override a single row.
+
+There are two currencies and two vaults. A basket is paid in XLM or in USDC.
+The buyer picks one at the top of the catalogue, and the choice decides which
+price list the basket is read against, which vault the money lands in, and
+which vault the contributor later claims from. The vaults are two deployments
+of the same contract. Its token is fixed at construction, so each asset needs
+its own deployment, and the two share nothing: balances, credited references
+and operator sets are all separate.
+
+The USDC prices are a separate list, written by rating XLM at 0.25 USD and
+fixed at that point. There is no price feed. A marketplace that repriced itself
+from one would have to decide what checkout does when the oracle is stale, and
+two published lists avoid the question. The cost is noted in
+`internal.list_price_usdc`: when XLM moves, one list becomes the cheaper way to
+buy the same file, and at that point a quote engine belongs there.
 
 ## What gets in
 
-Uploads are checked before they happen, in the contributor's browser
-([`src/lib/scan`](src/lib/scan)). It reads the file's own header and measures
-the image: a generator that named itself in the metadata, a Stable Diffusion
-prompt block, an IPTC field declaring synthetic media, a screenshot, a blank, an
-empty export, the same file twice. Anything it refuses is never uploaded — the
-bytes stay on the machine they came from.
+Uploads are checked in the contributor's browser before they happen
+([`src/lib/scan`](src/lib/scan)). The scanner reads the file's own header and
+measures the image. It looks for a generator that named itself in the
+metadata, a Stable Diffusion prompt block, an IPTC field declaring synthetic
+media, a screenshot, a blank image, an empty export, or the same file twice. A
+file it refuses is never uploaded, and the bytes stay on the contributor's
+machine.
 
-It claims only what it checks. There is no AI-image detector in it, because a
-browser cannot honestly run one; what it finds are files that *declare* how they
-were made. A generated image with its metadata stripped gets in, and every
-sentence in the interface says so.
+The scanner only reports what it can check. There is no AI-image detector in
+it, because a browser cannot run one reliably. It finds files that *declare*
+how they were made. A generated image with its metadata stripped gets in, and
+the interface says so.
 
-The verdict lands on the row (`quality`), and the catalogue drops anything
-flagged. Rows filed before the scanner existed say `unscanned`, stay listed, and
-are marked as such — buyers can filter them out, and their contributor can
-recheck them from `/dashboard/data` (they hold the file; nobody else, operators
-included, can read it).
+The verdict is stored on the row (`quality`), and the catalogue drops anything
+flagged. Rows filed before the scanner existed are marked `unscanned` and stay
+listed with that label. Buyers can filter them out, and their contributor can
+recheck them from `/dashboard/data`. Only the contributor can do this, because
+nobody else can read the file, operators included.
 
 ## Running locally
 
@@ -113,66 +137,63 @@ to run the landing page and the contributor dashboard; the rest turns on
 payouts and the admin panel.
 
 Run `supabase/schema.sql` in the Supabase SQL editor to create the tables,
-policies and storage bucket. It's idempotent — re-run it after pulling changes
-that add to it. Row-level security is on and keyed to the signed-in wallet, so
-the dashboard shows nothing until sign-in is configured (below).
+policies and storage bucket. It is idempotent, so re-run it after pulling
+changes that add to it. Row-level security is on and keyed to the signed-in
+wallet, so the dashboard shows nothing until sign-in is configured (below).
 
 ### Wallet sign-in
 
-Connecting a wallet only asks it what address it holds; anyone can claim any
-address. Signing in makes it prove it: the server issues a
-[SEP-10](https://stellar.org/protocol/sep-10) challenge — a transaction built
-on sequence 0, which no network will ever accept — the wallet signs it, and the
-server mints a session token carrying the proved address.
+Connecting a wallet only asks it which address it holds, and anyone can claim
+any address. Signing in proves it. The server issues a
+[SEP-10](https://stellar.org/protocol/sep-10) challenge, a transaction built on
+sequence 0 that no network will accept. The wallet signs it, and the server
+mints a session token carrying the proved address.
 
-That token is a JWT Supabase accepts, which is the point of it. Row-level
-security reads the wallet out of the token, so the database refuses to hand
-over someone else's rows rather than trusting this code to filter. A stranger
-holding the anon key reaches three aggregate views and nothing else: no dataset
-row, no sale row, no file.
+The token is a JWT that Supabase accepts. Row-level security reads the wallet
+out of the token, so the database itself refuses to return someone else's rows
+and does not rely on this code to filter them. Someone holding only the anon
+key can reach three aggregate views and nothing else: no dataset row, no sale
+row, no file.
 
 Two server-side secrets make it work:
 
-1. `STELLAR_AUTH_SECRET` — the key that signs challenges. Never funded, holds
-   nothing; generate one with `stellar keys generate datavar-auth` and read it
-   back with `stellar keys show datavar-auth`.
-2. `SUPABASE_JWT_SECRET` — Supabase → Project Settings → API Keys → JWT Keys,
+1. `STELLAR_AUTH_SECRET`: the key that signs challenges. It is never funded and
+   holds nothing. Generate one with `stellar keys generate datavar-auth` and read
+   it back with `stellar keys show datavar-auth`.
+2. `SUPABASE_JWT_SECRET`: Supabase → Project Settings → API Keys → JWT Keys,
    listed as **Legacy JWT Secret** (older projects: Settings → API → JWT
    Settings). It is the same secret that signs the anon key, so if the anon
    key's header decodes to `HS256`, this is the one. Treat it like a password:
    anyone holding it can mint a session for any wallet.
 
-   Should the project ever move to asymmetric signing keys and revoke the
-   legacy secret, this stops working — Supabase keeps the private half of an
-   asymmetric key. The migration is to publish a JWKS endpoint, register it
-   under Third-Party Auth, and sign with our own key in `src/lib/auth/jwt.ts`.
+   If the project moves to asymmetric signing keys and revokes the legacy
+   secret, this stops working, because Supabase keeps the private half of an
+   asymmetric key. The fix is to publish a JWKS endpoint, register it under
+   Third-Party Auth, and sign with our own key in `src/lib/auth/jwt.ts`.
 
-Operators are named in `ADMIN_WALLETS`, server-side. The browser is told whether
-it is an operator, inside the signed token, and never gets to decide — and the
-same claim is checked again by row-level security on every query the panel
-makes.
+Operators are named in `ADMIN_WALLETS`, server-side. The signed token tells the
+browser whether it is an operator, and the browser never decides this itself.
+Row-level security checks the same claim again on every query the panel makes.
 
 ### Google sign-in
 
-A wallet is still the identity: a dataset is owned by an address, a payout is
-addressed to one, a receipt names one. Google is a second door to the same
-wallet, not a way to do without one.
+The wallet is still the identity. Datasets are owned by an address, payouts go
+to an address, and receipts name one. Google sign-in is a second way into the
+same wallet account and does not replace the wallet.
 
-It is attached once. Sign in with Google, connect the wallet, sign the SEP-10
-challenge — both proofs arrive in the same request, and `public.identities`
-records that the account and the address belong together. After that the Google
-session alone is traded at `/api/auth/google` for exactly the token a signature
-would have produced, which is what makes the second visit a click instead of a
-browser extension.
+You link the two once: sign in with Google, connect the wallet and sign the
+SEP-10 challenge. Both proofs arrive in the same request, and
+`public.identities` records that the account and the address belong together.
+After that, `/api/auth/google` exchanges the Google session alone for the same
+token a signature would have produced, so a returning visit is one click and
+doesn't need the browser extension.
 
-What it deliberately cannot do is sign. The server holds no key, before this
-and after it, so granting consent, funding a purchase and claiming a payout all
-still ask the wallet — `canSign` in the wallet context is false until one is
-connected, and every surface that spends money reads it before offering a
-button. Signing in with Google gets you to your data; it does not spend your
-money.
+Google sign-in cannot sign transactions. The server holds no key, so granting
+consent, funding a purchase and claiming a payout all still go through the
+wallet. `canSign` in the wallet context is false until a wallet is connected,
+and every screen that spends money checks it before showing a button.
 
-Turning it on is three steps in two dashboards, and no new environment
+Setup takes three steps across two dashboards and no new environment
 variables:
 
 1. Google Cloud Console → APIs & Services → Credentials → OAuth client ID, type
@@ -185,51 +206,53 @@ variables:
    deployed origin to **Redirect URLs**. The browser comes back to
    `/auth/callback` on whichever origin it left from.
 
-The Google session is verified server-side against the same
-`SUPABASE_JWT_SECRET` the wallet sessions are signed with, so the asymmetric-key
-caveat above applies to both. The two token kinds are told apart by issuer —
-see `src/lib/auth/google.ts`, which refuses one of ours wearing the other's hat.
+The server verifies the Google session against the same `SUPABASE_JWT_SECRET`
+that signs wallet sessions, so the asymmetric-key caveat above applies to both.
+`src/lib/auth/google.ts` tells the two token kinds apart by issuer and rejects
+a token of one kind presented as the other.
 
 ### Payouts on testnet
 
-Earnings are held in a Soroban contract on testnet and leave it only on the
-contributor's own signature. Sales reach it two ways: a buyer paying for a
-licence at `/market`, or an operator recording one by hand. To turn it on:
+Earnings are held in a Soroban contract on testnet and leave it only when the
+contributor signs. Sales reach it in two ways: a buyer paying for a licence at
+`/market`, or an operator recording one by hand. To turn it on:
 
-1. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID` — the
+1. Deploy the payout contract and set `NEXT_PUBLIC_PAYOUT_CONTRACT_ID`. The
    command is in `.env.example`, and the contract's interface is in
    [`contracts/README.md`](contracts/README.md).
 2. Put your own wallet address in `ADMIN_WALLETS` (comma-separated for more
    than one) to get into `/admin`.
-3. Let those wallets credit. The contract keeps its own list — `ADMIN_WALLETS`
-   opens the panel, the contract decides whose signature it takes — and the
-   vault card manages it: the contract's admin can add or remove any wallet
-   there, up to ten. Each one needs a few test XLM for fees and nothing more.
+3. Let those wallets credit. `ADMIN_WALLETS` opens the panel, but the contract
+   keeps its own list of whose signatures it accepts, and the vault card
+   manages that list: the contract's admin can add or remove wallets there, up
+   to ten. Each one needs a few test XLM for fees and nothing more.
 4. Put test XLM into the vault by calling `fund` from any funded key. There is
-   no button for this: the server holds no money and cannot move any.
+   no button for this, because the server holds no money and cannot move any.
 
-Then sell a dataset — from `/market` as a buyer, or from `/admin` by hand on
-the Datasets page or as a random round on the Sales page — and claim it from
-`/dashboard/earnings`. Selling
-credits the sale into the vault in the same step, which takes one signature from
-the operator's wallet; the vault card credits anything left over. The claim
-returns a transaction hash that resolves on
-[stellar.expert](https://stellar.expert/explorer/testnet).
+Then sell a dataset, either from `/market` as a buyer or from `/admin` by hand
+(on the Datasets page, or as a random round on the Sales page), and claim it
+from `/dashboard/earnings`. Selling credits the sale into the vault in the same
+step, which takes one signature from the operator's wallet; the vault card
+credits anything left over. The claim returns a transaction hash that resolves
+on [stellar.expert](https://stellar.expert/explorer/testnet).
 
-There is no server-held Stellar key anywhere in this. Crediting was the last
-thing the server signed, and it now goes through the operator's wallet like
-every other call — so a deployment needs no key material to run the payout side,
-and a compromised server has none to leak.
+The earnings page shows each sale as the price minus the protocol fee minus any
+refund. Without the licence contract both are zero, so for every sale so far
+the contributor has been credited the full price.
 
-What the server can and cannot do is worth stating plainly. It can read the
-ledger, prepare transactions for other people to sign, and keep our copy of what
-happened. That is the entire list. It cannot credit a sale, pay a contributor,
-pay itself, take a credit back, or move funds into or out of the vault — every
-one of those needs a signature it has no key to produce, and the contract pays
-the address that signed the call. The
-database is still ours to write, so marking a sale settled needs a `settle`
-claim that only the claim route mints, for two minutes at a time; but a wrong
-row there changes bookkeeping, not who gets paid.
+The server holds no Stellar key for any of this. Crediting was the last thing
+it signed, and that now goes through the operator's wallet like every other
+call. A deployment needs no key material to run the payout side, and a
+compromised server has none to leak.
+
+The server can read the ledger, prepare transactions for other people to sign,
+and keep our copy of what happened, and that is all. It cannot credit a sale,
+pay a contributor, pay itself, take a credit back, or move funds into or out of
+the vault. Each of those needs a signature it has no key to produce, and the
+contract pays the address that signed the call. The database is still ours to
+write, so marking a sale settled needs a `settle` claim that only the claim
+route mints, valid for two minutes at a time. A wrong row there changes the
+bookkeeping but cannot change who gets paid.
 
 ## Stack
 
@@ -239,13 +262,13 @@ The App Router entry lives in `src/app`, and each landing page section (hero, st
 
 ### Why package.json has an `overrides` block
 
-`@creit.tech/stellar-wallets-kit` depends on adapters for chains this product does not use — Trezor, WalletConnect, Ledger, and through Reown a further tree reaching Solana, NEAR and Coinbase. They are ordinary dependencies rather than optional ones, so installing the kit installs all of them, and most of the advisories `npm audit` reports come from there rather than from anything we call.
+`@creit.tech/stellar-wallets-kit` depends on adapters for chains this product does not use: Trezor, WalletConnect, Ledger, and, through Reown, a further tree reaching Solana, NEAR and Coinbase. They are ordinary dependencies, not optional ones, so installing the kit installs all of them, and most of the advisories `npm audit` reports come from that tree and not from code we call.
 
-Nothing in that tree is shipped. The kit is imported per module, and this app loads four: Freighter, xBull, Albedo and Lobstr. Grepping a production build for the rest finds nothing in either the client chunks or the server output.
+None of that tree ships. The kit is imported per module, and this app loads four: Freighter, xBull, Albedo and Lobstr. Grepping a production build for the rest finds nothing in the client chunks or the server output.
 
-The pins are still worth having. `axios` is the one that matters — it arrives under our own `@stellar/stellar-sdk`, it is in the server build, and it is what talks to Horizon and the Soroban RPC. The rest (`protobufjs`, `nanoid`, `ip-address`, `uuid`) are pinned to keep the audit readable, so a real advisory is not lost among a page of unreachable ones.
+We pin some of it anyway. `axios` matters most: it comes in under our own `@stellar/stellar-sdk`, it is in the server build, and it talks to Horizon and the Soroban RPC. The others (`protobufjs`, `nanoid`, `ip-address`, `uuid`) are pinned to keep the audit output short enough that a real advisory stands out.
 
-`elliptic` is the one that stays. Every version is affected and there is no fixed release, so the only thing `npm audit fix --force` can offer is a downgrade of the wallet kit to 1.5.0 — an older kit, in exchange for an advisory in code that is never loaded. Not worth it.
+We leave `elliptic` alone. Every version is affected and there is no fixed release, so the only thing `npm audit fix --force` can offer is a downgrade of the wallet kit to 1.5.0. That would trade a newer kit for removing an advisory in code that is never loaded, so we have not done it.
 
 ## License
 

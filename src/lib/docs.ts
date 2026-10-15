@@ -7,12 +7,12 @@
  * to it means a change that makes a page wrong shows up in the same diff.
  *
  * These explain the product to someone deciding whether to use it. Setup,
- * schema and contract internals belong in the READMEs, not here — a reader
- * who wants those is a different reader.
+ * schema and contract internals belong in the READMEs, because a reader who
+ * wants those is a different reader.
  *
- * Bodies are markdown, rendered by `components/markdown.tsx` — the same
- * renderer the blog uses, which builds React elements rather than HTML, so
- * nothing here can produce markup. It supports `##`/`###` headings,
+ * Bodies are markdown, rendered by `components/markdown.tsx`. That is the
+ * same renderer the blog uses, and it builds React elements rather than HTML,
+ * so nothing here can produce markup. It supports `##`/`###` headings,
  * paragraphs, lists, blockquotes, code fences and inline links. No tables:
  * write a list instead.
  */
@@ -41,28 +41,28 @@ export const DOC_GROUPS: DocGroup[] = [
         slug: "",
         title: "What Datavar is",
         summary: "The consented data layer for AI, built on Stellar.",
-        body: `Your data already trains AI models. It is scraped, bought and resold, and the money stops somewhere before it reaches you.
+        body: `Your data already trains AI models. It gets scraped, bought and resold, and none of the money reaches you.
 
 Datavar is a data protocol where you contribute data on your own terms and get paid when it is used. Every dataset carries a consent receipt held on the Stellar ledger: who allowed it, for which buyer, for what purpose, and until when. An AI team can check that receipt without asking us, and you can withdraw it without asking anyone.
 
-## The short version
+## Four steps
 
 1. Sign in with a Stellar wallet. No email, no password, no name.
 2. Upload a dataset. It is hashed on your device before anything leaves it.
-3. Grant consent — a named buyer, a named purpose, an end date — signed by your wallet.
-4. When it sells, your earnings are credited to you in a contract — claim them in XLM with your own signature.
+3. Grant consent to a named buyer, for a named purpose, until an end date. Your wallet signs it.
+4. When it sells, your earnings are credited to you in a contract, and you claim them in XLM with your own signature.
 
-## What makes it different
+## How this differs from a data broker
 
 A data broker sells data you never knowingly handed over and keeps the proceeds. A privacy setting stops the collection and pays you nothing.
 
-Here the terms live on a public ledger rather than in a contract nobody reads. Consent always has an end date, and only you can revoke it — both enforced by the contract itself, not by our policy.
+On Datavar the terms are recorded on a public ledger. Consent always has an end date and only you can revoke it, and the contract enforces both rules.
 
-The money works the same way. Your earnings sit in a payout contract, credited to your wallet, and only your signature moves them out. All we can do is record who money in the contract belongs to; we cannot pay it to ourselves, cannot move it back out, and cannot stop you claiming it.
+Payments are handled the same way. Your earnings are credited to your wallet in a payout contract, and only your signature moves them out. We can record whom the money in the contract belongs to, but we cannot pay it to ourselves, move it back out, or stop you claiming it.
 
-> Datavar runs on Stellar testnet today. Both contracts — consent and payouts — are real and on-chain; the buyers are simulated while the demand side is built, so payouts settle in test XLM.
+> Datavar runs on Stellar testnet today. The consent and payout contracts are deployed on-chain. Buyers are simulated while the demand side is built, so payouts settle in test XLM. A third contract, for licences with a hold period, a protocol fee and refunds on early withdrawal, is written and tested but not deployed yet.
 
-[How it works](/docs/how-it-works) walks through the whole path, from wallet to payout hash.`,
+[How it works](/docs/how-it-works) goes through each step, from wallet to payout hash.`,
       },
       {
         slug: "how-it-works",
@@ -70,23 +70,23 @@ The money works the same way. Your earnings sit in a payout contract, credited t
         summary: "From connecting a wallet to a payout you can look up.",
         body: `## 1. Your wallet is your account
 
-Connect a Stellar wallet and sign once to prove it is yours. That signature is your whole account — there is no email or password anywhere in the product, because none was ever collected.
+Connect a Stellar wallet and sign once to prove it is yours. The wallet is your account. There is no email or password anywhere in the product, because we never collected one.
 
 ## 2. Contribute a dataset
 
-Pick a file and the category it belongs to. Your browser computes its SHA-256 before the file moves, and the file goes to private storage only you can reach.
+Pick a file and the category it belongs to. Your browser computes its SHA-256 before the file moves, and the file goes to private storage that only you can reach.
 
-That hash is what consent commits to later, so the protocol can name the exact data that was agreed to without exposing it.
+Consent later commits to that hash, so the protocol can name the exact data that was agreed to without exposing it.
 
 ## 3. Grant consent
 
-Name a buyer, a purpose and an expiry date. Your wallet signs it, and the receipt becomes ledger state anyone can verify. Revoke it whenever you like and the ledger says so from that moment on.
+Name a buyer, a purpose and an expiry date. Your wallet signs it, and the receipt becomes ledger state that anyone can verify. You can revoke it whenever you like, and from then on the ledger shows it as revoked.
 
 See [consent receipts](/docs/consent-receipts).
 
 ## 4. Get paid
 
-When a dataset is licensed, the payout is credited to your wallet in a contract on Stellar. Claiming signs a transaction with your wallet, the contract pays you, and you get back a hash you can check on a public explorer rather than take our word for it.
+When a dataset is licensed, the payout is credited to your wallet in a contract on Stellar. To claim it you sign a transaction with your wallet, the contract pays you, and you get a hash you can look up on a public explorer.
 
 See [getting paid](/docs/payouts).`,
       },
@@ -113,36 +113,36 @@ Every dataset is filed under one source category:
 - Dashcam & camera
 - Something else
 
-Rare, high-signal data is worth more than common data, so a category nobody else has covered is usually the more valuable upload.
+Rare data is worth more than common data, so a category nobody else has covered is usually the more valuable upload.
 
 ## What happens to a file
 
-Your browser hashes it first, then uploads it to private storage under your wallet's own path. A row records the title, category, size and hash — nothing else.
+Your browser hashes it first, then uploads it to private storage under your wallet's own path. A database row records the title, category, size and hash, and nothing else.
 
 The limit is 50 MB per file.
 
 ## What we don't do
 
-We don't open the file, index it, or scrub it. That cuts both ways, and you should know which way: nothing is redacted for you either. What's inside a file is yours to check before you send it.
+We don't open, index or scrub your file. That also means nothing is redacted for you, so check what is inside a file before you send it.
 
 ## Connected sources
 
-Linking accounts and devices directly — browsing, health, purchases, media — is the next thing being built. Direct uploads are how data enters the protocol today.`,
+We are building direct links to accounts and devices next, for sources such as browsing, health, purchases and media. For now, data enters the protocol only through direct uploads.`,
       },
       {
         slug: "consent-receipts",
         title: "Consent receipts",
-        summary: "The terms live on the ledger, not in a document we control.",
+        summary: "The terms are recorded on the ledger, where we can't edit them.",
         body: `A consent receipt says: *this contributor allowed this buyer to use the data with this hash, for this purpose, until this moment.*
 
-If that lived in our database, a buyer would have to take our word for it and we could rewrite it. On the ledger, a buyer checks it themselves — no account with us, no permission — and neither side can quietly change what was agreed.
+If the receipt lived in our database, a buyer would have to take our word for it, and we could rewrite it. On the ledger, a buyer can check it without an account or permission from us, and neither side can quietly change what was agreed.
 
 ## Two rules the contract enforces
 
-- **Consent always ends.** A grant without a future expiry is refused. There are no perpetual grants.
-- **Only you can withdraw it.** Not the buyer, not us. Revoking ends the receipt while keeping the record of what was agreed.
+- Consent always ends. The contract refuses a grant without a future expiry, so there are no perpetual grants.
+- Only you can withdraw it. The buyer can't, and neither can we. Revoking ends the receipt and keeps the record of what was agreed.
 
-These are code, not policy. That distinction is the whole reason for putting consent on a ledger.
+Both rules are in the contract's code, which is the reason to put consent on a ledger in the first place.
 
 ## Verifying one
 
@@ -159,35 +159,39 @@ The contract, its source and its tests are on the [links](/docs/links) page.
 
 ## What it can't do
 
-A receipt can't reach into a model that already trained on your data. Revoking stops future use and makes the withdrawal publicly checkable; it doesn't unlearn anything. That limit is exactly why consent here has to expire.`,
+A receipt can't reach into a model that has already trained on your data. Revoking stops future use and makes the withdrawal publicly checkable, but a trained model keeps what it learned. That limit is why consent here always has an end date.`,
       },
       {
         slug: "payouts",
         title: "Getting paid",
         summary: "Payouts settle in XLM, with a hash you can check yourself.",
-        body: `When a dataset of yours is licensed, the payout is written into a contract on Stellar and credited to your wallet. It shows on your earnings page as something to claim.
+        body: `When a dataset of yours is licensed, the payout is written into a contract on Stellar and credited to your wallet. Your earnings page shows it as an amount to claim: the price, minus the protocol fee, minus any refund. Today there is no fee and no refund, so for every sale so far that amount has been the full price.
 
 ## Where the money sits
 
-Not with us. There is no Datavar account holding payout money — there used to be, and closing it was the point. Earnings sit in the payout contract, and the contract has one rule about paying them out: it pays the wallet that signed the request. All Datavar can do is record who the money belongs to. It cannot pay itself, redirect a payout, move funds out, or stop you claiming yours.
+No Datavar account holds payout money. One used to, and we closed it. Earnings sit in the payout contract, which has one rule for paying out: it pays the wallet that signed the request. Datavar can record whom the money belongs to, but it cannot pay itself, redirect a payout, move funds out, or stop you claiming yours.
 
-That is the difference between being owed money and holding it. The contract refuses to credit a sale it can't cover, so a balance on your earnings page is money already sitting in the contract — not an IOU against an account you have to trust us with.
+The contract also refuses to credit a sale it can't cover. A balance on your earnings page is money already in the contract, so you are not relying on an account we control to pay you later.
 
 ## Claiming
 
-One press, then your wallet asks you to sign. The contract pays you and returns a transaction hash, which resolves on a public explorer whether or not this site is up.
+Press claim and your wallet asks you to sign. The contract pays you and returns a transaction hash, which resolves on a public explorer even if this site is down.
 
-Your wallet has to exist on Stellar to sign — the same requirement as granting consent. Testnet accounts open with [friendbot](https://friendbot.stellar.org) in a click.
+Your wallet's account has to exist on Stellar before it can sign, which granting consent also requires. Testnet accounts open with [friendbot](https://friendbot.stellar.org) in a click.
 
 ## Why XLM
 
-A Stellar payment costs a fraction of a cent and settles in seconds, which is what makes a fifty-cent payout worth sending at all. On most rails the fee would eat it.
+A Stellar payment costs a fraction of a cent and settles in seconds, so a fifty-cent payout is still worth sending. On most rails the fee would eat it.
 
 ## What a dataset earns
 
-Rare data earns more than common data. The estimator on the home page quotes the average settled price per category, computed from real sales — a category nobody has bought yet shows a dash rather than a number we invented.
+Rare data earns more than common data. The estimator on the home page quotes the average settled price per category, computed from real sales. A category nobody has bought yet shows a dash instead of a made-up number.
 
-> Buyers are simulated while the demand side is built, and payouts settle in test XLM on Stellar testnet. The contract and the payment are real and on-chain; the demand behind them isn't yet.`,
+## The licence contract
+
+We have written and tested a licence contract, but it is not deployed. Once it is, a buyer's payment will be held for a short period (planned at 7 days, or until the receipt's end date if that is sooner) before your share is credited to the payout contract, and a protocol fee (planned at 10%) will be taken from each sale. If you revoke during that hold, the buyer gets back the share of the price for the unused term. A revocation after the hold refunds nothing.
+
+> Buyers are simulated while the demand side is built, and payouts settle in test XLM on Stellar testnet. The contract and the payments are on-chain; the demand behind them is not real yet.`,
       },
     ],
   },
@@ -197,28 +201,30 @@ Rare data earns more than common data. The estimator on the home page quotes the
       {
         slug: "licensing",
         title: "Licensing data",
-        summary: "Provenance you can check against a ledger, not a warranty PDF.",
-        body: `Scraped corpora have no answer to who agreed to them — the exact question a regulator or a plaintiff asks first. Buying from a broker moves the liability without answering it, because the broker's warranty is a document, and a document can't be checked against a ledger.
+        summary: "Provenance you can check against the ledger yourself.",
+        body: `A scraped corpus can't say who agreed to it, and that is usually the first question a regulator or a plaintiff asks. Buying from a broker moves the liability without answering the question, because the broker's warranty is a document you can't check against a ledger.
 
 ## What a licence is here
 
-A consent receipt naming you as the buyer, the data by its hash, the purpose you agreed to, and the date the permission ends. That gives you three things a scraped corpus can't:
+A licence is a consent receipt that names you as the buyer, identifies the data by its hash, and states the purpose you agreed to and the date the permission ends. That gives you:
 
-- **Provenance.** Every record resolves to a person who agreed to it.
-- **Purpose limits.** The receipt names what it was for.
-- **An expiry.** Consent ends by default; renewal is a new grant.
+- Provenance. Every record traces back to a person who agreed to it.
+- A stated purpose, written into the receipt.
+- An expiry. Consent ends by default, and renewing it takes a new grant.
 
-## Verify it without us
+## Checking a receipt yourself
 
-Call \`is_valid\` on the contract from any funded key. No account here, no API key. See [consent receipts](/docs/consent-receipts) for the exact call.
-
-A warranty you have to ask the vendor to confirm is worth what the vendor is worth. This one is worth what the ledger is worth.
+Call \`is_valid\` on the contract from any funded key. You don't need an account or an API key from us. See [consent receipts](/docs/consent-receipts) for the exact call.
 
 ## Buying
 
-The [catalogue](/market) filters by source, format, size, freshness and how long the consent has left to run. A basket is paid with one signature, in XLM or USDC, into the payout contract contributors claim from. Every receipt is re-read on-chain before a licence is written, and every download re-reads it again — so a withdrawal stops the next delivery, one ledger close after it lands.
+The [catalogue](/market) filters by source, format, size, freshness and how long the consent has left to run. You pay for a basket with one signature, in XLM or USDC, into the payout contract that contributors claim from. We re-read every receipt on-chain before writing a licence, and again on every download, so a withdrawal stops the next delivery one ledger close after it lands.
 
-> This runs on Stellar testnet. A cohort builder — commissioning data that doesn't exist yet — and a streaming API aren't built. If you'd want them, tell us which cohort and what you'd pay — on Telegram at [${CONTACT.telegram.handle}](${CONTACT.telegram.href}) or at [${CONTACT.email.address}](${CONTACT.email.href}). That's worth more to us right now than another feature.`,
+Before you pay, checkout tells you what a withdrawal would mean. A contributor can withdraw before the end date, and your access ends when they do. Files you have already downloaded can't be recalled, and the licence terms govern them from then on. Today there is no refund when a contributor withdraws, and checkout says so.
+
+A licence contract that changes this is written and tested but not deployed. With it, your payment is held for a short period (planned at 7 days, or until the receipt's end date if sooner) before it reaches the contributor. If they withdraw during the hold, you get back the share of the price for the unused term, and checkout shows how much a withdrawal tomorrow would refund. A withdrawal after the hold refunds nothing.
+
+> This runs on Stellar testnet. Two things are not built yet: a cohort builder for commissioning data that doesn't exist yet, and a streaming API. If you want either, tell us which cohort and what you would pay, on Telegram at [${CONTACT.telegram.handle}](${CONTACT.telegram.href}) or by email at [${CONTACT.email.address}](${CONTACT.email.href}).`,
       },
     ],
   },
@@ -232,7 +238,7 @@ The [catalogue](/market) filters by source, format, size, freshness and how long
         body: `## Code
 
 - Repository: [github.com/AtaGuler0/datavar](https://github.com/AtaGuler0/datavar)
-- Both contracts and their tests live in \`contracts/\`.
+- The contracts and their tests are in \`contracts/\`. The consent and payout contracts are deployed; the licence contract is not yet.
 
 ## On-chain
 
@@ -240,11 +246,11 @@ The [catalogue](/market) filters by source, format, size, freshness and how long
 - Payout contract on Stellar testnet: [\`CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL\`](https://stellar.expert/explorer/testnet/contract/CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL)
 - Explorer: [stellar.expert testnet](https://stellar.expert/explorer/testnet)
 
-The payout contract will tell you what it holds and what it owes without asking us — \`funded\`, \`owed\` and \`balance_of\` are view calls anyone can simulate. Every settled payout links to its own transaction from the earnings page.
+You can ask the payout contract what it holds and what it owes: \`funded\`, \`owed\` and \`balance_of\` are view calls anyone can simulate. Each settled payout links to its own transaction from the earnings page.
 
 ## Reading
 
-- [Blog](/blog) — what we're building, and what we got wrong.
+- [Blog](/blog): what we're building, and what we got wrong.
 
 ## Contact
 
@@ -262,11 +268,11 @@ The payout contract will tell you what it holds and what it owes without asking 
         title: "Terms & Privacy",
         summary:
           "You licence your data, you don't sell it, and nothing promises you an income. Here is everything we hold.",
-        body: `*Last updated: 27 August 2026. One document, because the two halves are the same subject: what you agree to, and what we hold. It covers datavar.xyz, the contributor dashboard and the protocol contracts.*
+        body: `*Last updated: 27 August 2026. This is one document because both halves cover the same subject: what you agree to, and what we hold. It covers datavar.xyz, the contributor dashboard and the protocol contracts.*
 
 Datavar is a marketplace for consented data. You contribute data you hold the rights to, you decide who may use it and for what, and you are paid when someone licenses it. Sections 1 to 11 are the terms of that arrangement. Sections 12 to 20 are the privacy half: what we collect, what we cannot see, and what the ledger keeps forever.
 
-Where a rule below is enforced by code rather than by our word, it says so. Those are the ones you do not have to trust us on. If what you want to know is how much you will earn, read section 7 first.
+Where a rule below is enforced by a contract and not only by our word, the text says so, and you can check those rules yourself. If you want to know how much you will earn, read section 7 first.
 
 Datavar Labs ("Datavar", "we", "us") operates the service. By connecting a wallet and using it you accept this document. If you do not accept it, do not connect a wallet.
 
@@ -278,7 +284,7 @@ You must be at least 18 years old and legally able to enter into a contract wher
 
 You sign in by proving you control a Stellar address. There is no email, no password and no recovery flow, because there is nothing for us to reset.
 
-That has a hard consequence: **if you lose the key, you lose the account**, along with the datasets filed under it, the earnings credited to it and the receipts signed by it. We cannot move an account to a new address, and we cannot sign anything on your behalf. Anyone holding your key is you as far as the protocol is concerned.
+As a result, **if you lose the key, you lose the account**, along with the datasets filed under it, the earnings credited to it and the receipts signed by it. We cannot move an account to a new address, and we cannot sign anything on your behalf. To the protocol, anyone holding your key is you.
 
 ## 3. What you may contribute
 
@@ -289,32 +295,32 @@ By contributing a file you represent, each time, that:
 - It is not confidential to an employer, a client or anyone else, and contributing it breaks no agreement you are under.
 - It is not unlawful to hold or to share, and contains no material depicting the abuse or sexual exploitation of children, no stolen credentials or payment data, and no malware.
 
-We do not open, scan or filter files. That is a deliberate privacy choice (see section 14), and it means these representations are the only thing standing between the protocol and content that should not be in it. Breaking them is the fastest way to lose the account.
+We do not open, scan or filter files. That is a deliberate privacy choice (see section 14), and it means these representations are the only thing keeping content that should not be here out of the protocol. Breaking them is the fastest way to lose the account.
 
 You keep responsibility for what a file contains. Nothing is redacted for you.
 
 ## 4. What you grant is a licence, not a sale
 
-You keep ownership of everything you contribute. What a consent receipt grants a buyer is a **licence**: permission to use a named dataset, on named terms, for a while.
+You keep ownership of everything you contribute. What a consent receipt grants a buyer is a licence: permission to use a named dataset, on named terms, for a while.
 
-Every licence you grant is:
+Every licence you grant:
 
-- **Named.** It runs to a specific buyer, not to the market.
-- **Purpose-limited.** It permits the purpose written into the receipt and nothing else.
-- **Time-limited.** Consent that never ends is refused by the contract itself. There are no perpetual grants on Datavar.
-- **Non-exclusive.** You may license the same data to others, and you may use it yourself however you like.
-- **Non-transferable.** A buyer may not resell, sublicense or pass the data on. If they want it for a different purpose or a longer period, that is a new grant, and yours to give or refuse.
-- **Revocable.** You end it whenever you decide to.
+- Runs to a specific named buyer, not to the market.
+- Permits the purpose written into the receipt and nothing else.
+- Ends at a set time. The contract itself refuses consent that never ends, so there are no perpetual grants on Datavar.
+- Is non-exclusive. You may license the same data to others, and you may use it yourself however you like.
+- Is non-transferable. A buyer may not resell, sublicense or pass the data on. If they want it for a different purpose or a longer period, that is a new grant, and yours to give or refuse.
+- Is revocable. You end it whenever you decide to.
 
-You also grant Datavar a narrow licence: to store your file, to show it and its metadata back to you, and to deliver it to a buyer you have consented to. Not to train on it, not to publish it, not to sell it on our own account, not to pass it to anyone you have not named.
+You also grant Datavar a narrow licence: to store your file, to show it and its metadata back to you, and to deliver it to a buyer you have consented to. We may not train on it, publish it, sell it on our own account, or pass it to anyone you have not named.
 
 ## 5. Revoking, and what revoking cannot do
 
-Only you can revoke a receipt. Not the buyer, not us. That rule is in the contract, not in this document, which is why it is worth more than this document.
+Only you can revoke a receipt; neither the buyer nor we can. That rule is enforced by the contract, so it does not depend on this document.
 
-What revocation does: it ends the permission from that moment, publicly and verifiably, so a buyer continuing to use the data is doing so without consent.
+Revocation ends the permission from that moment, publicly and verifiably, so a buyer who keeps using the data is doing so without consent.
 
-What it cannot do: reach into a model that has already been trained. Nobody can unlearn data from a trained model, and any service that tells you otherwise is describing something it cannot deliver. This is exactly why consent here expires by default: a limit to weigh before you grant it, not after.
+Revocation cannot reach into a model that has already been trained on the data. Nobody can remove data from a model once it has been trained on it. Consent here expires by default for this reason, and you should weigh this limit before you grant consent.
 
 ## 6. How payment works
 
@@ -324,25 +330,25 @@ When a dataset of yours is licensed, the price is credited to your address insid
 2. You claim it by signing with your own wallet. The contract pays the address that signed. We cannot redirect it, cannot pay it to ourselves, and cannot stop you claiming it.
 3. You get a transaction hash that resolves on a public explorer, whether or not this site is running.
 
-Datavar does not take a cut of a sale today: the price a buyer pays is the amount credited to you. If that ever changes, the rate will be published here before it applies to any sale, and no change will reach back and reduce a balance you have already been credited.
+Datavar does not take a cut of a sale today: the price a buyer pays is the amount credited to you. We have written a licence contract that will change this when it is deployed. It will take a protocol fee (planned at 10%) and hold each payment for a short period (planned at 7 days, or until the receipt expires if that is sooner) before crediting your share. If you revoke during that hold, the buyer is refunded the share of the price for the unused term. The rate will be published here before it applies to any sale, and no change will reduce a balance you have already been credited.
 
 The network fee for the claim transaction is yours, and on Stellar it is a fraction of a cent. Your account has to exist on the network to sign anything.
 
 ## 7. There is no guaranteed income
 
-This is the part people skim, so it is stated plainly. **Datavar does not guarantee that you will earn anything.** Contributing data is not a job, an investment, or a promise of return.
+**Datavar does not guarantee that you will earn anything.** Contributing data is not a job, an investment, or a promise of return.
 
 Specifically:
 
-- **There is no minimum.** No floor per file, per month or per year. Many datasets earn nothing at all, and a dataset nobody licenses earns nothing indefinitely.
-- **There is no schedule.** Sales happen when a buyer wants a particular kind of data. Weeks or months may pass between them, or none may ever come.
-- **Prices move.** What a category earned last month is what it earned last month. Rare, hard-to-find data has tended to be worth more than common data, and that is a tendency, not a rate card.
-- **Estimates are estimates.** Any figure the site shows before a sale, whether the earnings estimator, a per-category average or a projection, is computed from past settled sales and is illustrative only. It is not an offer, a quote, a forecast or a commitment, and no part of it is payable to you until a real buyer licenses your data.
-- **Totals shown are protocol-wide.** Aggregate figures on the home page and the protocol page describe network activity in total. They say nothing about what any one contributor will receive.
-- **You are not our employee.** No employment, agency, partnership or joint venture is created by this document. There is no wage, no severance and no notice period; you contribute when you choose and stop when you choose.
-- **Nothing here is financial advice.** Do not treat contributed data as an income stream you can plan around.
+- There is no minimum. No floor per file, per month or per year. Many datasets earn nothing at all, and a dataset nobody licenses earns nothing indefinitely.
+- There is no schedule. Sales happen when a buyer wants a particular kind of data. Weeks or months may pass between them, or none may ever come.
+- Prices move. What a category earned last month is what it earned last month. Rare, hard-to-find data has tended to be worth more than common data, and that is a tendency, not a rate card.
+- Estimates are only estimates. Any figure the site shows before a sale, whether the earnings estimator, a per-category average or a projection, is computed from past settled sales and is illustrative only. It is not an offer, a quote, a forecast or a commitment, and no part of it is payable to you until a real buyer licenses your data.
+- Totals cover the whole protocol. Aggregate figures on the home page and the protocol page describe network activity in total, and say nothing about what any one contributor will receive. The protocol page also shows how many of the datasets and licences in its totals came from our own load-test bot.
+- You are not our employee. This document creates no employment, agency, partnership or joint venture. There is no wage, no severance and no notice period; you contribute when you choose and stop when you choose.
+- Nothing here is financial advice. Do not treat contributed data as an income stream you can plan around.
 
-> Datavar runs on Stellar **testnet** today. Both contracts are real and on-chain, and payouts really settle in test XLM, which has **no monetary value and cannot be exchanged for money**. Buyers are simulated while the demand side is built. Anything you claim today is a working demonstration of the payment path, not income, and test balances carry no promise of future tokens, airdrop or conversion.
+> Datavar runs on Stellar testnet today. The consent and payout contracts are deployed on-chain, and payouts really settle in test XLM, which has **no monetary value and cannot be exchanged for money**. Buyers are simulated while the demand side is built. Anything you claim today demonstrates the payment path and is not income, and test balances carry no promise of future tokens, airdrop or conversion.
 
 ## 8. Taxes
 
@@ -354,11 +360,11 @@ Do not contribute data you have no right to, or data about other people who have
 
 ## 10. Suspension and ending the arrangement
 
-You can walk away at any time: revoke your receipts and stop contributing. Balances already credited to you in the contract stay claimable: the contract does not have a switch that would let us take them back.
+You can walk away at any time: revoke your receipts and stop contributing. Balances already credited to you in the contract stay claimable, because the contract has no switch that would let us take them back.
 
 We may suspend or close an account that breaks section 3 or section 9, or where we are required to by law. Where we can do so without making things worse, we will say why.
 
-We may also change or discontinue parts of the service. Consent receipts and credited balances live on-chain and survive us: a receipt stays verifiable and a credited balance stays claimable whether or not this website exists.
+We may also change or discontinue parts of the service. Consent receipts and credited balances live on-chain and outlast us: a receipt stays verifiable and a credited balance stays claimable whether or not this website exists.
 
 ## 11. If you are licensing data
 
@@ -366,13 +372,13 @@ A licence you take is defined by the receipt on the ledger: the dataset by its h
 
 ## 12. What we collect
 
-Most privacy policies describe how much a company collects. This part mostly describes how little it can.
+We collect the following:
 
-- **Your Stellar address.** It is your whole account. You prove you hold the key by signing a challenge; we store the address, never the key.
-- **Dataset records.** For each file: a title, a category, your description if you write one, the size, the content type, the SHA-256 hash, the storage path and the time it arrived.
-- **The file itself,** in private storage, under a path beginning with your own address.
-- **Sale and payout records.** Which dataset was licensed, to which buyer, at what price, and the transaction hash once you claim.
-- **Ordinary technical logs** kept by the hosting and database providers that run the service (IP address, timestamp, request), used to operate and secure it.
+- Your Stellar address, which is your whole account. You prove you hold the key by signing a challenge; we store the address, never the key.
+- Dataset records. For each file: a title, a category, your description if you write one, the size, the content type, the SHA-256 hash, the storage path and the time it arrived.
+- The file itself, in private storage, under a path beginning with your own address.
+- Sale and payout records: which dataset was licensed, to which buyer, at what price, and the transaction hash once you claim.
+- Ordinary technical logs kept by the hosting and database providers that run the service (IP address, timestamp, request), used to operate and secure it.
 
 ## 13. What we don't collect
 
@@ -380,24 +386,24 @@ No email address, no name, no phone number, no password, no date of birth. No tr
 
 Your session is a signed token in your browser's local storage. It is not a cookie, it is not shared, and clearing your browser data ends it.
 
-There is nothing here to sell to an ad network. That is deliberate for a company whose argument is that data should be licensed with consent rather than harvested.
+We hold nothing we could sell to an ad network. That is deliberate, since our case is that data should be licensed with consent instead of harvested.
 
 ## 14. Your files
 
-We do not open, read, index, scan or scrub the files you contribute. Two things follow, and the second is on you:
+We do not open, read, index, scan or scrub the files you contribute. Two things follow:
 
 - We cannot build a profile of you out of them, and cannot hand a regulator or a buyer contents we have never looked at.
-- Nothing is redacted for you. What is inside a file stays inside it. Check a file before contributing it. See [what you can contribute](/docs/data-sources).
+- Nothing is redacted for you. What is inside a file stays inside it, so check a file before contributing it. See [what you can contribute](/docs/data-sources).
 
-Isolation is enforced by the database rather than by application code remembering to check: row-level security matches every dataset row and every stored object against the wallet inside your signed session, so one contributor cannot read another's rows or files. Operators can see dataset records in order to run the marketplace.
+The database enforces isolation, so it does not depend on application code remembering to check. Row-level security matches every dataset row and every stored object against the wallet inside your signed session, and one contributor cannot read another's rows or files. Operators can see dataset records in order to run the marketplace.
 
 ## 15. What the ledger makes public, permanently
 
-A consent receipt is a public record. Granting consent writes your address, the dataset's hash, the named buyer, the purpose and the expiry to the Stellar ledger. Revoking writes that too. The file never goes on-chain; the hash does. Treat the rest as public forever:
+A consent receipt is a public record. Granting consent writes your address, the dataset's hash, the named buyer, the purpose and the expiry to the Stellar ledger. Revoking is written there too. The file never goes on-chain; the hash does. Treat the rest as public forever:
 
-- **Ledger entries cannot be deleted.** Not by you, not by us. Revocation ends a receipt going forward; it does not erase the record that it existed.
-- **Your address and its payments are public.** Anyone can look up what a wallet has been paid, and any address you have made public elsewhere links back to it.
-- **Aggregates count contributors through a hash** of the address rather than the address itself, on the home and protocol pages. The ledger underneath stays public regardless, so this is tidiness, not anonymity.
+- Ledger entries cannot be deleted, by you or by us. Revocation ends a receipt going forward; it does not erase the record that it existed.
+- Your address and its payments are public. Anyone can look up what a wallet has been paid, and any address you have made public elsewhere links back to it.
+- On the home and protocol pages, aggregates count contributors through a hash of the address instead of the address itself. The ledger underneath stays public, so this keeps those pages tidy but does not make you anonymous.
 
 If you want distance between your name and your contributions, use an address that is not tied to your identity anywhere else.
 
@@ -411,9 +417,9 @@ We do not sell your data, rent it to brokers, or hand it to anyone else, includi
 
 Dataset records and files are kept while your account exists so you can see and license them. Sale and payout records are kept as the accounting history behind money that moved on a public chain.
 
-**There is no delete button in the dashboard yet.** That is a gap in the product, not a policy, and saying so is better than pointing you at a control that does not exist. Until it ships: write to [support@datavar.xyz](mailto:support@datavar.xyz), name the wallet, and we will verify it by asking you to sign a challenge with that wallet, then delete the file, the record, or the whole account.
+There is no delete button in the dashboard yet. That is a gap in the product, not a policy. Until it ships, write to [support@datavar.xyz](mailto:support@datavar.xyz) and name the wallet. We will verify it by asking you to sign a challenge with that wallet, then delete the file, the record, or the whole account.
 
-What deletion cannot touch: receipts already on the ledger (revoke them instead: that is the on-chain equivalent, and it is yours to do without asking us) and data a buyer already received under a valid licence.
+Deletion cannot touch receipts already on the ledger (revoke them instead; that is the on-chain equivalent, and you can do it without asking us) or data a buyer already received under a valid licence.
 
 ## 18. Your rights
 
@@ -441,7 +447,7 @@ Nothing here excludes liability that cannot lawfully be excluded, including for 
 
 ## 22. Changes
 
-We may update this document. Material changes will be posted here with a new date before they take effect, and continuing to use the service after that is acceptance. A change never applies retroactively to a receipt you have already signed or a balance already credited to you. What is already on the ledger is unaffected either way, which is rather the point of putting it there.
+We may update this document. Material changes will be posted here with a new date before they take effect, and continuing to use the service after that is acceptance. A change never applies retroactively to a receipt you have already signed or a balance already credited to you, and nothing already on the ledger is affected either way.
 
 ## 23. Governing law
 
@@ -453,13 +459,13 @@ A ruling about this document does not reach the ledger. Consent receipts and cre
 
 [support@datavar.xyz](mailto:support@datavar.xyz), or an issue on the [repository](https://github.com/AtaGuler0/datavar).
 
-See also: [consent receipts](/docs/consent-receipts), the rule this whole document defers to.`,
+See also: [consent receipts](/docs/consent-receipts).`,
       },
     ],
   },
 ];
 
-/** Every page in reading order — the order the sidebar shows and Next follows. */
+/** Every page in reading order: the order the sidebar shows and Next follows. */
 export const DOC_PAGES: DocPage[] = DOC_GROUPS.flatMap((group) => group.pages);
 
 /** The index lives at /docs; everything else hangs off it. */
