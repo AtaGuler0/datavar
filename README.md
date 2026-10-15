@@ -193,18 +193,27 @@ consent, funding a purchase and claiming a payout all still go through the
 wallet. `canSign` in the wallet context is false until a wallet is connected,
 and every screen that spends money checks it before showing a button.
 
-Setup takes three steps across two dashboards and no new environment
-variables:
+Setup takes four steps across two dashboards and one environment variable:
 
 1. Google Cloud Console → APIs & Services → Credentials → OAuth client ID, type
-   **Web application**. Authorised redirect URI:
-   `https://<project-ref>.supabase.co/auth/v1/callback`.
+   **Web application**. Authorised redirect URIs: `https://<your
+   domain>/auth/callback` and `http://localhost:3000/auth/callback` for
+   development, plus `https://<project-ref>.supabase.co/auth/v1/callback` if
+   you also want the fallback flow below.
 2. Supabase → Authentication → Providers → Google: paste the client ID and
-   secret, enable it.
-3. Supabase → Authentication → URL Configuration: add your dev origin
-   (`http://localhost:3000`, or whichever port `npm run dev` picked) and the
-   deployed origin to **Redirect URLs**. The browser comes back to
-   `/auth/callback` on whichever origin it left from.
+   secret, enable it. The same client ID has to be in the provider's
+   **Client IDs** list, which is what lets Supabase accept Google's ID tokens.
+3. Supabase → Authentication → URL Configuration: add your dev origin and the
+   deployed origin to **Redirect URLs**.
+4. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` to the client ID.
+
+With the variable set, the browser goes to Google directly and comes back to
+our `/auth/callback` with an ID token, which `signInWithIdToken` turns into a
+Supabase session. Google's account chooser then shows our domain. The request
+carries a `state` kept in sessionStorage and a nonce: Google gets its SHA-256
+and Supabase gets the nonce, so a token minted for another request is
+refused. Without the variable, sign-in goes through Supabase's own OAuth
+endpoint, and the chooser shows the Supabase project's domain instead.
 
 The server verifies the Google session against the same `SUPABASE_JWT_SECRET`
 that signs wallet sessions, so the asymmetric-key caveat above applies to both.

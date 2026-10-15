@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { googleSession } from "@/lib/auth/google-client";
+import { completeGoogleRedirect, googleSession } from "@/lib/auth/google-client";
 
 /**
  * Where Google sends the browser back to.
  *
- * The client was built with `detectSessionInUrl`, so asking it for the session
- * is also what completes the exchange — there is no code to write for the code
- * in the URL. This page exists to wait for that and then get out of the way.
+ * Two ways in. With NEXT_PUBLIC_GOOGLE_CLIENT_ID set, Google comes straight
+ * here with an ID token in the fragment, and `completeGoogleRedirect` trades it
+ * for a Supabase session. Without it, Supabase's own OAuth flow lands here with
+ * a `?code=`, and the client's `detectSessionInUrl` completes that exchange the
+ * moment the session is asked for. Either way this page waits and then gets
+ * out of the way.
  *
  * The page it returns to is read from the query string rather than from a
  * hook, and only a path is honoured: a `next` that names another origin is a
@@ -23,34 +26,44 @@ export default function AuthCallbackPage() {
     let live = true;
 
     const params = new URLSearchParams(window.location.search);
+
     // Resolved against our own origin and kept only if it stays there. A
     // prefix check on the raw string misses `/\\evil.com` and `/%09/evil.com`,
     // which browsers read as another host.
-    const requested = params.get("next") ?? "/dashboard";
-    let next = "/dashboard";
-    try {
-      const url = new URL(requested, window.location.origin);
-      if (url.origin === window.location.origin) {
-        next = url.pathname + url.search + url.hash;
+    const safe = (requested: string | null) => {
+      try {
+        const url = new URL(requested ?? "/dashboard", window.location.origin);
+        if (url.origin === window.location.origin) {
+          return url.pathname + url.search + url.hash;
+        }
+      } catch {
+        // Not a URL at all: fall through to the default.
       }
-    } catch {
-      // Not a URL at all: keep the default.
-    }
+      return "/dashboard";
+    };
 
-    // Google's own refusal — a declined consent screen — comes back as a
-    // query parameter rather than as a missing session, and is the same
-    // outcome: no session, so nothing to go on with.
-    const settle = async () =>
-      params.get("error") ? null : await googleSession();
+    const settle = async (): Promise<string | null> => {
+      // The direct flow first: it must read the fragment before anything
+      // creates the Supabase auth client.
+      const direct = await completeGoogleRedirect();
+      if (direct !== null) return safe(direct);
 
-    settle().then((session) => {
-      if (!live) return;
-      if (session) {
-        router.replace(next);
-      } else {
-        setFailed(true);
-      }
-    });
+      // Google's own refusal in the Supabase flow comes back as a query
+      // parameter rather than as a missing session, and is the same outcome.
+      if (params.get("error")) return null;
+      return (await googleSession()) ? safe(params.get("next")) : null;
+    };
+
+    settle()
+      .catch(() => null)
+      .then((next) => {
+        if (!live) return;
+        if (next) {
+          router.replace(next);
+        } else {
+          setFailed(true);
+        }
+      });
 
     return () => {
       live = false;

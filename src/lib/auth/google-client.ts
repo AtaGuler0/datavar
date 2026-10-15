@@ -46,11 +46,71 @@ export type GoogleSession = {
 };
 
 /**
+ * Our own Google OAuth client id. Public by nature: it is in every sign-in URL.
+ *
+ * When it is set, the browser goes to Google directly and Google sends it back
+ * to our /auth/callback with an ID token, which Supabase Auth then accepts
+ * through `signInWithIdToken`. Google's account chooser then names our domain.
+ * Without it, sign-in goes through Supabase's own OAuth endpoint as before,
+ * and the chooser names the Supabase project's domain instead.
+ */
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+
+/** What the callback needs to finish a direct sign-in, kept for one round trip. */
+const PENDING_KEY = "datavar.google.pending";
+
+type Pending = { state: string; nonce: string; next: string };
+
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+/**
  * Sends the browser to Google. Nothing after this line runs — the page is
  * replaced — and what comes back lands on /auth/callback.
  */
 export async function startGoogleSignIn(next: string): Promise<void> {
   markGoogleIntent();
+
+  if (GOOGLE_CLIENT_ID) {
+    // `state` ties the answer to this tab's request; `nonce` ties the ID token
+    // to it. Google gets the nonce's hash and Supabase gets the nonce itself,
+    // which is how Supabase checks the two match.
+    const pending: Pending = {
+      state: randomHex(16),
+      nonce: randomHex(32),
+      next,
+    };
+    sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/auth/callback`,
+      response_type: "id_token",
+      response_mode: "fragment",
+      scope: "openid email profile",
+      state: pending.state,
+      nonce: await sha256Hex(pending.nonce),
+      prompt: "select_account",
+    });
+    window.location.assign(
+      `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    );
+    return;
+  }
+
   const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const { error } = await authClient().auth.signInWithOAuth({
     provider: "google",
@@ -85,6 +145,63 @@ export function takeGoogleIntent(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Finishes a direct Google sign-in on /auth/callback.
+ *
+ * Returns null when this page load isn't the end of one (the old Supabase
+ * flow, or someone opening the callback by hand), the path to go back to when
+ * it succeeded, and throws when Google refused or the answer doesn't match
+ * what this tab asked for.
+ *
+ * Has to run before anything creates the Supabase auth client: that client
+ * reads the URL when it starts, and the ID token is for us, not for it. The
+ * fragment is cleared first for the same reason, and so the token doesn't
+ * stay in the address bar or the history.
+ */
+let completion: Promise<string | null> | null = null;
+
+export function completeGoogleRedirect(): Promise<string | null> {
+  // Once per page load. React runs effects twice in development, and the
+  // second run would find the fragment already gone and miss the sign-in.
+  completion ??= finishGoogleRedirect();
+  return completion;
+}
+
+async function finishGoogleRedirect(): Promise<string | null> {
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const idToken = fragment.get("id_token");
+  const error = fragment.get("error");
+  if (!idToken && !error) return null;
+
+  window.history.replaceState(
+    null,
+    "",
+    window.location.pathname + window.location.search,
+  );
+
+  let pending: Pending | null = null;
+  try {
+    pending = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? "null");
+  } catch {
+    pending = null;
+  }
+  sessionStorage.removeItem(PENDING_KEY);
+
+  if (error) throw new Error(error);
+  if (!pending || fragment.get("state") !== pending.state) {
+    throw new Error("That sign-in wasn't started from this tab.");
+  }
+
+  const { error: signInError } = await authClient().auth.signInWithIdToken({
+    provider: "google",
+    token: idToken!,
+    nonce: pending.nonce,
+  });
+  if (signInError) throw signInError;
+
+  return pending.next;
 }
 
 /** The stored Google session, refreshed if it needed it. Null when signed out. */
