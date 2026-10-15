@@ -1,26 +1,28 @@
 # Datavar's contracts
 
-Two contracts, for the two things a database cannot do: prove what someone
-consented to, and hold their money somewhere we cannot reach into.
+Three contracts:
 
-- [Consent receipts](#consent-receipts) — what was agreed, in ledger state.
-- [Payout vault](#payout-vault) — earnings that leave only on their owner's
-  signature.
+- [Consent receipts](#consent-receipts): what a contributor agreed to, in
+  ledger state.
+- [Payout vault](#payout-vault): contributor earnings, which leave only with
+  the contributor's signature.
+- [Licences](#licences): a buyer's purchase, held for a short period so a
+  revocation can be refunded, then paid into the vault minus the protocol fee.
+  Written and tested, not deployed yet.
 
 ## Consent receipts
 
-A consent receipt says: *this contributor allowed this buyer to use the record
-with this hash, for this purpose, until this moment.* Keeping that in a table we
-own means a buyer has to take our word for it, and means we could rewrite it. In
-ledger state, a buyer checks it themselves — no account with us, no API key, no
-permission — and neither we nor they can quietly change what was agreed.
+A consent receipt says that this contributor allowed this buyer to use the
+record with this hash, for this purpose, until this time. If it lived in a
+table we own, a buyer would have to take our word for it and we could change
+it. On the ledger, a buyer can check it without an account or an API key, and
+neither side can change what was agreed.
 
-Two rules are built into the contract rather than into a policy document:
+The contract enforces two rules:
 
-- **Consent always ends.** `grant` refuses an expiry that is not in the future.
-  There is no perpetual grant.
-- **Only the contributor can withdraw it.** Not the buyer, not the admin, not
-  us. The admin key upgrades the code and nothing else.
+- Consent always ends. `grant` refuses an expiry that is not in the future.
+- Only the contributor can withdraw it. The buyer and the admin can't. The
+  admin key can upgrade the code and hand that right on, and nothing else.
 
 ## Layout
 
@@ -32,7 +34,11 @@ contracts/
 │   └── Cargo.toml
 ├── contracts/payout/
 │   ├── src/lib.rs      # the payout vault
-│   ├── src/test.rs     # 26 tests, one per invariant and per authorisation path
+│   ├── src/test.rs     # 28 tests, one per invariant and per authorisation path
+│   └── Cargo.toml
+├── contracts/licence/
+│   ├── src/lib.rs      # purchases, hold, fee, refund on revocation
+│   ├── src/test.rs     # 19 tests, run against the real consent and payout contracts
 │   └── Cargo.toml
 ├── Cargo.toml          # workspace
 └── README.md
@@ -47,24 +53,24 @@ contracts/
 | `is_valid(id) -> bool` | anyone | Not revoked, not expired. Unknown ids answer `false` |
 | `receipt(id) -> Receipt` | anyone | The full terms; errors on an unknown id |
 | `receipt_ids(contributor)` / `receipt_count(contributor)` | anyone | The contributor's index |
-| `receipts_of(contributor, start, limit)` | anyone | One page of receipts — what the dashboard reads |
+| `receipts_of(contributor, start, limit)` | anyone | One page of receipts, which is what the dashboard reads |
 | `upgrade(new_wasm_hash)` | admin, signed | Swaps the code |
 | `set_admin(new_admin)` | admin, signed | Hands over that right |
 
-`dataset_hash` is the SHA-256 the upload flow computes in the browser before the
-file leaves the device, so the receipt commits to the exact bytes without
-exposing them.
+`dataset_hash` is the SHA-256 that the upload flow computes in the browser
+before the file leaves the device. The receipt commits to the exact bytes
+without containing them.
 
-`upgrade` is here from the first deployment on purpose. Retrofitting an upgrade
-path means a new address and a migration for every change.
+`upgrade` has been there since the first deployment. Adding it later would have
+meant a new address and a migration.
 
 ## Working on it
 
 ```bash
-cargo test              # 45 tests across both contracts, no network needed
+cargo test              # 66 tests across the three contracts, no network needed
 cargo fmt --all
 cargo clippy --all-targets
-stellar contract build  # → target/wasm32v1-none/release/{consent,payout}.wasm
+stellar contract build  # → target/wasm32v1-none/release/{consent,payout,licence}.wasm
 ```
 
 ## Deploying
@@ -79,16 +85,15 @@ stellar contract deploy \
 ```
 
 Put the contract id it prints into `NEXT_PUBLIC_CONSENT_CONTRACT_ID` in the
-app's `.env.local`. It's public by design — verifying a receipt is meant to need
-nobody's permission.
+app's `.env.local`. The id is public, since anyone should be able to verify a
+receipt.
 
 The current testnet deployment is
 [`CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI`](https://stellar.expert/explorer/testnet/contract/CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI).
 
 ## Checking it yourself
 
-The point of this contract is that you don't have to trust the dashboard. Ask
-the ledger directly:
+You can check a receipt without our dashboard:
 
 ```bash
 stellar contract invoke --network testnet --send=no \
@@ -101,43 +106,38 @@ stellar contract invoke --network testnet --send=no \
 
 # Payout vault
 
-This is the part of Datavar that an account cannot do.
-
 Before this contract, a contributor's earnings were a row in our database and a
-payment our server chose to send. Both halves of that were a promise: we could
-forget the row, and we could decline to send the payment. The vault removes the
-second half. Test XLM for payouts sits in the contract, and the only key that
-can move it to a contributor is the contributor's own.
+payment our server chose to send. We could lose the row or decline to send the
+payment. Now the test XLM for payouts sits in the contract, and only the
+contributor's own key can move it to them.
 
-Three roles, deliberately unequal:
+There are three roles:
 
-- An **operator** can say *this wallet is owed this much*, and nothing else. It
-  cannot pay anyone, cannot pay itself, and cannot take a credit back. There is
-  a set of them, up to ten: the role began as a single server key, and a product
-  run by two or three people needs that many wallets able to credit without
-  passing a key between them. A credit names the operator signing it, and the
-  contract checks that name against the set.
-- The **contributor** calls `claim` with their own signature and the balance
-  leaves for their wallet. Nobody can claim on their behalf, and nobody —
-  operator or admin — can stop them.
-- The **admin** upgrades the contract and withdraws *surplus*: the funds beyond
-  what is currently owed. Money already credited to a contributor is out of the
-  admin's reach by construction.
+- An operator can record that a wallet is owed an amount. It can't pay anyone,
+  pay itself or take a credit back. There can be up to ten operators. The role
+  started as one server key, and a team of two or three needs that many wallets
+  able to credit without sharing a key. Each credit names the operator signing
+  it, and the contract checks the name against the set.
+- The contributor calls `claim` with their own signature and the balance goes
+  to their wallet. Nobody else can claim for them, and neither an operator nor
+  the admin can stop them.
+- The admin upgrades the contract and can withdraw surplus, meaning funds
+  beyond what is currently owed. Money credited to a contributor is out of the
+  admin's reach.
 
-## Three invariants
+## Invariants
 
-Each one has a test, and together they are the argument for holding payouts
-here rather than in an account we control:
+Each has a test:
 
-1. **A credit is always funded.** `credit` refuses if it would push the total
-   owed past what the contract holds. A balance shown to a contributor is money
-   already sitting in the vault, not an IOU.
-2. **A credited balance is always claimable.** Follows from (1) plus a
-   `withdraw` that can only touch surplus. There is no state where the dashboard
-   says 41 XLM and the claim fails for want of funds.
-3. **A sale is credited once.** Each credit carries the reference of the sale it
-   settles — `sha256(sale_id)` — and the contract remembers it. An operator that
-   retries a failed batch cannot double-pay.
+1. A credit is always funded. `credit` fails if it would push the total owed
+   past what the contract holds, so a balance shown to a contributor is money
+   already in the vault.
+2. A credited balance is always claimable. This follows from (1) and from
+   `withdraw` only touching surplus. The dashboard can't show 41 XLM while the
+   claim fails for lack of funds.
+3. A sale is credited once. Each credit carries the sale's reference,
+   `sha256(sale_id)`, and the contract remembers it, so retrying a failed batch
+   can't pay twice.
 
 ## Interface
 
@@ -155,9 +155,9 @@ here rather than in an account we control:
 | `add_operator(operator)` / `remove_operator(operator)` | admin, signed | Changes who may credit |
 | `upgrade(new_wasm_hash)` / `set_admin(new_admin)` | admin, signed | As in the consent contract |
 
-The token is fixed at deployment — native XLM's SAC in our deployment, though
-the contract never assumes that. Changing it would strand every balance credited
-under the old one, so it cannot be changed at all.
+The token is fixed at deployment. Ours is the native XLM SAC, but the contract
+doesn't assume that. There is no way to change the token, because doing so
+would strand every balance credited in the old one.
 
 ## Deploying
 
@@ -170,13 +170,13 @@ stellar contract deploy \
      --token "$(stellar contract id asset --asset native --network testnet)"
 ```
 
-The `--operator` given here is only the first one; the rest are added from the
-operator panel, or with `add_operator`. Upgrading a contract deployed before the
-set existed needs no migration call — `operators()` falls back to the single
-operator it was deployed with until the first `add_operator` writes the set.
+The `--operator` here is the first one. Add others from the operator panel or
+with `add_operator`. A contract deployed before the operator set existed needs
+no migration: `operators()` returns the original operator until the first
+`add_operator` writes the set.
 
 Put the contract id into `NEXT_PUBLIC_PAYOUT_CONTRACT_ID`, then move test XLM in
-— from the operator panel, or:
+from the operator panel, or:
 
 ```bash
 stellar contract invoke --id <contract> --source <any-funded-key> \
@@ -189,8 +189,7 @@ The current testnet deployment is
 
 ## Checking it yourself
 
-You don't have to trust the earnings page about what you are owed. Ask the
-contract:
+To check what you are owed without the earnings page:
 
 ```bash
 stellar contract invoke --network testnet --send=no \
@@ -199,5 +198,71 @@ stellar contract invoke --network testnet --send=no \
   -- balance_of --contributor <your-address>
 ```
 
-`funded` and `owed` answer the other half of the question — whether the vault
-can cover what it has promised everyone.
+`funded` and `owed` show whether the vault can cover what it owes everyone.
+
+---
+
+# Licences
+
+Before this contract, a purchase was a `fund` call on the vault plus a row in
+our database. The ledger saw money arrive and nothing about what it bought, and
+a buyer whose contributor revoked the next day had no recourse. The licence
+contract records the purchase and holds the money for a short time first.
+
+1. `purchase(buyer, items)` checks each item's receipt on the consent contract
+   (it must exist, not be revoked and not be expired), takes the whole basket
+   in one transfer from the buyer, and records one licence per item. The fee is
+   fixed at this point from `fee_bps`. Each item carries a sale reference, which
+   is later used as the vault credit reference.
+2. The money stays in the licence contract until `due_at`: `purchased_at +
+   hold`, or the receipt's expiry if that is sooner.
+3. `settle(id)` or `settle_many(ids)` closes licences, and anyone can call
+   them. If the receipt was revoked before `due_at`, the buyer is refunded the
+   share of the price for the unused term, and the contributor and the fee keep
+   the share for the time used. Otherwise, once `due_at` has passed, `price -
+   fee` goes into the vault as a credit for the contributor and the fee goes to
+   the treasury.
+
+Money that has reached the vault never comes back, so a revocation after the
+hold refunds nothing and the vault keeps its rule that a credited balance is
+always claimable.
+
+The licence contract credits the vault as an operator, under its own contract
+address, so it has to be added to the vault's operator set after deployment.
+
+## Interface
+
+| Function | Who may call it | What it does |
+|---|---|---|
+| `purchase(buyer, items)` | the buyer, signed | Pays for up to 25 licences, returns their ids |
+| `settle(id)` | anyone | Refunds or pays out one licence, or fails with `NotDue` |
+| `settle_many(ids)` | anyone | The same for up to 25, skipping any that can't close yet |
+| `licence(id)` | anyone | The licence and its state: `Held`, `Settled` or `Refunded` |
+| `licence_for(reference)` | anyone | The licence bought under a sale reference |
+| `count()` / `config()` | anyone | Licences issued; consent, vault, token, treasury, fee and hold |
+| `set_fee(fee_bps)` / `set_hold(secs)` | admin, signed | Changes terms for new purchases only. Ceilings: 30% and 90 days |
+| `set_treasury(address)` | admin, signed | Where fees go |
+| `upgrade` / `set_admin` | admin, signed | As in the other contracts |
+
+## Deploying
+
+One licence contract per vault, since the token is fixed.
+
+```bash
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/licence.wasm \
+  --source datavar-admin --network testnet \
+  -- --admin "$(stellar keys address datavar-admin)" \
+     --consent CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI \
+     --vault CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL \
+     --token "$(stellar contract id asset --asset native --network testnet)" \
+     --treasury <treasury address> --fee_bps 1000 --hold 604800
+
+stellar contract invoke --network testnet --source datavar-admin \
+  --id CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL \
+  -- add_operator --operator <licence contract id>
+```
+
+Then set `NEXT_PUBLIC_LICENCE_CONTRACT_ID` in the app. Purchases in that asset
+go through the contract from then on, and the operator panel gets a "Settle
+licences" button. Without it, purchases keep paying straight into the vault.
