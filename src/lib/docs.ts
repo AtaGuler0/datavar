@@ -17,6 +17,8 @@
  * write a list instead.
  */
 
+import { CONTACT } from "./contact";
+
 export type DocPage = {
   /** Empty string is the index at /docs; everything else is /docs/<slug>. */
   slug: string;
@@ -181,8 +183,6 @@ Your wallet has to exist on Stellar to sign — the same requirement as granting
 
 A Stellar payment costs a fraction of a cent and settles in seconds, which is what makes a fifty-cent payout worth sending at all. On most rails the fee would eat it.
 
-Fiat payouts through PayPal are planned.
-
 ## What a dataset earns
 
 Rare data earns more than common data. The estimator on the home page quotes the average settled price per category, computed from real sales — a category nobody has bought yet shows a dash rather than a number we invented.
@@ -214,11 +214,11 @@ Call \`is_valid\` on the contract from any funded key. No account here, no API k
 
 A warranty you have to ask the vendor to confirm is worth what the vendor is worth. This one is worth what the ledger is worth.
 
-## Freshness
+## Buying
 
-Contributors keep producing. Rather than a frozen snapshot of an internet that has moved on, you can commission a cohort that doesn't exist yet and have people opt in to produce it.
+The [catalogue](/market) filters by source, format, size, freshness and how long the consent has left to run. A basket is paid with one signature, in XLM or USDC, into the payout contract contributors claim from. Every receipt is re-read on-chain before a licence is written, and every download re-reads it again — so a withdrawal stops the next delivery, one ledger close after it lands.
 
-> The catalogue, cohort builder and delivery API aren't built yet — you can't buy data from Datavar today. If you'd want to, tell us which cohort and what you'd pay. That's worth more to us right now than another feature.`,
+> This runs on Stellar testnet. A cohort builder — commissioning data that doesn't exist yet — and a streaming API aren't built. If you'd want them, tell us which cohort and what you'd pay — on Telegram at [${CONTACT.telegram.handle}](${CONTACT.telegram.href}) or at [${CONTACT.email.address}](${CONTACT.email.href}). That's worth more to us right now than another feature.`,
       },
     ],
   },
@@ -248,7 +248,9 @@ The payout contract will tell you what it holds and what it owes without asking 
 
 ## Contact
 
-Open an issue on the repository. There's no support address yet, and pointing you at one nobody reads would be worse than saying so.`,
+- Telegram: [${CONTACT.telegram.handle}](${CONTACT.telegram.href})
+- Email: [${CONTACT.email.address}](${CONTACT.email.href})
+- Or open an issue on the repository.`,
       },
     ],
   },

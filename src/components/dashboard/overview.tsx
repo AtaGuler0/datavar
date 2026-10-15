@@ -24,7 +24,8 @@ import { ActivityChart } from "./activity-chart";
 import { ConnectPanel } from "./connect-panel";
 import { InsightCard } from "./insight-card";
 import { CONTRIBUTOR_NAV } from "./nav-config";
-import { Card } from "./primitives";
+import { Arrow, Segmented } from "../night";
+import { Card, PageHeading } from "./primitives";
 import { RecentUploads } from "./recent-uploads";
 import { SourceShare } from "./source-share";
 import { StatCard } from "./stat-card";
@@ -164,75 +165,54 @@ export function Overview() {
           now — the protocol-wide view moved to /protocol, because arriving at
           your own dashboard and scrolling into someone else's numbers made
           neither half legible. */}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <div>
-          <p className="eyebrow text-ink-faint">Overview</p>
-          <h1 className="display mt-3 text-[1.75rem] font-medium text-ink sm:text-[2rem]">
-            {greeting}.
-          </h1>
-          <p className="mt-2.5 text-sm text-ink-dim">
-            {connected && stats ? (
-              <>
-                <span className="font-mono text-xs tabular-nums">
-                  {truncateAddress(address)}
-                </span>{" "}
-                · {stats.total} dataset{stats.total === 1 ? "" : "s"} on file
-                {stats.lastUpload && (
-                  <> · last upload {formatDate(stats.lastUpload)}</>
-                )}
-              </>
-            ) : (
-              "Everything here is keyed to your Stellar wallet. Connect one to load your account."
-            )}
-          </p>
-        </div>
-
-        {connected && (
-          <div className="flex items-center rounded-full border border-rule bg-paper p-0.5 shadow-sm shadow-ink/[0.03]">
-            {PERIODS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriod(p)}
-                aria-pressed={p === period}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  p === period
-                    ? "bg-ink-950 text-chalk"
-                    : "text-ink-dim hover:text-ink"
-                }`}
-              >
-                {p} days
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <PageHeading
+        eyebrow="Contributor · Overview"
+        title={`${greeting}.`}
+        aside={connected ? "Here is where your data stands." : "Sign in and your data is here."}
+        action={
+          connected ? (
+            <Segmented
+              label="Period"
+              options={PERIODS.map((p) => ({ id: p, label: `${p}D` }))}
+              value={period}
+              onChange={setPeriod}
+            />
+          ) : undefined
+        }
+      />
+      {connected && stats && (
+        <p className="mt-4 font-mono text-[0.75rem] tracking-[0.06em] text-star-faint uppercase">
+          <span className="text-star-dim">{truncateAddress(address)}</span> ·{" "}
+          {stats.total} dataset{stats.total === 1 ? "" : "s"} on file
+          {stats.lastUpload && <> · last upload {formatDate(stats.lastUpload)}</>}
+        </p>
+      )}
 
       {/* Account state: KPIs when connected, the connect block when not. */}
       {status === "loading" ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-2xl border border-rule bg-paper-raised"
+              className="h-32 animate-pulse rounded-xl border border-line bg-white/[0.02]"
             />
           ))}
         </div>
       ) : !connected ? (
-        <div className="mt-4">
+        <div className="mt-10">
           <ConnectPanel />
         </div>
       ) : stats === null ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-2xl border border-rule bg-paper-raised"
+              className="h-32 animate-pulse rounded-xl border border-line bg-white/[0.02]"
             />
           ))}
         </div>
       ) : (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Earned"
             value={formatMoney(stats.earned)}
@@ -267,7 +247,7 @@ export function Overview() {
 
       {/* The charts row — when over time on the left, from where on the right. */}
       {connected && datasets && (
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
           <Card
             title="Contributions over time"
             subtitle={`Bytes contributed per ${period === 90 ? "week" : "day"}`}
@@ -285,7 +265,7 @@ export function Overview() {
 
       {/* Bottom row — the ledger on the left, what to do next on the right. */}
       {connected && datasets && (
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
           <Card
             title="Recent uploads"
             subtitle="Your latest contributions, newest first"
@@ -299,50 +279,40 @@ export function Overview() {
       {/* Section index — a map of the rooms, for before you've signed in.
           Once connected, the rail and the cards above cover it. */}
       {!connected && status !== "loading" && (
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-        {SECTIONS.map((section) => (
-          <Link
-            key={section.href}
-            href={section.href}
-            className="group flex items-start gap-4 rounded-xl border border-rule bg-paper p-5 shadow-sm shadow-ink/[0.03] transition-colors hover:border-rule-strong"
-          >
-            <span className="mt-0.5 font-mono text-xs tabular-nums text-ink-faint">
-              {section.index}
-            </span>
-            <span className="flex-1">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                {section.label}
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-3 w-3 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M6 3l5 5-5 5" strokeLinecap="round" />
-                </svg>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {SECTIONS.map((section) => (
+            <Link
+              key={section.href}
+              href={section.href}
+              className="group relative rounded-xl border border-line p-6 transition-colors hover:border-line-strong hover:bg-white/[0.018]"
+            >
+              <span className="flex items-center justify-between font-mono text-[0.75rem] tracking-[0.1em] text-star-faint uppercase">
+                <span>
+                  <span className="mr-3 text-star-ghost">{section.index}</span>
+                  {section.label}
+                </span>
+                <Arrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
-              <span className="mt-1 block text-sm text-pretty text-ink-dim">
+              <span className="mt-4 block text-[0.9375rem] leading-relaxed text-pretty text-star-dim">
                 {section.summary}
               </span>
-            </span>
-          </Link>
+            </Link>
           ))}
         </div>
       )}
 
       {/* The way out to the protocol-wide view, which used to be the top half
           of this page. A line, not a panel: it is context, not your account. */}
-      <p className="mt-8 border-t border-rule pt-6 text-sm text-ink-dim">
-        Everything contributed across Datavar is counted on the{" "}
-        <Link
-          href="/protocol"
-          className="text-ink underline decoration-rule-strong underline-offset-2 transition-colors hover:decoration-ink"
-        >
-          protocol page
-        </Link>
-        , no wallet required.
-      </p>
+      <Link
+        href="/protocol"
+        className="group mt-12 flex items-center justify-between gap-4 border-t border-line pt-6 text-[0.9375rem] text-star-dim transition-colors hover:text-star"
+      >
+        <span>Everything contributed across Datavar, counted in public.</span>
+        <span className="inline-flex items-center gap-2 font-mono text-[0.75rem] tracking-[0.08em] uppercase">
+          Protocol
+          <Arrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        </span>
+      </Link>
     </div>
   );
 }

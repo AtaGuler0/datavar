@@ -8,6 +8,7 @@ import {
 } from "@/lib/supabase/market";
 import { formatCount } from "@/lib/format";
 import { STROOPS_PER_XLM, type PayAsset } from "@/lib/stellar/config";
+import { SourceTile } from "./source-tile";
 
 /**
  * The filters.
@@ -91,26 +92,46 @@ export function FilterRail({
         ("max" in s ? s.max : undefined) === filters.maxBytes,
     )?.id ?? "any";
 
+  const active =
+    filters.sources.length +
+    filters.formats.length +
+    (filters.minPrice !== undefined || filters.maxPrice !== undefined ? 1 : 0) +
+    (sizeId !== "any" ? 1 : 0) +
+    (filters.freshDays ? 1 : 0) +
+    (filters.consentDays ? 1 : 0) +
+    (filters.scannedOnly ? 1 : 0) +
+    (filters.unlicensedOnly ? 1 : 0);
+
   return (
-    <aside className="space-y-7">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-ink">Filters</h2>
-        <button
-          type="button"
-          onClick={onReset}
-          className="text-xs text-ink-faint transition-colors hover:text-ink"
-        >
-          Reset
-        </button>
+    <aside className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2.5 font-mono text-[0.75rem] tracking-[0.12em] text-star uppercase">
+          Filters
+          {active > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-star px-1.5 text-[0.6875rem] tracking-normal text-night tabular-nums">
+              {active}
+            </span>
+          )}
+        </h2>
+        {active > 0 && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="font-mono text-[0.6875rem] tracking-[0.08em] text-star-faint uppercase transition-colors hover:text-star"
+          >
+            Clear all
+          </button>
+        )}
       </div>
 
       <Group label="Source">
-        <div className="space-y-1.5">
+        <div className="-mx-2 space-y-0.5">
           {SOURCE_TYPES.map((source) => {
             const count = countFor(source.id);
             return (
-              <Check
+              <Row
                 key={source.id}
+                icon={<SourceTile source={source.id} className="h-4 w-5 shrink-0" />}
                 label={source.label}
                 hint={count > 0 ? formatCount(count) : "—"}
                 muted={count === 0}
@@ -123,36 +144,31 @@ export function FilterRail({
       </Group>
 
       <Group label="Format">
-        <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {FORMAT_GROUPS.map((group) => (
-            <Check
+            <Chip
               key={group.id}
               label={group.label}
               checked={filters.formats.includes(group.id)}
-              onChange={() => toggle("formats", group.id)}
+              onClick={() => toggle("formats", group.id)}
             />
           ))}
         </div>
       </Group>
 
-      <Group
-        label={`Price in ${filters.asset}`}
-        note={
-          filters.asset === "USDC"
-            ? "The same datasets, on the USDC list. Switching currency at the top of the results clears this band, because the numbers mean something different on each list."
-            : undefined
-        }
-      >
-        <div className="flex items-center gap-2">
+      <Group label={`Price · ${filters.asset}`}>
+        <div className="flex items-center rounded-[12px] border border-line transition-colors focus-within:border-line-strong">
           <Money
-            label="Min"
+            label="Minimum price"
+            placeholder="Min"
             asset={filters.asset}
             value={filters.minPrice}
             onChange={(stroops) => set({ minPrice: stroops })}
           />
-          <span className="pt-5 text-ink-faint">–</span>
+          <span aria-hidden="true" className="h-5 w-px bg-line" />
           <Money
-            label="Max"
+            label="Maximum price"
+            placeholder="Max"
             asset={filters.asset}
             value={filters.maxPrice}
             onChange={(stroops) => set({ maxPrice: stroops })}
@@ -161,14 +177,13 @@ export function FilterRail({
       </Group>
 
       <Group label="Size">
-        <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {SIZES.map((size) => (
-            <Radio
+            <Chip
               key={size.id}
-              name="size"
               label={size.label}
               checked={sizeId === size.id}
-              onChange={() =>
+              onClick={() =>
                 set({
                   minBytes: "min" in size ? size.min : undefined,
                   maxBytes: "max" in size ? size.max : undefined,
@@ -180,94 +195,67 @@ export function FilterRail({
       </Group>
 
       <Group label="Contributed">
-        <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {FRESHNESS.map((option) => (
-            <Radio
+            <Chip
               key={option.id}
-              name="freshness"
               label={option.label}
               checked={(filters.freshDays ?? 0) === ("days" in option ? option.days : 0)}
-              onChange={() =>
-                set({ freshDays: "days" in option ? option.days : undefined })
-              }
+              onClick={() => set({ freshDays: "days" in option ? option.days : undefined })}
             />
           ))}
         </div>
       </Group>
 
-      <Group
-        label="Consent remaining"
-        note="How long the contributor's permission still has to run. A licence expires when the consent behind it does."
-      >
-        <div className="space-y-1.5">
+      <Group label="Consent remaining">
+        <div className="flex flex-wrap gap-1.5">
           {RUNWAY.map((option) => (
-            <Radio
+            <Chip
               key={option.id}
-              name="runway"
               label={option.label}
-              checked={
-                (filters.consentDays ?? 0) === ("days" in option ? option.days : 0)
-              }
-              onChange={() =>
-                set({ consentDays: "days" in option ? option.days : undefined })
-              }
+              checked={(filters.consentDays ?? 0) === ("days" in option ? option.days : 0)}
+              onClick={() => set({ consentDays: "days" in option ? option.days : undefined })}
             />
           ))}
         </div>
       </Group>
 
-      <Group
-        label="Provenance"
-        note="Uploads are checked in the contributor's own browser: metadata that declares a generator, screenshots, blanks and empty exports are refused at the door. Datasets filed before that check say so."
-      >
-        <Check
+      <div className="space-y-1 border-t border-line pt-6">
+        <Switch
           label="Checked at upload"
           hint={scannedCount === null ? undefined : formatCount(scannedCount)}
           checked={filters.scannedOnly === true}
-          onChange={() =>
-            set({ scannedOnly: filters.scannedOnly ? undefined : true })
-          }
+          onChange={() => set({ scannedOnly: filters.scannedOnly ? undefined : true })}
         />
-      </Group>
-
-      <Group label="Exclusivity">
-        <Check
+        <Switch
           label="Not licensed by anyone yet"
           checked={filters.unlicensedOnly === true}
-          onChange={() =>
-            set({ unlicensedOnly: filters.unlicensedOnly ? undefined : true })
-          }
+          onChange={() => set({ unlicensedOnly: filters.unlicensedOnly ? undefined : true })}
         />
-      </Group>
+      </div>
     </aside>
   );
 }
 
-function Group({
-  label,
-  note,
-  children,
-}: {
-  label: string;
-  note?: string;
-  children: React.ReactNode;
-}) {
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="eyebrow text-ink-faint">{label}</h3>
-      {note && <p className="mt-1.5 text-xs text-pretty text-ink-faint">{note}</p>}
+      <h3 className="font-mono text-[0.6875rem] tracking-[0.12em] text-star-faint uppercase">{label}</h3>
       <div className="mt-3">{children}</div>
     </section>
   );
 }
 
-function Check({
+/** A source as a selectable row: its tile, its name, how many are listed. */
+function Row({
+  icon,
   label,
   hint,
   muted,
   checked,
   onChange,
 }: {
+  icon: React.ReactNode;
   label: string;
   hint?: string;
   muted?: boolean;
@@ -275,85 +263,138 @@ function Check({
   onChange: () => void;
 }) {
   return (
-    <label
-      className={`flex cursor-pointer items-center gap-2.5 text-sm ${
-        muted ? "text-ink-faint" : "text-ink-dim"
-      } transition-colors hover:text-ink`}
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`flex w-full items-center gap-3 rounded-[10px] px-2 py-2 text-left text-sm transition-colors ${
+        checked
+          ? "bg-white/[0.06] text-star"
+          : muted
+            ? "text-star-ghost hover:bg-white/[0.03] hover:text-star-faint"
+            : "text-star-dim hover:bg-white/[0.03] hover:text-star"
+      }`}
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="h-3.5 w-3.5 shrink-0 rounded-[0.25rem] border-rule-strong text-slate-deep accent-slate-deep"
-      />
+      <span
+        aria-hidden="true"
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition-colors ${
+          checked ? "border-star bg-star text-night" : "border-line-strong"
+        }`}
+      >
+        {checked && (
+          <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M2.5 6.2l2.3 2.3L9.5 3.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint && <span className="font-mono text-[0.6875rem] tabular-nums">{hint}</span>}
-    </label>
+      {hint && (
+        <span className="font-mono text-[0.6875rem] text-star-faint tabular-nums">{hint}</span>
+      )}
+    </button>
   );
 }
 
-function Radio({
-  name,
+/** One option of a set, as a pill: white when it is the one chosen. */
+function Chip({
   label,
+  checked,
+  onClick,
+}: {
+  label: string;
+  checked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={checked}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-[0.8125rem] transition-colors ${
+        checked
+          ? "border-star bg-star text-night"
+          : "border-line text-star-dim hover:border-line-strong hover:text-star"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** An on/off filter as a switch. */
+function Switch({
+  label,
+  hint,
   checked,
   onChange,
 }: {
-  name: string;
   label: string;
+  hint?: string;
   checked: boolean;
   onChange: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-dim transition-colors hover:text-ink">
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        onChange={onChange}
-        className="h-3.5 w-3.5 shrink-0 border-rule-strong accent-slate-deep"
-      />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </label>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className="flex w-full items-center gap-3 py-2 text-left text-sm text-star-dim transition-colors hover:text-star"
+    >
+      <span className="min-w-0 flex-1">{label}</span>
+      {hint && <span className="font-mono text-[0.6875rem] text-star-faint tabular-nums">{hint}</span>}
+      <span
+        aria-hidden="true"
+        className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${
+          checked ? "border-star bg-star" : "border-line-strong bg-transparent"
+        }`}
+      >
+        <span
+          className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-all duration-200 ${
+            checked ? "left-[1.1rem] bg-night" : "left-0.5 bg-star-faint"
+          }`}
+        />
+      </span>
+    </button>
   );
 }
 
 /** A decimal amount in, integer units out — money stays integers elsewhere. */
 function Money({
   label,
+  placeholder,
   asset,
   value,
   onChange,
 }: {
   label: string;
+  placeholder: string;
   asset: PayAsset;
   value: number | undefined;
   onChange: (stroops: number | undefined) => void;
 }) {
   return (
-    <label className="min-w-0 flex-1">
-      <span className="block text-[0.6875rem] text-ink-faint">{label}</span>
-      <div className="mt-1 flex items-center rounded-lg border border-rule bg-paper px-2.5 py-1.5 focus-within:border-rule-strong">
-        <input
-          type="number"
-          min={0}
-          step={asset === "USDC" ? 0.25 : 0.5}
-          inputMode="decimal"
-          value={value === undefined ? "" : value / STROOPS_PER_XLM}
-          onChange={(e) => {
-            const parsed = Number(e.target.value);
-            onChange(
-              e.target.value === "" || Number.isNaN(parsed) || parsed < 0
-                ? undefined
-                : Math.round(parsed * STROOPS_PER_XLM),
-            );
-          }}
-          placeholder="—"
-          className="w-full min-w-0 bg-transparent text-sm tabular-nums text-ink outline-none placeholder:text-ink-faint"
-        />
-        <span className="ml-1 shrink-0 font-mono text-[0.625rem] text-ink-faint">
-          {asset}
-        </span>
-      </div>
+    <label className="flex min-w-0 flex-1 items-center px-3 py-2.5">
+      <span className="sr-only">{label}</span>
+      <input
+        type="number"
+        min={0}
+        step={asset === "USDC" ? 0.25 : 0.5}
+        inputMode="decimal"
+        value={value === undefined ? "" : value / STROOPS_PER_XLM}
+        onChange={(e) => {
+          const parsed = Number(e.target.value);
+          onChange(
+            e.target.value === "" || Number.isNaN(parsed) || parsed < 0
+              ? undefined
+              : Math.round(parsed * STROOPS_PER_XLM),
+          );
+        }}
+        placeholder={placeholder}
+        className="w-full min-w-0 [appearance:textfield] bg-transparent text-sm text-star tabular-nums outline-none placeholder:text-star-faint [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
     </label>
   );
 }

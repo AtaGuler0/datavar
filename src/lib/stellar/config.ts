@@ -46,15 +46,14 @@ export const PAYOUT_USDC_CONTRACT_ID =
   process.env.NEXT_PUBLIC_PAYOUT_USDC_CONTRACT_ID ?? "";
 
 /**
- * USDC as it exists on testnet here: the asset the Turkish ramp issues, and
- * the Soroban token contract that wraps it.
+ * USDC as it exists on testnet here: the classic asset, and the Soroban token
+ * contract that wraps it.
  *
  * The issuer is the asset's identity. The SAC id is derived from it and is the
  * address the vault actually talks to — a Soroban contract cannot hold a
  * classic asset except through its wrapper. Both are pinned rather than
- * discovered, because the anchor's stellar.toml decides what the *ramp* deals
- * in, and a payout vault that changed asset because a file on someone else's
- * server changed would be a very quiet way to lose money.
+ * discovered: a payout vault that changed asset because a file on someone
+ * else's server changed would be a very quiet way to lose money.
  */
 export const USDC = {
   code: "USDC",
@@ -140,6 +139,14 @@ export const STROOPS_PER_XLM = 10_000_000;
 export function stroopsToAmount(stroops: number): string {
   return (stroops / STROOPS_PER_XLM).toFixed(7);
 }
+
+/**
+ * The rate the USDC price list was written at: 0.25 USD per XLM, fixed — see
+ * internal.list_price_usdc in schema.sql. Not a market rate and never fed by
+ * one; it is only for turning an XLM average into the USDC figure the same
+ * dataset is listed at.
+ */
+export const USDC_PER_XLM_LIST = 0.25;
 
 /** Stroops → display XLM: 25000000 → "2.5". Trailing zeros trimmed. */
 export function formatXlm(stroops: number): string {

@@ -290,21 +290,46 @@ export function Markdown({ source }: { source: string }) {
               </pre>
             );
 
-          case "image":
+          case "image": {
+            // An SVG here is a diagram drawn at ~960px with 10–13px labels:
+            // squeezed to a phone it prints them at 3px. Below sm it keeps a
+            // readable width and scrolls sideways instead, like the system
+            // diagram on the landing page. A photo has no labels to save, so
+            // it still just fits.
+            const diagram = /\.svg($|\?)/i.test(block.src);
+            const img = (
+              // A plain img rather than next/image: an author's upload has
+              // no intrinsic size we know at render time, and next/image
+              // would need one to reserve space. Guessing it would trade a
+              // real layout shift for a wrong one.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={block.src}
+                alt={block.alt}
+                loading="lazy"
+                decoding="async"
+                className={`w-full rounded-xl border border-rule bg-paper-raised ${
+                  diagram ? "min-w-[820px] sm:min-w-0" : ""
+                }`}
+              />
+            );
             return (
               <figure key={key} className="py-2">
-                {/* A plain img rather than next/image: an author's upload has
-                    no intrinsic size we know at render time, and next/image
-                    would need one to reserve space. Guessing it would trade a
-                    real layout shift for a wrong one. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={block.src}
-                  alt={block.alt}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full rounded-xl border border-rule bg-paper-raised"
-                />
+                {diagram ? (
+                  <>
+                    <div className="-mx-6 overflow-x-auto overscroll-x-contain px-6 sm:mx-0 sm:px-0">
+                      {img}
+                    </div>
+                    <p
+                      aria-hidden="true"
+                      className="mt-2 text-right font-mono text-[0.6875rem] text-ink-faint sm:hidden"
+                    >
+                      Scroll sideways →
+                    </p>
+                  </>
+                ) : (
+                  img
+                )}
                 {block.alt && (
                   <figcaption className="mt-3 text-center text-xs text-ink-faint">
                     {block.alt}
@@ -312,6 +337,7 @@ export function Markdown({ source }: { source: string }) {
                 )}
               </figure>
             );
+          }
 
           case "rule":
             return <hr key={key} className="border-rule" />;

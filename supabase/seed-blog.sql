@@ -1,4 +1,4 @@
--- Datavar — the first three posts.
+-- Datavar — the first four posts.
 --
 -- Run after schema.sql, in the same SQL editor. Idempotent: re-running it
 -- overwrites these by slug and leaves everything else alone, so it is safe to
@@ -161,6 +161,90 @@ $body$,
   null,
   null,
   '2026-08-08T18:00:00Z'
+), (
+  'data-got-expensive-the-people-who-make-it-still-get-nothing',
+  'Data got expensive. The people who make it still get nothing.',
+  'Where Datavar came from, what a row of personal data has been worth over twenty years, and the plumbing that has to exist before anyone is paid for theirs.',
+  $body$
+Datavar started because somebody asked for it.
+
+The people building it came from io.net and Hacken. io.net rents out GPUs to teams training models, and working there shows you where the bottleneck in AI actually sits. Compute is a commodity. You can rent an H100 by the hour from a dozen suppliers, and the price drops every quarter. Data never went the same way. Nobody runs a spot market for a hundred thousand hours of consented speech, and there is no quick way to buy it that a lawyer will sign off on.
+
+Hacken audits smart contracts, which teaches a narrower lesson: a claim and a checked claim are different things. Audits exist because "trust us" stopped working as a security model, and crypto learned that before anyone else, mostly by losing money.
+
+Someone who knew both worlds asked whether we could build a data protocol. The ask was specific. What a person agreed to should be written down somewhere neither the buyer nor the seller can quietly edit afterwards. We said yes, and most of the time since has gone on finding out which parts of that we had underestimated.
+
+## What data used to be worth
+
+![Three eras of what a record of personal data has been worth: byproduct, inventory, input.](/illustrations/data-got-expensive/three-eras.svg)
+
+For most of the internet's life your data was exhaust. It got produced on the way to something else, kept because storage was cheap, and sold by pointing ads at it. Clive Humby called data the new oil in 2006. People tend to drop the second half of his point, and it's the useful half: oil is worth nothing until somebody refines it.
+
+Then language models refined it. Train a model on a trillion tokens and text becomes a product, and the pile suddenly had a price.
+
+## What data is worth now
+
+![Content flows from people to a platform to an AI lab. Money flows back from the lab to the platform and stops before it reaches the people.](/illustrations/data-got-expensive/where-money-stops.svg)
+
+In 2024 Reddit licensed its content to Google for a reported $60 million a year, and signed a separate deal with OpenAI a few months later. News Corp's agreement with OpenAI was reported at more than $250 million over five years. Shutterstock booked over $100 million in AI licensing revenue in 2023. These are real prices, negotiated by lawyers on both sides.
+
+Look at who sits at that table: the platform and the lab. The people who wrote the posts are the inventory, and they aren't a party to the sale.
+
+It's easy to call that theft, and it's slightly wrong. The reason it happens can be fixed, so it's worth getting it right. Nothing records who agreed to what. Without that record the smallest unit anyone can sell is the whole platform, and the only party who can sell it is the platform. Nobody is holding your contribution back from the deal. The deal has no way to express it.
+
+## What data is about to be worth
+
+![A rising curve of tokens per frontier training run meets the finite stock of public human text somewhere between 2026 and 2032.](/illustrations/data-got-expensive/supply-and-demand.svg)
+
+Epoch AI has estimated the effective stock of public human text at around 300 trillion tokens. They project that training runs reach datasets of that size somewhere between 2026 and 2032, most likely around 2028.
+
+You can argue with the estimate. The direction is harder to argue with. Compute gets cheaper every year, and people write about as much as they always have.
+
+When the free text runs thin, a lab can train on synthetic data, which means a model learning from its own output, and there's a growing literature on how that goes wrong. It can reach for data that is private today, which is where email and messages live. Or it can pay people for data that doesn't exist yet.
+
+Only the last of those gets better with time, and nobody has built the plumbing for it. Paying people at scale means answering a question nothing answers today. Who agreed to what, for which buyer, for what purpose, and until when? And can the buyer check the answer without trusting the seller?
+
+That's the part we're building.
+
+## How Datavar works
+
+![Five steps from a file on your device to a payout: hash, signed grant, ledger receipt, public check, payment.](/illustrations/data-got-expensive/receipt-flow.svg)
+
+Your Stellar wallet is your account. You sign once to prove it's yours, and there is no password anywhere in the product. You can sign in with Google too, but only as a second door to a wallet you've already attached. Google can't sign anything on your behalf.
+
+When you add a file, your browser computes its SHA-256 before anything uploads, and reads the file's own headers. Files that say they were generated by an AI, screenshots, blank images and duplicates are turned away before they leave your machine.
+
+To sell a dataset you grant consent to a named buyer, for a stated purpose, until a date you pick. Your wallet signs it, and the grant becomes a receipt in a Soroban contract on Stellar instead of a row in our database. The contract enforces two rules on its own. Consent always has an end date, and only the person who granted it can withdraw it. We tried to break the second rule on testnet with our own admin key. The transaction failed and the receipt stayed where it was.
+
+That's why it lives on a ledger. A buyer who wants to know whether they may use a record calls `is_valid` on the contract and gets the same answer our dashboard gets. They don't need an account with us, and they don't have to take our word that nothing changed.
+
+Listing a dataset in the marketplace works the same way. You grant consent to the marketplace's address, so a listing is ledger state, and taking it down is a revoke. A buyer pays for a whole basket with one signature, in XLM or USDC. Before a licence is written, our server reads every consent receipt in the basket back from the chain, and a licence can't outlive the consent behind it. If you withdraw, the next delivery stops.
+
+When something sells, the money goes into a payout contract. You claim it with your own signature, and the payment shows up on a public explorer like any other.
+
+The consent contract is at `CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI` on Stellar testnet, and the source is in the repository. The full walkthrough is in [the docs](/docs/how-it-works).
+
+All of this runs on testnet. Purchases settle in test XLM and test USDC, so nobody has paid real money for anything yet.
+
+## Why Stellar
+
+A consent receipt has to be cheap to write and cheap for a stranger to read, and it has to settle fast enough that a buyer can check one inside a single request. A two-dollar payout still has to be worth sending after fees. Those two needs are why the contract sits in Soroban and not in a Postgres table we control. A table we own settles nothing, because the whole question is what happens when someone stops trusting us.
+
+## What has to be true a year from now
+
+- The simulated buyers are gone from the repository, and a real buyer has licensed a real dataset.
+- The contracts are on mainnet, and a contributor has been paid XLM or USDC they can spend.
+- Someone outside the company has verified a receipt from our published docs, without asking us how.
+- One person has been paid for data because they agreed to it, and can name the buyer, the purpose and the date the permission runs out.
+
+The last one is the product. The rest is machinery for making it possible.
+
+Until then this is a testnet protocol with a market that hasn't seen real money. We'd rather say so here than have you find it out.
+$body$,
+  'Datavar',
+  '/illustrations/data-got-expensive/cover.png',
+  'Data got expensive. The people who make it still get nothing.',
+  '2026-08-08T12:00:00Z'
 )
 on conflict (slug) do update set
   title        = excluded.title,

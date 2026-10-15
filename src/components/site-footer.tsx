@@ -1,152 +1,117 @@
 import Link from "next/link";
+import { CONTACT } from "@/lib/contact";
 import { Logo } from "./logo";
-import { DOC_GROUPS, docHref } from "@/lib/docs";
 
 /**
- * Four columns of plans used to stand here — Careers, Pricing, DPA and the
- * rest — none of them links, because none of those pages existed. Showing the
- * shape of a company we aren't yet was the wrong trade: a reader can't tell a
- * roadmap from a lie by looking at it.
+ * The marketing footer, kept to what someone at the bottom of a page is
+ * actually looking for: one short column each for the product, the reading
+ * and the people, and the legal page.
  *
- * What replaced them is the documentation, which covers most of what those
- * headings promised and, unlike them, exists. The columns are built from the
- * docs index itself, so a page added there appears here without anyone
- * remembering to.
+ * It used to list every docs page one by one under four headings — two of
+ * them to the same URL. The docs have their own index and side nav for that;
+ * one link to them does the job, and the footer stops being a sitemap.
  */
 
-/** The docs groups worth surfacing in a footer, in order. */
-const FOOTER_GROUPS = ["Getting started", "Contributing", "Enterprise"];
+type FooterLink = { label: string; href: string; external?: boolean };
 
-/** Links that sit under a group heading without being docs pages themselves.
- *  Keyed by group title, so renaming a group in `docs.ts` has to be mirrored
- *  here — an unmatched key drops the link silently. */
-const EXTRA_LINKS: Record<string, { label: string; href: string }[]> = {
-  Enterprise: [{ label: "For AI teams", href: "/docs/licensing" }],
-};
-
-const COLUMNS = FOOTER_GROUPS.map((title) => {
-  const group = DOC_GROUPS.find((g) => g.title === title);
-  return {
-    title,
+const COLUMNS: { title: string; links: FooterLink[] }[] = [
+  {
+    title: "Product",
     links: [
-      ...(group?.pages.map((page) => ({
-        label: page.title,
-        href: docHref(page.slug),
-      })) ?? []),
-      ...(EXTRA_LINKS[title] ?? []),
+      { label: "Contribute", href: "/dashboard" },
+      { label: "Marketplace", href: "/market" },
+      { label: "Protocol", href: "/protocol" },
     ],
-  };
-});
-
-/** The rest of the site, for a reader who came here looking for the exits.
- *  The docs index isn't listed here — "Read the docs" beside it already goes
- *  there, and one column over the pages themselves are linked one by one. */
-const ELSEWHERE = [
-  { label: "Protocol", href: "/protocol" },
-  { label: "Blog", href: "/blog" },
-  { label: "Become a contributor", href: "/dashboard" },
+  },
+  {
+    title: "Learn",
+    links: [
+      { label: "Docs", href: "/docs" },
+      { label: "Licensing", href: "/docs/licensing" },
+      { label: "Blog", href: "/blog" },
+    ],
+  },
+  {
+    // Only accounts someone answers. The X and LinkedIn placeholders are gone
+    // rather than parked here as dead text.
+    title: "Contact",
+    links: [
+      { label: "Telegram", href: CONTACT.telegram.href, external: true },
+      { label: "Email", href: CONTACT.email.href, external: true },
+      { label: "GitHub", href: "https://github.com/AtaGuler0/datavar", external: true },
+    ],
+  },
 ];
+
+// Padded into a tap-sized target below sm, with the list's spacing taken
+// down by the same amount so the column keeps its rhythm.
+const linkClass =
+  "inline-block py-1.5 text-sm text-star-faint transition-colors hover:text-star sm:py-0";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-rule bg-paper-raised">
-      <div className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid gap-12 lg:grid-cols-[1.5fr_2.5fr]">
+    <footer className="overflow-hidden border-t border-line bg-night">
+      <div className="mx-auto max-w-6xl px-6 pt-16 pb-10">
+        <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div>
             <Logo />
-            <p className="mt-5 max-w-xs text-sm text-pretty text-ink-dim">
-              The consented data layer for AI. Built on the assumption that the
-              people who produce the data should be the people who profit from
-              it.
+            <p className="mt-4 max-w-xs text-sm text-pretty text-star-dim">
+              The consented data layer for AI.
             </p>
-            <Link
-              href="/docs"
-              className="group mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-ink"
-            >
-              Read the docs
-              <svg
-                viewBox="0 0 16 16"
-                className="h-3 w-3 text-ink-faint transition-transform duration-200 group-hover:translate-x-0.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M6 3l5 5-5 5" strokeLinecap="round" />
-              </svg>
-            </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-8 sm:gap-14">
             {COLUMNS.map((column) => (
               <div key={column.title}>
-                <h3 className="text-xs font-medium text-ink">{column.title}</h3>
-                <ul className="mt-4 space-y-2.5">
-                  {/* Keyed on the label too: a column can carry two links to
-                      the same page under different names. */}
+                <h3 className="text-xs text-star-ghost">{column.title}</h3>
+                <ul className="mt-2 space-y-0.5 sm:mt-3 sm:space-y-2">
                   {column.links.map((link) => (
-                    <li key={`${link.label}:${link.href}`}>
-                      <Link
-                        href={link.href}
-                        className="text-sm text-ink-faint transition-colors hover:text-ink"
-                      >
-                        {link.label}
-                      </Link>
+                    <li key={link.label}>
+                      {link.external ? (
+                        <a
+                          href={link.href}
+                          target={link.href.startsWith("http") ? "_blank" : undefined}
+                          rel={link.href.startsWith("http") ? "noreferrer" : undefined}
+                          className={linkClass}
+                        >
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link href={link.href} className={linkClass}>
+                          {link.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
-
-            <div>
-              <h3 className="text-xs font-medium text-ink">Elsewhere</h3>
-              <ul className="mt-4 space-y-2.5">
-                {ELSEWHERE.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-ink-faint transition-colors hover:text-ink"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
           </div>
         </div>
 
-        <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-rule pt-8 sm:flex-row sm:items-center">
-          <p className="font-mono text-xs text-ink-faint">
+        <div className="mt-14 flex flex-col gap-3 border-t border-line pt-6 font-mono text-xs text-star-faint sm:flex-row sm:items-center sm:justify-between">
+          <p>
             © {new Date().getFullYear()} Datavar Labs
-          </p>
-          <div className="flex items-center gap-6">
+            <span aria-hidden="true" className="mx-3 text-star-ghost">
+              ·
+            </span>
             {/* One legal page, not two: the terms and the privacy half
-                describe the same arrangement from opposite ends, and splitting
-                them meant repeating the ledger's permanence in both. It lives
-                in the docs rather than a folder of its own (same renderer,
-                same diff) and is linked from here, where a reader looks for
-                it, rather than from a column above. */}
-            <Link
-              href="/docs/terms"
-              className="font-mono text-xs text-ink-faint transition-colors hover:text-ink"
-            >
+                describe the same arrangement from opposite ends. */}
+            <Link href="/docs/terms" className="-my-2 inline-block py-2 transition-colors hover:text-star">
               Terms &amp; Privacy
             </Link>
-            {/* One entry, because one exists. The X and LinkedIn placeholders
-                are gone rather than parked here as dead text — an empty
-                account list says less than a real repository does. */}
-            <a
-              href="https://github.com/AtaGuler0/datavar"
-              target="_blank"
-              rel="noreferrer"
-              className="font-mono text-xs text-ink-faint transition-colors hover:text-ink"
-            >
-              GitHub
-            </a>
-          </div>
+          </p>
+          <p>Stellar testnet</p>
         </div>
       </div>
+
+      <p
+        aria-hidden="true"
+        className="mx-auto max-w-6xl px-6 pb-10 text-center font-pixel leading-[0.9] text-star select-none"
+        style={{ fontSize: "clamp(3.5rem, 17vw, 13.5rem)" }}
+      >
+        Datavar
+      </p>
     </footer>
   );
 }

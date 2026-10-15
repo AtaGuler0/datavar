@@ -61,7 +61,7 @@ export function WalletPicker({
         className="absolute inset-0 bg-ink-950/50 backdrop-blur-sm"
       />
 
-      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-rule bg-paper shadow-2xl shadow-ink-950/20">
+      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-rule bg-paper shadow-2xl shadow-black/50">
         <div className="flex items-start justify-between gap-4 border-b border-rule px-6 py-5">
           <div>
             <p className="eyebrow text-ink-faint">

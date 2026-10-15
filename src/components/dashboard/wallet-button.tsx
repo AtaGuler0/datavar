@@ -118,7 +118,7 @@ export function WalletButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-rule bg-paper py-1 shadow-lg shadow-ink/5">
+        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-rule bg-paper py-1 shadow-lg shadow-black/40">
           {/* Under a Google session there is an address but no key attached,
               and this is the only route back to one from the top bar. */}
           {!canSign && (

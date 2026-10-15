@@ -8,7 +8,7 @@ import { SITE_URL } from "@/lib/site";
  * and row-level security, and a robots file has never kept anybody out of
  * anything. It is about what is worth indexing. The marketing surface, the
  * blog and the docs are written to be found; the dashboard, the operator panel
- * and the ramp are an application, and a search result landing someone on a
+ * and a buyer's own pages are an application, and a search result landing someone on a
  * page that only says "connect a wallet" helps nobody.
  *
  * /api is here for a different reason again: those routes answer with JSON,
@@ -21,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin", "/api/", "/auth/", "/dashboard", "/anchor", "/market/licences", "/market/profile"],
+        disallow: ["/admin", "/api/", "/auth/", "/dashboard", "/market/licences", "/market/profile"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

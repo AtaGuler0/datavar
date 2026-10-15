@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { Logo } from "./logo";
 import { SectionLink } from "./section-link";
 
@@ -11,58 +10,37 @@ const LINKS = [
   { href: "/#how", label: "How it works" },
   { href: "/#earnings", label: "Earnings" },
   { href: "/#buyers", label: "For AI teams" },
-  { href: "/#faq", label: "FAQ" },
 ];
 
-/** The header is `h-16`; its midline is what decides which side of a colour
- *  boundary it is on. Flipping there rather than at the top or bottom edge
- *  means the swap happens when most of the bar has already crossed. */
-const HEADER_MIDLINE = 32;
-
+/**
+ * The marketing header: dark from the start, with a white pill for the call
+ * to action.
+ */
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false);
-  const [onDark, setOnDark] = useState(false);
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
 
-  /* Both flags come off the same read: whether the page has moved at all, and
-     whether a dark block is currently behind the bar. Sections that paint a
-     dark background tag themselves with data-nav-tone="dark" — the header
-     doesn't need to know which section it is or what page it is on, only that
-     something dark is under it, so it can invert instead of sitting there as a
-     pale slab over the enterprise block. Re-read per route: the marketing
-     shell and the blog render different trees under the same header. */
+  // The bar is transparent over the top of the page and takes a ground once
+  // anything has scrolled under it.
   useEffect(() => {
-    const darkZones = Array.from(
-      document.querySelectorAll<HTMLElement>('[data-nav-tone="dark"]'),
-    );
-
     let frame = 0;
     const read = () => {
       frame = 0;
       setScrolled(window.scrollY > 12);
-      setOnDark(
-        darkZones.some((zone) => {
-          const box = zone.getBoundingClientRect();
-          return box.top <= HEADER_MIDLINE && box.bottom >= HEADER_MIDLINE;
-        }),
-      );
     };
-    // Scroll fires far more often than the screen repaints, and this reads
-    // layout — coalesce to one measurement per frame.
+    // Scroll fires far more often than the screen repaints — coalesce to one
+    // read per frame.
     const schedule = () => {
       frame ||= requestAnimationFrame(read);
     };
 
     read();
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
     };
-  }, [pathname]);
+  }, []);
 
   // The mobile sheet covers the page; don't let the page scroll behind it.
   useEffect(() => {
@@ -88,9 +66,8 @@ export function SiteNav() {
     };
   }, [open]);
 
-  // The open sheet is a light surface, so the bar belongs to the sheet while
-  // it is up no matter what is scrolled behind it.
-  const inverted = onDark && !open;
+  const linkTone = "text-star-dim hover:text-star";
+  const sheetRow = "border-b border-line py-4 text-lg text-star";
 
   return (
     <>
@@ -103,12 +80,10 @@ export function SiteNav() {
           // the page take the taps meant for it. The sheet is a sibling now,
           // and this stays solid so the two can never interact again.
           open
-            ? "border-b border-rule bg-paper"
-            : !scrolled
-              ? "border-b border-transparent"
-              : inverted
-                ? "border-b border-rule-dark bg-ink-950/85 backdrop-blur-xl"
-                : "border-b border-rule bg-paper/85 backdrop-blur-xl"
+            ? "border-b border-line bg-night"
+            : scrolled
+              ? "border-b border-line bg-night/85 backdrop-blur-xl"
+              : "border-b border-transparent"
         }`}
       >
         <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -125,22 +100,19 @@ export function SiteNav() {
               e.preventDefault();
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            className="relative z-10"
+            className="relative z-10 flex items-center gap-5"
             aria-label="Datavar home"
           >
-            <Logo tone={inverted ? "dark" : "light"} />
+            <Logo />
+            <span aria-hidden="true" className="hidden h-5 w-px bg-line-strong md:block" />
           </Link>
 
-          <div className="hidden items-center gap-8 md:flex">
+          <div className="mr-auto ml-5 hidden items-center gap-8 md:flex">
             {LINKS.map((link) => (
               <SectionLink
                 key={link.href}
                 href={link.href}
-                className={`text-sm transition-colors duration-300 ${
-                  inverted
-                    ? "text-chalk-dim hover:text-chalk"
-                    : "text-ink-dim hover:text-ink"
-                }`}
+                className={`text-sm transition-colors duration-300 ${linkTone}`}
               >
                 {link.label}
               </SectionLink>
@@ -148,14 +120,10 @@ export function SiteNav() {
             {/* A route rather than a fragment, so a real Link: it prefetches
                 and navigates, which SectionLink's scroll handling can't do. */}
             <Link
-              href="/protocol"
-              className={`text-sm transition-colors duration-300 ${
-                inverted
-                  ? "text-chalk-dim hover:text-chalk"
-                  : "text-ink-dim hover:text-ink"
-              }`}
+              href="/docs"
+              className={`text-sm transition-colors duration-300 ${linkTone}`}
             >
-              Protocol
+              Docs
             </Link>
           </div>
 
@@ -164,26 +132,15 @@ export function SiteNav() {
                 to send anyone to. It goes to the catalogue now. */}
             <Link
               href="/market"
-              className={`rounded-lg px-3.5 py-2 text-sm transition-colors duration-300 ${
-                inverted
-                  ? "text-chalk-dim hover:text-chalk"
-                  : "text-ink-dim hover:text-ink"
-              }`}
+              className={`rounded-lg px-3.5 py-2 text-sm transition-colors duration-300 ${linkTone}`}
             >
-              Buy data
+              Marketplace
             </Link>
-            {/* Slate on ink-950 is nearly the same value, so the button would
-                read as a hole in the bar. Over a dark block it flips to the
-                paper side of the palette and keeps its weight. */}
             <Link
               href="/dashboard"
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-300 ${
-                inverted
-                  ? "bg-paper text-ink hover:bg-chalk"
-                  : "bg-slate-deep text-paper hover:bg-slate"
-              }`}
+              className="rounded-[12px] bg-star px-4 py-2 text-sm font-medium text-night transition-colors duration-300 hover:bg-white"
             >
-              Become a contributor
+              Get started
             </Link>
           </div>
 
@@ -198,12 +155,12 @@ export function SiteNav() {
             <span className="flex w-5 flex-col gap-[5px]">
               <span
                 className={`h-px w-full transition-[transform,background-color] duration-300 ${
-                  inverted ? "bg-chalk" : "bg-ink"
+                  "bg-star"
                 } ${open ? "translate-y-[3px] rotate-45" : ""}`}
               />
               <span
                 className={`h-px w-full transition-[transform,background-color] duration-300 ${
-                  inverted ? "bg-chalk" : "bg-ink"
+                  "bg-star"
                 } ${open ? "-translate-y-[3px] -rotate-45" : ""}`}
               />
             </span>
@@ -218,7 +175,7 @@ export function SiteNav() {
       {open && (
         <div
           id="site-menu"
-          className="fixed inset-0 top-16 z-40 overflow-y-auto overscroll-contain bg-paper px-6 pt-6 pb-10 md:hidden"
+          className="fixed inset-0 top-16 z-40 overflow-y-auto overscroll-contain bg-night px-6 pt-6 pb-10 md:hidden"
         >
           <div className="flex flex-col gap-1">
             {LINKS.map((link) => (
@@ -226,32 +183,32 @@ export function SiteNav() {
                 key={link.href}
                 href={link.href}
                 onNavigate={() => setOpen(false)}
-                className="border-b border-rule py-4 text-lg text-ink"
+                className={sheetRow}
               >
                 {link.label}
               </SectionLink>
             ))}
             <Link
-              href="/protocol"
+              href="/docs"
               onClick={() => setOpen(false)}
-              className="border-b border-rule py-4 text-lg text-ink"
+              className={sheetRow}
             >
-              Protocol
+              Docs
             </Link>
             <Link
               href="/market"
               onClick={() => setOpen(false)}
-              className="border-b border-rule py-4 text-lg text-ink"
+              className={sheetRow}
             >
-              Buy data
+              Marketplace
             </Link>
           </div>
           <Link
             href="/dashboard"
             onClick={() => setOpen(false)}
-            className="mt-8 block rounded-lg bg-slate-deep py-3.5 text-center font-medium text-paper"
+            className="mt-8 block rounded-[14px] bg-star py-3.5 text-center font-medium text-night"
           >
-            Become a contributor
+            Get started
           </Link>
         </div>
       )}

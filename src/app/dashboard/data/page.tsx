@@ -1,3 +1,4 @@
+import { ConnectFigure } from "@/components/step-figures";
 import { DataPanel } from "@/components/dashboard/data-panel";
 import { PageHeading } from "@/components/dashboard/primitives";
 import { WalletGate } from "@/components/dashboard/wallet-gate";
@@ -6,11 +7,12 @@ export default function DataPage() {
   return (
     <div>
       <PageHeading
-        eyebrow="01 · Your data"
+        eyebrow="Contributor · 01 · Your data"
         title="Your data."
-        description="Everything you've contributed, and where each dataset stands: hashed on your device, consented to on the ledger, licensed, paid. Whatever it needs next is on the row itself, and every receipt you've signed is one view away."
+        aside="Where every dataset stands."
+        description="Hashed, consented, licensed, paid: each row says what it needs next."
       />
-      <WalletGate message="Connect your wallet to see and contribute data.">
+      <WalletGate message="Connect your wallet to see and contribute data." figure={<ConnectFigure />}>
         <DataPanel />
       </WalletGate>
     </div>

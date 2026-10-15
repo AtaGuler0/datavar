@@ -28,8 +28,8 @@ export function AdminTopBar() {
   return (
     <>
       <header
-        className={`sticky top-0 z-40 border-b border-rule md:hidden ${
-          open ? "bg-paper" : "bg-paper/85 backdrop-blur-xl"
+        className={`sticky top-0 z-40 border-b border-line md:hidden ${
+          open ? "bg-night" : "bg-night-900/85 backdrop-blur-xl"
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3 px-4">
@@ -49,12 +49,12 @@ export function AdminTopBar() {
             >
               <span className="flex w-5 flex-col gap-[5px]">
                 <span
-                  className={`h-px w-full bg-ink transition-transform duration-300 ${
+                  className={`h-px w-full bg-star transition-transform duration-300 ${
                     open ? "translate-y-[3px] rotate-45" : ""
                   }`}
                 />
                 <span
-                  className={`h-px w-full bg-ink transition-transform duration-300 ${
+                  className={`h-px w-full bg-star transition-transform duration-300 ${
                     open ? "-translate-y-[3px] -rotate-45" : ""
                   }`}
                 />

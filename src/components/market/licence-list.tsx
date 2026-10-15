@@ -1,8 +1,13 @@
 "use client";
 
+import { LicenceShelfFigure } from "../app-figures";
+
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useWallet } from "@/components/dashboard/wallet-provider";
+import { Corners } from "@/components/dashboard/primitives";
+import { PillLink } from "@/components/night";
+import { MarketPage } from "./chrome";
+import { SourceTile } from "./source-tile";
 import { WalletGate } from "@/components/dashboard/wallet-gate";
 import { SESSION_NOW } from "@/lib/clock";
 import { formatBytes, formatDate } from "@/lib/format";
@@ -14,6 +19,7 @@ import {
 import { CONSENT_CONTRACT_ID } from "@/lib/stellar/config";
 import { sourceLabel } from "@/lib/supabase/datasets";
 import {
+  DeliveryRefused,
   licensedDownloadUrl,
   listLicences,
   readBuyerProfile,
@@ -31,28 +37,24 @@ import { BuyerProfileForm } from "./buyer-profile";
  * receipt it stands on, the payment that bought it, and the date it stops.
  *
  * The download is a plain button rather than a link with a URL in it, because
- * the URL does not exist until the database has agreed to make one. Storage
- * asks whether a sale names this wallet and whether the licence has run out;
- * an expired licence produces an error, not a file.
+ * the URL does not exist until both the database and the consent contract have
+ * agreed to make one. Storage asks whether a sale names this wallet and whether
+ * the licence has run out; the route behind the button asks the contract whether
+ * the receipt is still good. A withdrawal since the sale produces an explanation
+ * here, not a file.
  */
 export function LicenceList() {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <div>
-        <p className="eyebrow text-ink-faint">Marketplace</p>
-        <h1 className="display mt-3 text-[1.75rem] font-medium text-balance text-ink sm:text-[2.25rem]">
-          Your licences
-        </h1>
-        <p className="mt-4 max-w-xl text-pretty text-ink-dim">
-          Every dataset you have licensed, the consent receipt behind it, and
-          the payment that bought it.
-        </p>
-      </div>
-
-      <WalletGate message="Connect the wallet you licensed with to see what it holds.">
+    <MarketPage
+      section="Your licences"
+      title="Your licences."
+      aside="What this wallet has bought."
+      description="Every dataset you've licensed, with its receipt and its payment."
+    >
+      <WalletGate message="Connect the wallet you licensed with to see what it holds." figure={<LicenceShelfFigure />}>
         <Licences />
       </WalletGate>
-    </div>
+    </MarketPage>
   );
 }
 
@@ -79,7 +81,7 @@ function Licences() {
 
   if (failed) {
     return (
-      <p className="mt-10 rounded-2xl border border-dashed border-rule-strong bg-paper/60 px-6 py-14 text-center text-pretty text-ink-dim">
+      <p className="mt-10 rounded-xl border border-dashed border-line-strong px-6 py-14 text-center text-pretty text-star-dim">
         Couldn&rsquo;t read your licences. That is the database refusing or
         unreachable, not an empty shelf.
       </p>
@@ -88,11 +90,12 @@ function Licences() {
 
   return (
     <div className="mt-10 space-y-8">
-      <section className="rounded-2xl border border-rule bg-paper p-5 shadow-sm shadow-ink/[0.03]">
+      <section className="relative rounded-xl border border-line bg-white/[0.018] p-5">
+        <Corners />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-sm font-medium text-ink">Buyer details</h2>
-            <p className="mt-0.5 text-xs text-ink-faint">
+            <h2 className="font-mono text-[0.6875rem] tracking-[0.1em] text-star-dim uppercase">Buyer details</h2>
+            <p className="mt-1.5 text-[0.875rem] text-star-faint">
               {profile
                 ? `${profile.org} · ${profile.contact}`
                 : "Not filed yet. Licensing asks for this once."}
@@ -101,14 +104,14 @@ function Licences() {
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
-            className="shrink-0 text-xs text-ink-faint transition-colors hover:text-ink"
+            className="shrink-0 font-mono text-[0.6875rem] tracking-[0.08em] text-star-dim uppercase transition-colors hover:text-star"
           >
             {editing ? "Cancel" : profile ? "Edit" : "Add"}
           </button>
         </div>
 
         {editing && address && (
-          <div className="mt-4 border-t border-rule pt-4">
+          <div className="mt-4 border-t border-line pt-4">
             <BuyerProfileForm
               wallet={address}
               profile={profile}
@@ -126,21 +129,18 @@ function Licences() {
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-28 animate-pulse rounded-2xl border border-rule bg-paper"
+              className="h-32 animate-pulse rounded-xl border border-line bg-white/[0.02]"
             />
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-rule-strong bg-paper/60 px-6 py-16 text-center">
-          <p className="text-pretty text-ink-dim">
+        <div className="rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+          <p className="text-[1.0625rem] text-pretty text-star">
             This wallet holds no licences yet.
           </p>
-          <Link
-            href="/market"
-            className="mt-5 inline-block rounded-lg bg-slate-deep px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-slate"
-          >
-            Browse the catalogue
-          </Link>
+          <div className="mt-6">
+            <PillLink href="/market">Browse the catalogue</PillLink>
+          </div>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -167,27 +167,32 @@ function LicenceRow({ licence }: { licence: Licence }) {
     setBusy(true);
     setError(null);
     try {
-      const url = await licensedDownloadUrl(dataset.storage_path);
+      const url = await licensedDownloadUrl(licence.id);
       window.location.href = url;
-    } catch {
+    } catch (e) {
+      // The route refuses with the reason — withdrawn consent reads nothing
+      // like a network blip, and the buyer is the one who has to act on it.
       setError(
-        expired
-          ? "This licence has run out, so storage no longer hands the file over."
+        e instanceof DeliveryRefused
+          ? e.message
           : "The file didn't come back. Try again in a moment.",
       );
     } finally {
       setBusy(false);
     }
-  }, [dataset, busy, expired]);
+  }, [dataset, busy, licence.id]);
 
   return (
-    <li className="rounded-2xl border border-rule bg-paper p-5 shadow-sm shadow-ink/[0.03]">
+    <li className="relative rounded-xl border border-line bg-white/[0.018] p-5">
+      <Corners />
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h3 className="truncate text-[0.9375rem] font-medium text-ink">
+        <div className="flex min-w-0 items-center gap-4">
+          {dataset && <SourceTile source={dataset.source_type} className="h-11 w-12 shrink-0" />}
+          <div className="min-w-0">
+          <h3 className="truncate text-[1rem] font-medium tracking-[-0.01em] text-star">
             {dataset?.title ?? "Dataset"}
           </h3>
-          <p className="mt-0.5 text-xs text-ink-faint">
+          <p className="mt-1 font-mono text-[0.6875rem] tracking-[0.06em] text-star-faint uppercase">
             {dataset ? sourceLabel(dataset.source_type) : "—"}
             {dataset && (
               <>
@@ -198,12 +203,13 @@ function LicenceRow({ licence }: { licence: Licence }) {
             <span className="mx-1.5">·</span>
             licensed {formatDate(licence.created_at)}
           </p>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className="text-sm tabular-nums text-ink-dim">
+          <span className="text-[1.25rem] font-medium tracking-[-0.03em] text-star tabular-nums">
             {formatAmount(licence.price_stroops, licence.asset)}{" "}
-            <span className="font-mono text-[0.625rem] text-ink-faint">
+            <span className="font-mono text-[0.6875rem] tracking-normal text-star-faint">
               {licence.asset}
             </span>
           </span>
@@ -211,7 +217,7 @@ function LicenceRow({ licence }: { licence: Licence }) {
             type="button"
             onClick={download}
             disabled={busy || !dataset || expired}
-            className="rounded-lg bg-slate-deep px-3.5 py-1.5 text-xs font-medium text-paper transition-colors hover:bg-slate disabled:opacity-50"
+            className="inline-flex h-9 items-center rounded-[10px] bg-star px-4 text-[0.8125rem] font-medium text-night transition-colors hover:bg-white disabled:opacity-50"
           >
             {expired ? "Expired" : busy ? "Preparing…" : "Download"}
           </button>
@@ -219,16 +225,16 @@ function LicenceRow({ licence }: { licence: Licence }) {
       </div>
 
       {licence.purpose && (
-        <p className="mt-3 text-pretty text-[0.8125rem] text-ink-dim">
-          <span className="text-ink-faint">Licensed for: </span>
+        <p className="mt-4 text-pretty text-[0.875rem] text-star-dim">
+          <span className="text-star-faint">Licensed for · </span>
           {licence.purpose}
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-3 font-mono text-[0.625rem] text-ink-faint">
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line pt-4 font-mono text-[0.6875rem] text-star-faint">
         <span>
           Runs to{" "}
-          <span className={expired ? "text-fall" : "text-ink-dim"}>
+          <span className={expired ? "text-fall" : "text-star-dim"}>
             {licence.licence_expires_at
               ? formatDate(licence.licence_expires_at)
               : "—"}
@@ -239,7 +245,7 @@ function LicenceRow({ licence }: { licence: Licence }) {
             href={explorerContractUrl(CONSENT_CONTRACT_ID)}
             target="_blank"
             rel="noreferrer"
-            className="text-slate underline-offset-4 hover:underline"
+            className="text-star-dim underline-offset-4 hover:text-star hover:underline"
           >
             receipt #{licence.consent_receipt_id}
           </a>
@@ -249,7 +255,7 @@ function LicenceRow({ licence }: { licence: Licence }) {
             href={explorerTxUrl(licence.fund_tx)}
             target="_blank"
             rel="noreferrer"
-            className="truncate text-slate underline-offset-4 hover:underline"
+            className="truncate text-star-dim underline-offset-4 hover:text-star hover:underline"
           >
             payment {licence.fund_tx.slice(0, 10)}…
           </a>

@@ -56,7 +56,7 @@ export default async function PostPage({ params }: Props) {
     >
       <Link
         href="/blog"
-        className="font-mono text-[0.6875rem] tracking-[0.14em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
+        className="-my-3 inline-block py-3 font-mono text-[0.6875rem] tracking-[0.14em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
       >
         ← Blog
       </Link>

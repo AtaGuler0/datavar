@@ -9,6 +9,8 @@ import {
   priceOf,
   type Listing,
 } from "@/lib/supabase/market";
+import { Corners } from "../dashboard/primitives";
+import { SourceTile } from "./source-tile";
 
 /**
  * One listing.
@@ -46,48 +48,50 @@ export function ListingCard({
   );
 
   return (
-    <article className="flex flex-col rounded-2xl border border-rule bg-paper p-5 shadow-sm shadow-ink/[0.03] transition-colors hover:border-rule-strong">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-[0.9375rem] font-medium text-ink">
-            {sourceLabel(listing.source_type)}
-          </h3>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[0.6875rem] text-ink-faint">
-            <span>
-              {format
-                ? formatLabel(format)
-                : (listing.content_type ?? "Unknown format")}
-            </span>
-            {/* What the upload check found, or that there wasn't one. Said on
-                every card rather than only on the good ones: "checked" means
-                nothing if its absence is invisible. */}
-            <span
-              className={`rounded border px-1.5 py-0.5 ${
-                listing.scan_status === "clean"
-                  ? "border-rise/30 text-rise"
-                  : "border-rule text-ink-faint"
-              }`}
-              title={
-                listing.scan_status === "clean"
-                  ? "Checked in the contributor's browser at upload: no generator metadata, not a screenshot, not empty."
-                  : "Filed before uploads were checked."
-              }
-            >
-              {listing.scan_status === "clean" ? "checked" : "unchecked"}
-            </span>
-          </p>
+    <article className="group/card relative flex flex-col rounded-xl border border-line bg-white/[0.018] p-5 transition-colors hover:border-line-strong">
+      <Corners />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <SourceTile source={listing.source_type} className="h-11 w-12 shrink-0" />
+          <div className="min-w-0">
+            <h3 className="truncate text-[1rem] font-medium tracking-[-0.01em] text-star">
+              {sourceLabel(listing.source_type)}
+            </h3>
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 font-mono text-[0.6875rem] tracking-[0.06em] text-star-faint uppercase">
+              <span>
+                {format
+                  ? formatLabel(format)
+                  : (listing.content_type ?? "Unknown format")}
+              </span>
+              {/* What the upload check found, or that there wasn't one. Said on
+                  every card rather than only on the good ones: "checked" means
+                  nothing if its absence is invisible. */}
+              <span
+                className={`flex items-center gap-1.5 ${
+                  listing.scan_status === "clean" ? "text-signal" : "text-star-ghost"
+                }`}
+                title={
+                  listing.scan_status === "clean"
+                    ? "Checked in the contributor's browser at upload: no generator metadata, not a screenshot, not empty."
+                    : "Filed before uploads were checked."
+                }
+              >
+                · {listing.scan_status === "clean" ? "checked" : "unchecked"}
+              </span>
+            </p>
+          </div>
         </div>
         <p className="shrink-0 text-right">
-          <span className="text-lg font-medium tabular-nums text-ink">
+          <span className="text-[1.625rem] leading-none font-medium tracking-[-0.04em] text-star tabular-nums">
             {formatAmount(priceOf(listing, asset), asset)}
           </span>
-          <span className="ml-1 font-mono text-[0.625rem] text-ink-faint">
+          <span className="ml-1.5 font-mono text-[0.6875rem] text-star-faint">
             {asset}
           </span>
         </p>
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5 text-[0.8125rem]">
+      <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4 text-[0.875rem]">
         <Field label="Size" value={formatBytes(listing.byte_size)} />
         <Field label="Contributed" value={formatDate(listing.created_at)} />
         <Field
@@ -104,13 +108,13 @@ export function ListingCard({
         />
       </dl>
 
-      <p className="mt-4 line-clamp-2 text-pretty text-[0.8125rem] text-ink-dim">
-        <span className="text-ink-faint">Purpose: </span>
+      <p className="mt-4 line-clamp-2 text-pretty text-[0.8125rem] text-star-dim">
+        <span className="text-star-faint">Purpose · </span>
         {listing.consent_purpose}
       </p>
 
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-rule pt-4">
-        <p className="min-w-0 font-mono text-[0.625rem] text-ink-faint">
+      <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+        <p className="min-w-0 font-mono text-[0.6875rem] text-star-ghost">
           <span title="An opaque, stable id for the contributor. It is a salted digest, not an address.">
             {listing.contributor_id.slice(0, 8)}
           </span>
@@ -121,20 +125,21 @@ export function ListingCard({
         </p>
 
         {licensed ? (
-          <span className="shrink-0 rounded-lg border border-rule bg-paper-raised px-3 py-1.5 text-xs text-ink-dim">
-            Licensed
+          <span className="shrink-0 font-mono text-[0.6875rem] tracking-[0.08em] text-signal uppercase">
+            ✓ Licensed
           </span>
         ) : (
           <button
             type="button"
             onClick={onToggle}
-            className={`shrink-0 rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
+            aria-pressed={inBasket}
+            className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-[10px] px-4 text-[0.8125rem] font-medium transition-colors ${
               inBasket
-                ? "border border-rule-strong bg-paper-raised text-ink"
-                : "bg-slate-deep text-paper hover:bg-slate"
+                ? "border border-line-strong text-star hover:border-star-faint"
+                : "bg-star text-night hover:bg-white"
             }`}
           >
-            {inBasket ? "Remove" : "Add"}
+            {inBasket ? "In basket · Remove" : "Add to basket"}
           </button>
         )}
       </div>
@@ -145,8 +150,8 @@ export function ListingCard({
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[0.6875rem] text-ink-faint">{label}</dt>
-      <dd className="truncate text-ink-dim tabular-nums">{value}</dd>
+      <dt className="font-mono text-[0.625rem] tracking-[0.1em] text-star-faint uppercase">{label}</dt>
+      <dd className="mt-1 truncate text-star tabular-nums">{value}</dd>
     </div>
   );
 }

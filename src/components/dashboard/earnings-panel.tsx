@@ -325,7 +325,7 @@ function ClaimBar({
           {waitingCount > 0
             ? `${formatAmount(waitingStroops, asset)} ${asset} from ${waitingCount} newer sale${waitingCount === 1 ? "" : "s"} is on its way into the contract, and claimable the moment it lands.`
             : asset === "USDC"
-              ? "Claiming needs a USDC trustline on your account — add one from the ramp if the transaction is refused."
+              ? "Claiming needs a USDC trustline on your account — add one in your wallet if the transaction is refused."
               : "Claiming signs one transaction with your wallet. The contract pays it out."}
         </p>
       </div>

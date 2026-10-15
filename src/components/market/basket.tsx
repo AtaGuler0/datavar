@@ -165,7 +165,7 @@ export function Basket({
             if (e.target === e.currentTarget && step !== "paying") setOpen(false);
           }}
         >
-          <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-rule bg-paper shadow-xl shadow-ink/10 sm:rounded-2xl">
+          <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-rule bg-paper shadow-xl shadow-black/50 sm:rounded-2xl">
             <header className="flex items-start justify-between gap-4 border-b border-rule px-5 py-4">
               <div>
                 <h2 className="text-sm font-medium text-ink">
@@ -173,7 +173,7 @@ export function Basket({
                 </h2>
                 <p className="mt-0.5 text-xs text-ink-faint">
                   {asset === "USDC"
-                    ? "Testnet USDC from the Turkish ramp. Nothing here moves real money."
+                    ? "Testnet USDC. Nothing here moves real money."
                     : "Testnet XLM. Nothing here moves real money."}
                 </p>
               </div>
@@ -181,7 +181,7 @@ export function Basket({
                 type="button"
                 onClick={() => setOpen(false)}
                 disabled={step === "paying"}
-                className="-mr-1 -mt-1 rounded-lg p-1.5 text-ink-faint transition-colors hover:text-ink disabled:opacity-40"
+                className="-mt-2 -mr-2 rounded-lg p-2.5 text-ink-faint transition-colors hover:text-ink disabled:opacity-40 sm:-mt-1 sm:-mr-1 sm:p-1.5"
                 aria-label="Close"
               >
                 <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -218,7 +218,7 @@ export function Basket({
                           type="button"
                           onClick={() => onRemove(item.id)}
                           disabled={step === "paying"}
-                          className="shrink-0 text-xs text-ink-faint transition-colors hover:text-ink disabled:opacity-40"
+                          className="-my-2 -mr-2 flex h-9 w-9 shrink-0 items-center justify-center text-sm text-ink-faint transition-colors hover:text-ink disabled:opacity-40"
                           aria-label="Remove"
                         >
                           ×
@@ -263,19 +263,6 @@ export function Basket({
                       </li>
                     </ul>
                   </div>
-
-                  {asset === "USDC" && (
-                    <p className="mt-3 text-xs text-pretty text-ink-faint">
-                      No USDC yet?{" "}
-                      <Link
-                        href="/anchor"
-                        className="text-ink-dim underline decoration-rule-strong underline-offset-4 hover:text-ink"
-                      >
-                        Buy some with Turkish lira
-                      </Link>{" "}
-                      — it lands in this same wallet.
-                    </p>
-                  )}
 
                   {!session ? (
                     <div className="mt-5 rounded-xl border border-rule bg-paper-raised/60 p-4">

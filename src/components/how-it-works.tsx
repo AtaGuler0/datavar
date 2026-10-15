@@ -1,75 +1,107 @@
+import { ContributorSpec } from "./contributor-spec";
+import { NightHeading, Plate } from "./night";
 import { Reveal } from "./reveal";
-import { SectionHeading } from "./section-heading";
+import {
+  ApproveFigure,
+  ConnectFigure,
+  Ledger,
+  PaidFigure,
+} from "./step-figures";
+import { StepScroll, type Step } from "./step-scroll";
+import { SystemDiagram } from "./system-diagram";
 
-const STEPS = [
+const STEPS: Step[] = [
   {
-    n: "01",
-    title: "Connect what you already have",
-    body: "Link the accounts, devices and files that hold your data. Access is read-only, scoped, and revocable the second you change your mind.",
-    detail: ["Browsing & search", "Health & wearables", "Purchases", "Media"],
+    title: "Bring what you already have.",
+    body: "Export what a service holds on you, or pick files you already keep, and upload them. Each file is hashed on your device before it leaves, and nothing is offered to anyone until you say so.",
+    stat: {
+      value: "On-device",
+      label: "hashing",
+      note: "SHA-256 before upload · nothing listed without consent",
+    },
+    stage: "Upload",
+    share: 30,
+    fig: "Fig 1.1",
+    tag: "Intake",
+    caption: ["Browsing · health · purchases · media", "hashed on device"],
+    figure: <ConnectFigure />,
   },
   {
-    n: "02",
-    title: "Nothing leaves until you approve it",
+    title: "Nothing leaves until you approve it.",
     body: "You approve each dataset, each buyer, and each purpose separately. Every approval is written as a signed consent receipt with an expiry date.",
-    detail: ["Per-buyer control", "Purpose limits", "Expiring by default"],
+    stat: {
+      value: "1 receipt",
+      label: "per dataset, buyer and purpose",
+      note: "signed on Stellar · no end date, no consent",
+    },
+    stage: "Approve",
+    share: 30,
+    fig: "Fig 1.2",
+    tag: "Gate",
+    caption: ["Per buyer · per purpose", "declined stays declined"],
+    figure: <ApproveFigure />,
   },
   {
-    n: "03",
-    title: "Get paid when it sells",
+    title: "Get paid when it sells.",
     body: "Rare, high-signal data earns more than common data. Earnings are held in a contract on Stellar and leave it on your signature alone, with the transaction hash to check them against.",
-    detail: ["XLM payouts", "On-chain receipts", "PayPal soon"],
+    stat: {
+      value: "USDC",
+      label: "paid out of the contract",
+      note: "claimed on your signature alone",
+    },
+    stage: "Paid",
+    share: 40,
+    fig: "Fig 1.3",
+    tag: "Payout",
+    caption: ["Settled on Stellar", "illustrative ledger"],
+    figure: (
+      <>
+        <PaidFigure />
+        <Ledger />
+      </>
+    ),
   },
 ];
 
 export function HowItWorks() {
   return (
-    <section id="how" className="bg-paper">
+    <section id="how" className="bg-night">
       <div className="mx-auto max-w-6xl px-6 py-28 sm:py-36">
-        <SectionHeading
+        <NightHeading
           eyebrow="For people"
-          title={
-            <>
-              You produce the data.
-              <br />
-              You should set the terms.
-            </>
-          }
-          body="Right now your data is taken quietly and monetised by someone else. Datavar flips the default: nothing moves until you say so, and when it moves, you're paid."
+          title="Your data. Your terms."
+          aside="Nothing moves until you say so, and when it moves, you're paid."
+          className="max-w-3xl"
         />
 
-        <ol className="mt-20">
-          {STEPS.map((step, i) => (
-            <Reveal as="li" key={step.n} delay={i * 90}>
-              <div className="grid gap-5 border-t border-rule py-10 sm:grid-cols-[auto_1fr_1fr] sm:gap-10">
-                <span className="font-mono text-xs text-ink-faint">
-                  {step.n}
-                </span>
+        <Reveal delay={120}>
+          <Plate
+            fig="Fig 0.1"
+            tag="System"
+            className="mt-16"
+            bodyClassName="overflow-hidden px-2 sm:px-8"
+            caption={
+              <>
+                <span>Consent and data travel right</span>
+                <span>The payout comes back</span>
+              </>
+            }
+          >
+            {/* Scrolls sideways on a phone rather than shrinking the labels
+                past reading: the drawing is wide by nature. */}
+            <div className="overflow-x-auto overscroll-x-contain">
+              <SystemDiagram className="mx-auto h-auto w-full min-w-[680px] max-w-5xl" />
+            </div>
+          </Plate>
+        </Reveal>
 
-                <h3 className="text-xl font-medium tracking-tight text-balance text-ink sm:text-2xl">
-                  {step.title}
-                </h3>
+        {/* The contributor side opened like a product, Caveman-style, then
+            walked through step by step. */}
+        <div className="mt-32 sm:mt-44">
+          <ContributorSpec />
+        </div>
 
-                <div>
-                  <p className="text-[0.9375rem] text-pretty text-ink-dim">
-                    {step.body}
-                  </p>
-                  <ul className="mt-5 flex flex-wrap gap-2">
-                    {step.detail.map((d) => (
-                      <li
-                        key={d}
-                        className="rounded-md border border-rule bg-paper-raised px-2.5 py-1 font-mono text-[0.6875rem] text-ink-faint"
-                      >
-                        {d}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </Reveal>
-          ))}
-        </ol>
-        <div className="border-t border-rule" />
+        <StepScroll steps={STEPS} />
       </div>
     </section>
   );

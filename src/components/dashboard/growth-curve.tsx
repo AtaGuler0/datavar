@@ -138,7 +138,7 @@ export function GrowthCurve({
 
         {hovered && (
           <div
-            className="pointer-events-none absolute -top-2 z-10 rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-xs whitespace-nowrap shadow-lg shadow-ink/10"
+            className="pointer-events-none absolute -top-2 z-10 rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-xs whitespace-nowrap shadow-lg shadow-black/50"
             style={{
               left: `${((hover! + 0.5) / points.length) * 100}%`,
               transform: `translateX(${shift})`,
@@ -162,23 +162,28 @@ export function GrowthCurve({
         <span>Today</span>
       </div>
 
-      <table className="sr-only">
-        <caption>Cumulative {unitLabel} over time</caption>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((p) => (
-            <tr key={p.t}>
-              <td>{formatDate(new Date(p.t).toISOString())}</td>
-              <td>{format(p.value)}</td>
+      {/* sr-only on the wrapper, not the table: a table will not shrink
+          below its content, so it ignored the 1px box and widened a
+          320px page. */}
+      <div className="sr-only">
+        <table>
+          <caption>Cumulative {unitLabel} over time</caption>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Total</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((p) => (
+              <tr key={p.t}>
+                <td>{formatDate(new Date(p.t).toISOString())}</td>
+                <td>{format(p.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

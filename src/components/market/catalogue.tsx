@@ -18,6 +18,7 @@ import {
   type Listing,
   type ListingFilters,
 } from "@/lib/supabase/market";
+import { ghostButton, Segmented } from "../night";
 import { ActivityStrip } from "./activity-strip";
 import { Basket } from "./basket";
 import { FilterRail } from "./filter-rail";
@@ -190,23 +191,15 @@ export function Catalogue() {
   const pages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-[110rem] px-4 pb-32 pt-8 sm:px-6 sm:pt-10">
-      <header className="flex flex-wrap items-end justify-between gap-6">
-        <div>
-          <p className="eyebrow text-ink-faint">Marketplace</p>
-          <h1 className="display mt-3 text-[1.75rem] font-medium text-balance text-ink sm:text-[2.25rem]">
-            Data people agreed to sell you.
-          </h1>
-          <p className="mt-4 max-w-xl text-pretty text-ink-dim">
-            Every listing stands on a consent receipt its contributor signed
-            on-chain. Testnet throughout.
-          </p>
-        </div>
-
-        <dl className="flex gap-8">
-          <Stat label="Listed now" value={formatCount(listed)} />
-          <Stat label="Categories" value={formatCount(facets?.length ?? 0)} />
-        </dl>
+    <div className="mx-auto max-w-[110rem] px-4 pb-32 pt-12 sm:px-6 sm:pt-16">
+      <header>
+        <p className="font-mono text-[0.75rem] tracking-[0.12em] text-star-faint uppercase">
+          Datavar <span className="mx-2 text-star-ghost">│</span> Catalogue
+        </p>
+        <h1 className="mt-6 -ml-[0.04em] max-w-4xl text-[2.5rem] leading-[1.02] font-medium tracking-[-0.05em] text-balance sm:text-[3.75rem]">
+          <span className="text-star">Data people agreed to sell you.</span>{" "}
+          <span className="text-star-faint">Every listing on a signed receipt.</span>
+        </h1>
       </header>
 
       {/* Under the heading and above the filters: a buyer should see that this
@@ -228,13 +221,13 @@ export function Catalogue() {
         </div>
 
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rule pb-4">
-            <p className="text-sm text-ink-dim">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+            <p className="text-sm text-star-dim">
               {rows === null ? (
                 "Reading the catalogue…"
               ) : (
                 <>
-                  <span className="tabular-nums text-ink">
+                  <span className="tabular-nums text-star">
                     {formatCount(total)}
                   </span>{" "}
                   dataset{total === 1 ? "" : "s"} match
@@ -242,39 +235,26 @@ export function Catalogue() {
               )}
             </p>
 
-            <div className="flex items-center gap-2">
+            {/* Wraps rather than pushing the page sideways: on a 320px phone
+                the three controls are wider than the screen. */}
+            <div className="flex flex-wrap items-center gap-2">
               {ASSETS.length > 1 && (
-                <div
-                  role="group"
-                  aria-label="Currency"
-                  className="flex items-center rounded-lg border border-rule bg-paper p-0.5"
-                >
-                  {ASSETS.map((asset) => (
-                    <button
-                      key={asset}
-                      type="button"
-                      onClick={() => changeAsset(asset)}
-                      aria-pressed={filters.asset === asset}
-                      className={`rounded-md px-2.5 py-1 font-mono text-[0.6875rem] transition-colors ${
-                        filters.asset === asset
-                          ? "bg-slate-deep text-paper"
-                          : "text-ink-faint hover:text-ink"
-                      }`}
-                    >
-                      {asset}
-                    </button>
-                  ))}
-                </div>
+                <Segmented
+                  label="Currency"
+                  options={[...ASSETS].reverse().map((a) => ({ id: a, label: a }))}
+                  value={filters.asset}
+                  onChange={changeAsset}
+                />
               )}
               <button
                 type="button"
                 onClick={() => setMobileFilters(true)}
-                className="rounded-lg border border-rule bg-paper px-3 py-1.5 text-xs text-ink-dim transition-colors hover:text-ink lg:hidden"
+                className="h-9 rounded-[10px] border border-line px-3 font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase transition-colors hover:text-star lg:hidden"
               >
                 Filters
               </button>
-              <label className="flex items-center gap-2 text-xs text-ink-faint">
-                Sort
+              <label className="flex items-center gap-2 font-mono text-[0.6875rem] tracking-[0.08em] text-star-faint uppercase">
+                <span className="sr-only sm:not-sr-only">Sort</span>
                 <select
                   value={filters.sort}
                   onChange={(e) =>
@@ -283,7 +263,7 @@ export function Catalogue() {
                       sort: e.target.value as ListingFilters["sort"],
                     })
                   }
-                  className="rounded-lg border border-rule bg-paper px-2.5 py-1.5 text-xs text-ink outline-none transition-colors focus:border-rule-strong"
+                  className="h-9 rounded-[10px] border border-line bg-night px-2.5 text-[0.8125rem] text-star outline-none transition-colors focus:border-line-strong"
                 >
                   {SORTS.map((sort) => (
                     <option key={sort.id} value={sort.id}>
@@ -302,11 +282,11 @@ export function Catalogue() {
               action={{ label: "Try again", onClick: retry }}
             />
           ) : rows === null ? (
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-56 animate-pulse rounded-2xl border border-rule bg-paper"
+                  className="h-64 animate-pulse rounded-xl border border-line bg-white/[0.02]"
                 />
               ))}
             </div>
@@ -325,7 +305,7 @@ export function Catalogue() {
             />
           ) : (
             <>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 2xl:grid-cols-3">
                 {rows.map((listing) => (
                   <ListingCard
                     key={listing.id}
@@ -339,23 +319,23 @@ export function Catalogue() {
               </div>
 
               {pages > 1 && (
-                <nav className="mt-8 flex items-center justify-between border-t border-rule pt-5">
+                <nav className="mt-10 flex items-center justify-between border-t border-line pt-6">
                   <button
                     type="button"
                     onClick={() => changePage(Math.max(0, page - 1))}
                     disabled={page === 0}
-                    className="rounded-lg border border-rule px-3 py-1.5 text-xs text-ink-dim transition-colors hover:text-ink disabled:opacity-40"
+                    className="h-9 rounded-[10px] border border-line px-4 text-[0.8125rem] text-star-dim transition-colors hover:border-line-strong hover:text-star disabled:opacity-40"
                   >
                     Previous
                   </button>
-                  <span className="font-mono text-[0.6875rem] text-ink-faint tabular-nums">
+                  <span className="font-mono text-[0.75rem] tracking-[0.08em] text-star-faint tabular-nums">
                     {page + 1} / {pages}
                   </span>
                   <button
                     type="button"
                     onClick={() => changePage(Math.min(pages - 1, page + 1))}
                     disabled={page >= pages - 1}
-                    className="rounded-lg border border-rule px-3 py-1.5 text-xs text-ink-dim transition-colors hover:text-ink disabled:opacity-40"
+                    className="h-9 rounded-[10px] border border-line px-4 text-[0.8125rem] text-star-dim transition-colors hover:border-line-strong hover:text-star disabled:opacity-40"
                   >
                     Next
                   </button>
@@ -365,7 +345,7 @@ export function Catalogue() {
           )}
 
           {rows !== null && rows.length > 0 && (
-            <p className="mt-8 text-xs text-pretty text-ink-faint">
+            <p className="mt-8 max-w-3xl text-[0.8125rem] leading-relaxed text-pretty text-star-faint">
               Listings show what the protocol can stand behind: category,
               format, size, when it was contributed, and the consent receipt
               behind it. Titles and descriptions stay with the contributor — a
@@ -377,18 +357,18 @@ export function Catalogue() {
 
       {mobileFilters && (
         <div
-          className="fixed inset-0 z-50 bg-ink-950/40 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-50 bg-night/60 backdrop-blur-sm lg:hidden"
           onMouseDown={(e) =>
             e.target === e.currentTarget && setMobileFilters(false)
           }
         >
-          <div className="ml-auto flex h-dvh w-[20rem] max-w-[88vw] flex-col bg-paper">
-            <header className="flex items-center justify-between border-b border-rule px-5 py-4">
-              <h2 className="text-sm font-medium text-ink">Filters</h2>
+          <div className="ml-auto flex h-dvh w-[20rem] max-w-[88vw] flex-col border-l border-line bg-night-900">
+            <header className="flex items-center justify-between border-b border-line px-5 py-4">
+              <h2 className="font-mono text-[0.75rem] tracking-[0.12em] text-star uppercase">Filters</h2>
               <button
                 type="button"
                 onClick={() => setMobileFilters(false)}
-                className="text-sm text-ink-faint transition-colors hover:text-ink"
+                className="-my-2 -mr-2 px-2 py-2 text-sm text-ink-faint transition-colors hover:text-ink"
               >
                 Done
               </button>
@@ -422,15 +402,6 @@ export function Catalogue() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[0.6875rem] text-ink-faint">{label}</dt>
-      <dd className="mt-1 text-xl font-medium tabular-nums text-ink">{value}</dd>
-    </div>
-  );
-}
-
 function Notice({
   title,
   note,
@@ -441,17 +412,13 @@ function Notice({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div className="mt-6 rounded-2xl border border-dashed border-rule-strong bg-paper/60 px-6 py-16 text-center">
-      <p className="text-pretty text-ink-dim">{title}</p>
-      <p className="mx-auto mt-2 max-w-md text-pretty text-sm text-ink-faint">
+    <div className="mt-6 rounded-xl border border-dashed border-line-strong px-6 py-16 text-center">
+      <p className="text-[1.0625rem] text-pretty text-star">{title}</p>
+      <p className="mx-auto mt-2 max-w-md text-pretty text-sm text-star-faint">
         {note}
       </p>
       {action && (
-        <button
-          type="button"
-          onClick={action.onClick}
-          className="mt-5 rounded-lg border border-rule px-4 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
-        >
+        <button type="button" onClick={action.onClick} className={`mt-6 ${ghostButton}`}>
           {action.label}
         </button>
       )}

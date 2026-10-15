@@ -73,33 +73,6 @@ asking. The cost is stated in `internal.list_price_usdc`: when XLM moves, one
 list is the cheaper way to buy the same file, and that is the day to put a
 quote engine there.
 
-## Turkish lira
-
-`/anchor` is a TRY ⇄ USDC ramp, and it exists because the marketplace takes
-USDC and a team with a budget in lira has no way to hold any. It works the
-other way for contributors, who earn USDC and pay their bills in lira.
-
-It is the ecosystem's own standard rather than an integration with one company:
-SEP-1 discovery, SEP-10 auth, SEP-12 KYC, SEP-38 quotes and SEP-6 transfers,
-against `NEXT_PUBLIC_ANCHOR_HOME_DOMAIN`. Two values are the whole handoff — a
-home domain and an asset code — and everything else is read from that domain's
-stellar.toml at runtime, so pointing this at a real Turkish anchor on mainnet
-is a change to two lines and the network.
-
-The browser talks to the anchor directly; datavar's own API is not in the path.
-That is the honest shape of it: the user's key is the identity on both sides,
-so a server in the middle would only be somewhere for a token to leak. The
-anchor learns a Stellar address and nothing else — no name reaches it, and none
-of it is written to our database.
-
-Two things are worth knowing before using it. The bank leg is simulated, and
-the deposit screen says so on the button that stands in for it. And a SEP-10
-challenge is a transaction the wallet will sign without reading, so
-`assertIsChallenge` in `lib/anchor/session.ts` refuses anything that is not one
-before the wallet is asked — sequence zero, the anchor's declared signing key,
-this domain, open timebounds. Without that check a login button is a signing
-oracle.
-
 ## What gets in
 
 Uploads are checked before they happen, in the contributor's browser

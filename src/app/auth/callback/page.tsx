@@ -51,7 +51,7 @@ export default function AuthCallbackPage() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-paper-sunken/30 px-6">
-      <div className="w-full max-w-sm rounded-2xl border border-rule bg-paper px-6 py-10 text-center shadow-sm shadow-ink/[0.03]">
+      <div className="w-full max-w-sm rounded-2xl border border-rule bg-paper px-6 py-10 text-center shadow-sm shadow-black/40">
         {failed ? (
           <>
             <p className="text-pretty text-ink-dim">

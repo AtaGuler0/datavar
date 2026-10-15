@@ -34,7 +34,7 @@ export function DatasetList({ datasets }: { datasets: Dataset[] | null }) {
       {datasets.map((d) => (
         <li
           key={d.id}
-          className="rounded-xl border border-rule bg-paper p-4 shadow-sm shadow-ink/[0.03]"
+          className="rounded-xl border border-rule bg-paper p-4 shadow-sm shadow-black/40"
         >
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">

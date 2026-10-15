@@ -1,51 +1,79 @@
 @import "tailwindcss";
 
 @theme {
-  /* Light surfaces — warm white, never pure #fff */
-  --color-paper: #fbfaf9;
-  --color-paper-raised: #f5f3f1;
-  --color-paper-sunken: #edebe8;
+  /* Night — the whole site's palette. Pure neutral greys with no blue cast.
+     Colour only ever arrives as signal: green means consented, live or up,
+     red means down or refused, and nothing decorative is either. */
+  --color-night: #090a0b;
+  --color-night-900: #0e0f10;
+  --color-night-850: #131415;
+  --color-night-800: #19191a;
+  --color-night-700: #212122;
 
-  /* Dark surfaces — the enterprise block */
-  --color-ink-950: #0b0d0f;
-  --color-ink-900: #101316;
-  --color-ink-850: #171b1f;
-  --color-ink-800: #1f242a;
+  --color-star: #ededed;
+  --color-star-dim: #a6a6a6;
+  /* The quietest text that still clears 4.5:1 on the ground. */
+  --color-star-faint: #7c7c7c;
+  /* Below text contrast: for rules, separators and decoration only. */
+  --color-star-ghost: #4d4d4d;
 
-  /* Text on light */
-  --color-ink: #16192b;
-  --color-ink-dim: #565d70;
-  --color-ink-faint: #8b91a1;
+  --color-line: rgba(255, 255, 255, 0.085);
+  --color-line-strong: rgba(255, 255, 255, 0.15);
 
-  /* Text on dark */
-  --color-chalk: #eceef0;
-  --color-chalk-dim: #a4abb4;
-  --color-chalk-faint: #6b727c;
+  --color-signal: #3fcf78;
+  --color-danger: #e5636a;
 
-  /* Accent — restrained slate, not a signal colour */
-  --color-slate-deep: #2f3a55;
-  --color-slate: #3d4a6b;
-  --color-slate-soft: #6b7899;
+  /* Role names from the paper era, kept so every surface built on them moved
+     to night in one place. They mean what they always meant — ground, text,
+     rule, accent — only the values changed. New code reaches for the night
+     names above; these are the reason the app routes didn't need rewriting.
 
-  /* Delta directions on stat tiles — muted and earthy, so movement informs
-     without shouting. Always paired with an arrow, never colour alone. */
-  --color-rise: #3f5f44;
-  --color-fall: #8f4437;
+     paper   → the ground, and the surfaces raised from or sunk into it
+     ink     → text on the ground (and anything drawn in the text colour)
+     chalk   → text on what used to be the dark block — the same text now
+     ink-9xx → that dark block's surfaces, now the ground's own steps
+     slate   → the accent; at night that is white, like the primary button
+     rise / fall → deltas, in the signal colours */
+  --color-paper: var(--color-night);
+  --color-paper-raised: var(--color-night-850);
+  --color-paper-sunken: var(--color-night-800);
 
-  /* Rules */
-  --color-rule: rgba(22, 25, 43, 0.1);
-  --color-rule-strong: rgba(22, 25, 43, 0.2);
-  --color-rule-dark: rgba(255, 255, 255, 0.09);
-  --color-rule-dark-strong: rgba(255, 255, 255, 0.16);
+  --color-ink: var(--color-star);
+  --color-ink-dim: var(--color-star-dim);
+  --color-ink-faint: var(--color-star-faint);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-ink-950: var(--color-night);
+  --color-ink-900: var(--color-night-900);
+  --color-ink-850: var(--color-night-850);
+  --color-ink-800: var(--color-night-700);
+
+  --color-chalk: var(--color-star);
+  --color-chalk-dim: var(--color-star-dim);
+  --color-chalk-faint: var(--color-star-faint);
+
+  --color-slate-deep: var(--color-star);
+  --color-slate: #ffffff;
+  --color-slate-soft: var(--color-star-dim);
+
+  --color-rise: var(--color-signal);
+  --color-fall: var(--color-danger);
+
+  --color-rule: var(--color-line);
+  --color-rule-strong: var(--color-line-strong);
+  --color-rule-dark: var(--color-line);
+  --color-rule-dark-strong: var(--color-line-strong);
+
+  /* Geist is the only family on the site. The generic keyword at the end of
+     each stack is there for a font that fails to load, not as a second face. */
+  --font-sans: var(--font-geist-sans), sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  --font-pixel: var(--font-geist-pixel), var(--font-geist-mono), monospace;
 
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html {
@@ -59,14 +87,43 @@ section[id] {
 }
 
 body {
-  background-color: var(--color-paper);
-  color: var(--color-ink);
+  background-color: var(--color-night);
+  color: var(--color-star);
   -webkit-font-smoothing: antialiased;
 }
 
+/* Inside the app panel (components/app-shell.tsx) the ground is a step up
+   from the page, so a card built on `paper` has to sit a step above that
+   again, or it would read as a hole in the panel. The role names make this a
+   re-pointing rather than a rewrite of every card. */
+.app-panel {
+  --color-paper: var(--color-night-850);
+  --color-paper-raised: var(--color-night-800);
+  --color-paper-sunken: var(--color-night-700);
+  /* The old dark block, which on paper was the one raised surface. */
+  --color-ink-950: var(--color-night-850);
+  --color-ink-900: var(--color-night-800);
+}
+
+/* The wallet kit's modal brings its own system-font stack and renders in
+   the light DOM, so it is pulled onto Geist here. `body` raises the selector
+   above the kit's runtime-injected `.stellar-wallets-kit` rule, whichever
+   order the two stylesheets land in. */
+body .stellar-wallets-kit {
+  font-family: var(--font-sans);
+}
+body .stellar-wallets-kit :is(code, kbd, samp, pre) {
+  font-family: var(--font-mono);
+}
+
 ::selection {
-  background-color: var(--color-slate);
-  color: var(--color-paper);
+  background-color: var(--color-star);
+  color: var(--color-night);
+}
+
+::selection {
+  background-color: var(--color-star);
+  color: var(--color-night);
 }
 
 /* Tight optical tracking for large display type */
@@ -75,12 +132,135 @@ body {
   line-height: 1;
 }
 
+/* Display type on night pages is set lighter and tighter than on paper:
+   light-on-dark reads heavier, so 450 here sits where 500 does in daylight. */
+.display-night {
+  letter-spacing: -0.052em;
+  line-height: 1.02;
+  font-weight: 450;
+}
+
 /* Small caps label above every section heading */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+/* FAQ answers open and close by height where the browser can animate a
+   <details> body (::details-content plus interpolate-size); elsewhere they
+   simply appear, which is what they did before. See components/faq.tsx. */
+.faq {
+  interpolate-size: allow-keywords;
+}
+.faq details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size 0.35s var(--ease-out-soft),
+    content-visibility 0.35s allow-discrete;
+}
+.faq details[open]::details-content {
+  block-size: auto;
+}
+
+/* The protocol's dataset field — see components/protocol/dataset-field.tsx.
+   A slow wave runs back to front and lifts each licensed block a few units
+   as it passes, like the ledger being read row by row, then rests. Only
+   transform moves; nothing about what the field says changes. */
+.field-lift {
+  animation: field-lift 7s ease-in-out infinite;
+  animation-delay: calc(var(--d, 0) * 3.5s);
+}
+@keyframes field-lift {
+  0%,
+  16%,
+  100% {
+    transform: translateY(0);
+  }
+  7% {
+    transform: translateY(-5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-lift {
+    animation: none;
+  }
+}
+
+/* The estimator's slider — see components/earnings.tsx. A hairline track and
+   a white knob, drawn here because the native control ignores the theme. */
+.estimate-range {
+  appearance: none;
+  height: 16px;
+  background: transparent;
+}
+.estimate-range::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--color-line-strong);
+}
+.estimate-range::-moz-range-track {
+  height: 1px;
+  background: var(--color-line-strong);
+}
+.estimate-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -7.5px;
+  border-radius: 9999px;
+  background: var(--color-star);
+  box-shadow: 0 0 0 4px var(--color-night-900);
+}
+.estimate-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-star);
+}
+.estimate-range:focus-visible {
+  outline: none;
+}
+.estimate-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--color-night-900), 0 0 0 5px var(--color-star);
+}
+
+/* A stage still ahead on the step progress bar — see
+   components/step-scroll.tsx. Stippled, so "not yet" reads as a different
+   kind of thing from "done", not as a paler version of it. */
+.progress-ahead {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.28) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+/* The settlement ledger under the payout figure — see
+   components/step-figures.tsx. Rows roll upward one copy's height and start
+   over, fading in at the bottom and out at the top. */
+.ledger {
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent);
+}
+.ledger-track {
+  animation: ledger 12s linear infinite;
+}
+@keyframes ledger {
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+/* Packets on the system diagram's wires — see components/system-diagram.tsx.
+   They move by SMIL, which the reduced-motion rule below can't reach, so
+   they are removed outright instead: a still cube parked on a wire reads as
+   part of the drawing. */
+@media (prefers-reduced-motion: reduce) {
+  .packet {
+    display: none;
+  }
 }
 
 /* Scroll-reveal primitive — see components/reveal.tsx */

@@ -1362,11 +1362,21 @@ create policy "datasets read"
 -- protocol is for: a buyer who paid for a licence may read the file they
 -- licensed, for as long as the licence lasts.
 --
--- Three conditions, all of them facts in the database rather than assertions
--- in a request: a sale exists, it names this wallet as the buyer, and its
--- licence has not run out. Revoking consent does not reach back through this —
--- the contract cannot un-send bytes, and neither can a policy. What expiry
--- controls is whether they may fetch it again.
+-- Four conditions, all of them facts rather than assertions in a request: a
+-- sale exists, it names this wallet as the buyer, its licence has not run out,
+-- and the consent receipt behind it has not been withdrawn.
+--
+-- The fourth one reads the mirror, and the mirror is not the ledger. That is on
+-- purpose and it is why it is not the only check: /api/market/download re-reads
+-- the receipt on the contract before it mints a URL at all, so the authority is
+-- the chain and this is the floor under it. A revoke that has landed on-chain
+-- but not yet in this table is already refused a URL upstream; a caller who
+-- skips the route and asks storage directly with their own token still meets
+-- this. The two can only ever refuse more together, never less.
+--
+-- What none of it does is reach a copy already downloaded. The contract cannot
+-- un-send bytes and neither can a policy. What withdrawal controls is whether
+-- they are handed over again — see Datavar-REVOCATION-POLICY.md section C.2.
 -- ---------------------------------------------------------------------------
 drop policy if exists "datasets licensed download" on storage.objects;
 create policy "datasets licensed download"
@@ -1377,10 +1387,12 @@ create policy "datasets licensed download"
       select 1
         from public.sales s
         join public.datasets d on d.id = s.dataset_id
+   left join public.consents k on k.receipt_id = s.consent_receipt_id
        where d.storage_path = objects.name
          and s.buyer_wallet = public.current_wallet()
          and s.channel = 'market'
          and (s.licence_expires_at is null or s.licence_expires_at > now())
+         and (k.receipt_id is null or k.revoked_at is null)
     )
   );
 

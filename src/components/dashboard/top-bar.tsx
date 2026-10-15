@@ -8,7 +8,7 @@ import { WalletButton } from "./wallet-button";
 
 /**
  * Small-screen chrome only — on desktop the rail carries the logo, nav and
- * wallet. Keeps the landing header's paper/backdrop treatment so the product
+ * wallet. Keeps the landing header's night/backdrop treatment so the product
  * still feels like the same building on a phone.
  *
  * The five sections used to sit here as a horizontal strip that ran off the
@@ -36,11 +36,11 @@ export function TopBar() {
   return (
     <>
       <header
-        className={`sticky top-0 z-40 border-b border-rule md:hidden ${
+        className={`sticky top-0 z-40 border-b border-line md:hidden ${
           // Solid while the menu is open. backdrop-filter would make this bar
           // the containing block for the fixed sheet below and collapse it to
           // the height of the bar — the bug the landing header had.
-          open ? "bg-paper" : "bg-paper/85 backdrop-blur-xl"
+          open ? "bg-night" : "bg-night-900/85 backdrop-blur-xl"
         }`}
       >
         <div className="flex h-14 items-center justify-between gap-3 px-4">
@@ -60,12 +60,12 @@ export function TopBar() {
             >
               <span className="flex w-5 flex-col gap-[5px]">
                 <span
-                  className={`h-px w-full bg-ink transition-transform duration-300 ${
+                  className={`h-px w-full bg-star transition-transform duration-300 ${
                     open ? "translate-y-[3px] rotate-45" : ""
                   }`}
                 />
                 <span
-                  className={`h-px w-full bg-ink transition-transform duration-300 ${
+                  className={`h-px w-full bg-star transition-transform duration-300 ${
                     open ? "-translate-y-[3px] -rotate-45" : ""
                   }`}
                 />

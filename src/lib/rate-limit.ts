@@ -53,6 +53,11 @@ export const RATE_LIMITS = {
   /** Has a session, so counted per wallet: a checkout is a payment, and each
    *  one asks the consent contract about every dataset in the basket. */
   market: { bucket: "market", limit: 30, windowSeconds: 60 },
+  /** Has a session, and every download re-reads the consent behind the licence:
+   *  one contract simulation per file handed over. Generous enough for a buyer
+   *  fetching a basket they just bought, tight enough that the contract is not
+   *  a free endpoint. */
+  marketDownload: { bucket: "market:download", limit: 60, windowSeconds: 60 },
 } as const satisfies Record<string, RateLimitRule>;
 
 /** Long enough to make the call, and useless for anything else. */

@@ -1,5 +1,6 @@
-import type { PayAsset } from "@/lib/stellar/config";
-import { DATASETS_BUCKET, supabase } from "./client";
+import { authHeaders } from "@/lib/auth/session-store";
+import { isAssetConfigured, type PayAsset } from "@/lib/stellar/config";
+import { supabase } from "./client";
 
 /**
  * The buy side, from the browser.
@@ -151,8 +152,9 @@ export type ListingFilters = {
   sort: SortId;
 };
 
+// USDC is what the site prices in now; XLM only where USDC isn't set up.
 export const DEFAULT_FILTERS: ListingFilters = {
-  asset: "XLM",
+  asset: isAssetConfigured("USDC") ? "USDC" : "XLM",
   sources: [],
   formats: [],
   sort: "newest",
@@ -425,22 +427,40 @@ export async function readPulse(): Promise<Pulse | null> {
   return (data as Pulse) ?? null;
 }
 
-/** How long a download link stays good. Long enough to click, not to share. */
-const SIGNED_URL_SECONDS = 120;
+/** Raised when delivery is refused for a reason the buyer should read. */
+export class DeliveryRefused extends Error {}
 
 /**
  * A link to the file itself.
  *
- * Storage checks the licence, not this function: the policy on the bucket asks
- * whether a sale exists naming this wallet, and an expired licence produces an
- * error rather than a URL. Which is why the download button is allowed to be a
- * plain button — the answer comes from the database either way.
+ * This used to ask storage directly, and storage answered from the database:
+ * a sale naming this wallet, a licence that had not run out. Both are true of
+ * a dataset whose contributor withdrew consent this morning, which made the
+ * withdrawal a claim rather than a control.
+ *
+ * So it goes through /api/market/download now, which re-reads the receipt on
+ * the consent contract before it mints anything. The refusal carries a reason
+ * worth showing — withdrawn and expired are different things to a buyer — and
+ * the storage policy still runs underneath, because the URL is minted with
+ * this wallet's own token.
  */
-export async function licensedDownloadUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from(DATASETS_BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_SECONDS);
+export async function licensedDownloadUrl(saleId: string): Promise<string> {
+  const response = await fetch("/api/market/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ saleId }),
+  });
 
-  if (error) throw error;
-  return data.signedUrl;
+  const payload = (await response.json().catch(() => null)) as {
+    url?: string;
+    error?: string;
+  } | null;
+
+  if (!response.ok || !payload?.url) {
+    throw new DeliveryRefused(
+      payload?.error ?? "The file didn't come back. Try again in a moment.",
+    );
+  }
+
+  return payload.url;
 }

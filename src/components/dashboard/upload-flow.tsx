@@ -116,7 +116,7 @@ export function UploadCard({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-rule bg-paper shadow-sm shadow-ink/[0.03]">
+    <div className="overflow-hidden rounded-2xl border border-rule bg-paper shadow-sm shadow-black/40">
       <div className="border-b border-rule px-6 py-4">
         <p className="eyebrow text-ink-faint">Contribute a dataset</p>
       </div>

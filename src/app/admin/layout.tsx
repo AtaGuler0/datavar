@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AdminGate } from "@/components/admin/admin-gate";
+import { AppShell } from "@/components/app-shell";
 import { AdminSideNav } from "@/components/admin/side-nav";
 import { AdminTopBar } from "@/components/admin/top-bar";
 import { WalletProvider } from "@/components/dashboard/wallet-provider";
@@ -18,17 +19,12 @@ export default function AdminLayout({
 }) {
   return (
     <WalletProvider>
-      {/* Same shell as the contributor dashboard — viewport-sized, only the
-          content column scrolls. */}
-      <div className="flex h-dvh bg-paper">
-        <AdminSideNav />
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-paper-sunken/30">
-          <AdminTopBar />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 sm:px-8 md:py-10">
-            <AdminGate>{children}</AdminGate>
-          </main>
-        </div>
-      </div>
+      <AppShell side="operator" rail={<AdminSideNav />}>
+        <AdminTopBar />
+        <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 sm:px-8 md:py-10">
+          <AdminGate>{children}</AdminGate>
+        </main>
+      </AppShell>
     </WalletProvider>
   );
 }

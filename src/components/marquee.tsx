@@ -9,21 +9,20 @@ const PRIOR = ["io.net", "Hacken"];
 
 export function Marquee() {
   return (
-    <section className="relative border-y border-rule bg-paper py-10">
-      <p className="mb-6 text-center font-mono text-[0.6875rem] tracking-[0.18em] text-ink-faint uppercase">
-        Built by people previously at
-      </p>
-
-      <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-3">
-        {PRIOR.map((company) => (
-          <li
-            key={company}
-            className="text-lg font-medium whitespace-nowrap text-ink-faint transition-colors duration-300 hover:text-ink-dim"
-          >
-            {company}
-          </li>
-        ))}
-      </ul>
+    <section className="bg-night px-6">
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 border-b border-line py-16 sm:flex-row sm:justify-between">
+        <p className="text-sm text-star-faint">Built by people previously at</p>
+        <ul className="flex flex-wrap items-center justify-center gap-x-12 gap-y-3">
+          {PRIOR.map((company) => (
+            <li
+              key={company}
+              className="text-2xl font-medium tracking-[-0.04em] whitespace-nowrap text-star-faint transition-colors duration-300 hover:text-star"
+            >
+              {company}
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

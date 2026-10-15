@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "../logo";
+import { RailGroup, RailWorkspace, railItem } from "../app-shell";
 import { SidebarWallet } from "../dashboard/side-nav";
 import { ADMIN_NAV, isAdminSectionActive } from "./nav-config";
 
@@ -60,60 +60,42 @@ function SectionIcon({ href, className }: { href: string; className?: string }) 
 
 /**
  * The operator rail. Identical furniture to the contributor one, with the
- * label and the way out of it changed — you should never be in any doubt
- * about which side of the product you're looking at.
+ * workspace label and the way out of it changed — you should never be in any
+ * doubt about which side of the product you're looking at.
  */
 export function AdminSideNav() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
-      <div className="px-6 pt-6">
-        <Link href="/" aria-label="Datavar home">
-          <Logo />
-        </Link>
-      </div>
+    <aside className="hidden h-full w-60 shrink-0 flex-col px-3 pt-3 pb-3 md:flex">
+      <RailWorkspace side="operator" />
 
-      <p className="mt-8 px-6 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
-        Operator
-      </p>
-      <ul className="mt-2 flex flex-col gap-0.5 px-3">
-        {ADMIN_NAV.map((section) => {
-          const active = isAdminSectionActive(section.href, pathname);
-          return (
-            <li key={section.href}>
-              <Link
-                href={section.href}
-                aria-current={active ? "page" : undefined}
-                className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-ink-950 text-chalk"
-                    : "text-ink-dim hover:bg-paper-sunken/60 hover:text-ink"
-                }`}
-              >
-                <SectionIcon
+      <nav aria-label="Sections" className="mt-6">
+        <RailGroup side="operator">
+          {ADMIN_NAV.map((section) => {
+            const active = isAdminSectionActive(section.href, pathname);
+            const item = railItem(active);
+            return (
+              <li key={section.href}>
+                <Link
                   href={section.href}
-                  className={
-                    active
-                      ? "text-chalk-dim"
-                      : "text-ink-faint transition-colors group-hover:text-ink-dim"
-                  }
-                />
-                {section.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+                  aria-current={active ? "page" : undefined}
+                  className={item.link}
+                >
+                  <SectionIcon href={section.href} className={item.icon} />
+                  {section.label}
+                </Link>
+              </li>
+            );
+          })}
+        </RailGroup>
+      </nav>
 
-      <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
-        <Link
-          href="/dashboard"
-          className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
-        >
+      <div className="mt-auto flex flex-col gap-1">
+        <Link href="/dashboard" className={railItem(false).link}>
           <svg
             viewBox="0 0 16 16"
-            className="h-4 w-4 shrink-0 text-ink-faint transition-colors group-hover:text-ink-dim"
+            className={`h-4 w-4 shrink-0 ${railItem(false).icon}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -123,7 +105,9 @@ export function AdminSideNav() {
           </svg>
           Contributor view
         </Link>
-        <SidebarWallet />
+        <div className="mt-2">
+          <SidebarWallet />
+        </div>
       </div>
     </aside>
   );
@@ -140,7 +124,7 @@ export function AdminMobileMenu({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div
       id="admin-menu"
-      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-paper px-4 pt-4 pb-8 md:hidden"
+      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-night px-4 pt-4 pb-8 md:hidden"
     >
       <p className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
         Operator
@@ -155,7 +139,7 @@ export function AdminMobileMenu({ onNavigate }: { onNavigate: () => void }) {
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={`flex items-start gap-3 rounded-xl px-3 py-3.5 transition-colors ${
-                  active ? "bg-ink-950" : "hover:bg-paper-sunken/60"
+                  active ? "bg-night-700" : "hover:bg-night-800"
                 }`}
               >
                 <SectionIcon

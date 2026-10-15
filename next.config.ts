@@ -32,23 +32,6 @@ const supabaseOrigins = supabaseHost
   : [];
 
 /**
- * The anchor the TRY ramp talks to.
- *
- * `/anchor` calls it from the browser on purpose — the user's key is the
- * identity, so a server of ours in the middle would only be somewhere for a
- * token to leak — which means the domain has to be named here or every call it
- * makes is refused. And refused quietly: a blocked fetch rejects like a network
- * failure, so the section would report that the anchor "could not be reached"
- * while the anchor was fine and the policy was the thing saying no.
- *
- * Read from the same variable the client reads, so pointing the ramp at a real
- * anchor moves both together.
- */
-const anchorOrigin = process.env.NEXT_PUBLIC_ANCHOR_HOME_DOMAIN
-  ? [`https://${process.env.NEXT_PUBLIC_ANCHOR_HOME_DOMAIN}`]
-  : [];
-
-/**
  * Content Security Policy.
  *
  * The reason this exists: the session token lives in localStorage, which is a
@@ -97,7 +80,6 @@ const csp = [
     "connect-src 'self'",
     ...supabaseOrigins,
     ...STELLAR_ORIGINS,
-    ...anchorOrigin,
   ].join(" "),
   // Albedo signs in an iframe it owns; the other three wallets need nothing.
   "frame-src https://albedo.link",

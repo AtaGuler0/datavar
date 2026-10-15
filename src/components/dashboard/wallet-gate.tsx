@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PillButton } from "../night";
+import { Corners } from "./primitives";
 import { useWallet } from "./wallet-provider";
 
 /**
@@ -26,16 +28,19 @@ import { useWallet } from "./wallet-provider";
 export function WalletGate({
   children,
   message,
+  figure,
 }: {
   children: ReactNode;
   message?: string;
+  /** The page's own drawing, shown beside the way in. */
+  figure?: ReactNode;
 }) {
   const { status, session, connect, signIn, signInError, google, googleError } =
     useWallet();
 
   if (status === "loading" || status === "authenticating") {
     return (
-      <div className="mt-10 h-40 animate-pulse rounded-2xl border border-rule bg-paper-raised" />
+      <div className="mt-10 h-40 animate-pulse rounded-xl border border-line bg-white/[0.02]" />
     );
   }
 
@@ -54,6 +59,7 @@ export function WalletGate({
         }
         label="Sign in"
         onClick={signIn}
+        figure={figure}
       />
     );
   }
@@ -70,6 +76,7 @@ export function WalletGate({
         }
         label="Connect wallet"
         onClick={connect}
+        figure={figure}
       />
     );
   }
@@ -80,6 +87,7 @@ export function WalletGate({
       label={status === "connecting" ? "Opening…" : "Sign in"}
       onClick={connect}
       disabled={status === "connecting"}
+      figure={figure}
       note={
         googleError ??
         "A Stellar wallet, or the Google account you attached to one."
@@ -94,45 +102,37 @@ function Panel({
   onClick,
   disabled,
   note,
+  figure,
 }: {
   message: string;
   label: string;
   onClick: () => void;
   disabled?: boolean;
   note?: string;
+  figure?: ReactNode;
 }) {
   return (
-    <div className="mt-10 rounded-2xl border border-rule bg-paper px-6 py-14 text-center shadow-sm shadow-ink/[0.03]">
-      <div
-        aria-hidden="true"
-        className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg border border-rule bg-paper-raised/60 text-ink-dim"
-      >
-        <svg
-          viewBox="0 0 16 16"
-          className="h-4 w-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <rect x="2" y="4" width="12" height="9" rx="1.5" />
-          <path d="M2 6.5h9" strokeLinecap="round" />
-          <path d="M10.5 10h2" strokeLinecap="round" />
-        </svg>
+    <section className="relative mt-10 overflow-hidden rounded-xl border border-line bg-white/[0.018]">
+      <Corners />
+      <div className="grid items-center gap-8 p-7 sm:p-9 lg:grid-cols-[1fr_0.9fr]">
+        <div className="max-w-md">
+          <p className="font-mono text-[0.6875rem] tracking-[0.1em] text-star-faint uppercase">
+            Wallet required
+          </p>
+          <p className="mt-5 text-[1.5rem] leading-[1.15] font-medium tracking-[-0.03em] text-pretty text-star">
+            {message}
+          </p>
+          <div className="mt-7">
+            <PillButton onClick={onClick} disabled={disabled}>
+              {label}
+            </PillButton>
+          </div>
+          {note && (
+            <p className="mt-4 text-[0.8125rem] text-pretty text-star-faint">{note}</p>
+          )}
+        </div>
+        {figure && <div className="hidden lg:block">{figure}</div>}
       </div>
-      <p className="mx-auto mt-5 max-w-sm text-pretty text-ink-dim">{message}</p>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className="mt-6 inline-flex items-center rounded-lg bg-slate-deep px-5 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
-      >
-        {label}
-      </button>
-      {note && (
-        <p className="mx-auto mt-4 max-w-sm text-pretty text-xs text-ink-faint">
-          {note}
-        </p>
-      )}
-    </div>
+    </section>
   );
 }

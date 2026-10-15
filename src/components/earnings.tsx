@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { formatXlm, STROOPS_PER_XLM } from "@/lib/stellar/config";
+import { STROOPS_PER_XLM, USDC_PER_XLM_LIST } from "@/lib/stellar/config";
 import { Reveal } from "./reveal";
-import { SectionHeading } from "./section-heading";
+import { EarningsChart } from "./earnings-chart";
+import { NightHeading, Plate, PillLink } from "./night";
 
 /**
  * What a contributor might earn. The rates are not ours to invent: each one is
@@ -15,29 +15,27 @@ import { SectionHeading } from "./section-heading";
 
 /** Source categories, mirroring SOURCE_TYPES in lib/supabase/datasets. */
 const SOURCES = [
-  { id: "browsing", label: "Browsing & search" },
-  { id: "purchases", label: "Purchase history" },
-  { id: "health", label: "Health & wearables" },
-  { id: "location", label: "Location trails" },
-  { id: "media", label: "Streaming & media" },
-  { id: "voice", label: "Voice samples" },
-  { id: "messaging", label: "Messaging metadata" },
-  { id: "dashcam", label: "Dashcam & camera" },
+  { id: "browsing", label: "Browsing & search", short: "Browsing" },
+  { id: "purchases", label: "Purchase history", short: "Purchases" },
+  { id: "health", label: "Health & wearables", short: "Health" },
+  { id: "location", label: "Location trails", short: "Location" },
+  { id: "media", label: "Streaming & media", short: "Media" },
+  { id: "voice", label: "Voice samples", short: "Voice" },
+  { id: "messaging", label: "Messaging metadata", short: "Messaging" },
+  { id: "dashcam", label: "Dashcam & camera", short: "Dashcam" },
 ];
 
 /** Which checkboxes start ticked. A UI default, not a claim about anything. */
 const DEFAULT_ON = ["browsing", "purchases", "media"];
 
 /**
- * How a payout can leave the protocol. XLM is the only one that exists — the
- * claim route settles it on Stellar — so it is the only one that is selectable.
- * PayPal is listed because it is planned, and marked so nobody reads it as
- * shipped.
+ * XLM stroops → USDC. The averages come from XLM sales; the same datasets are
+ * listed in USDC at a fixed rate, and that rate is what turns one into the
+ * other here.
  */
-const PAYOUTS = [
-  { id: "xlm", label: "XLM", note: "Instant · network fee", ready: true },
-  { id: "paypal", label: "PayPal", note: "Soon", ready: false },
-];
+function toUsdc(stroops: number) {
+  return (stroops / STROOPS_PER_XLM) * USDC_PER_XLM_LIST;
+}
 
 /** Eases a number toward its target so the total never snaps. */
 function useTween(target: number) {
@@ -92,7 +90,6 @@ export function Earnings({
 }) {
   const [selected, setSelected] = useState<string[]>(DEFAULT_ON);
   const [datasetsEach, setDatasetsEach] = useState(1);
-  const [payout, setPayout] = useState("xlm");
 
   /** True once anything at all has been licensed. Until then there is no
    *  average to quote and the panel says that instead of showing a zero. */
@@ -107,7 +104,7 @@ export function Earnings({
     [selected, datasetsEach, avgStroopsBySource],
   );
 
-  const shown = useTween(total / STROOPS_PER_XLM);
+  const shown = useTween(toUsdc(total));
 
   const toggle = (id: string) =>
     setSelected((prev) =>
@@ -116,185 +113,178 @@ export function Earnings({
 
   /** A source's average, or a dash when nothing in that category has sold. */
   const rateLabel = (id: string) =>
-    avgStroopsBySource[id] ? `${formatXlm(avgStroopsBySource[id])} XLM` : "—";
+    avgStroopsBySource[id] ? `${toUsdc(avgStroopsBySource[id]).toFixed(2)} USDC` : "—";
 
   return (
-    <section
-      id="earnings"
-      className="relative border-y border-rule bg-paper-raised"
-    >
-      <div className="relative mx-auto max-w-6xl px-6 py-28 sm:py-36">
-        <SectionHeading
-          eyebrow="Earnings"
-          title="See what you're currently giving away for free."
-          body={
-            priced
-              ? "Pick the sources you'd be willing to share. Rates are what datasets in each category have actually settled for on testnet. They are an average of real sales, not a promise."
-              : "Pick the sources you'd be willing to share. Nothing has been licensed on testnet yet, so there are no averages to quote. These fill in from real sales as the protocol runs."
-          }
-          align="center"
-        />
+    <section id="earnings" className="bg-night">
+      <div className="mx-auto max-w-6xl px-6 py-28 sm:py-36">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-end">
+          <NightHeading
+            eyebrow="Earnings"
+            title="Put a price on it."
+            aside="See what you're giving away for free."
+          />
+          <Reveal delay={120}>
+            <p className="max-w-md text-[0.9375rem] leading-relaxed text-pretty text-star-dim lg:justify-self-end">
+              {priced
+                ? "Pick the sources you'd be willing to share. Rates are testnet averages from a buyer we simulate, in USDC: read them as a comparison, not a promise."
+                : "Pick the sources you'd be willing to share. Nothing has sold on testnet yet, so the rates fill in once something does."}
+            </p>
+          </Reveal>
+        </div>
 
         <Reveal delay={140}>
-          <div className="mt-16 grid overflow-hidden rounded-2xl border border-rule bg-paper lg:grid-cols-[1.25fr_1fr]">
+          <Plate
+            fig="Fig 0.2"
+            tag="Estimate"
+            className="mt-16"
+            bodyClassName="grid lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+          >
             {/* Left: the inputs */}
-            <div className="border-rule p-7 sm:p-9 lg:border-r">
-              <p className="eyebrow text-ink-faint">Your sources</p>
+            <div className="border-line p-5 pt-7 sm:p-8 lg:border-r">
+              <div className="flex items-center justify-between gap-4">
+                <label
+                  htmlFor="volume"
+                  className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase"
+                >
+                  Datasets per source
+                </label>
+                <span className="min-w-12 rounded-lg border border-line-strong px-3 py-1.5 text-right font-mono text-lg text-star tabular-nums">
+                  {datasetsEach}
+                </span>
+              </div>
+              <input
+                id="volume"
+                type="range"
+                min={1}
+                max={10}
+                step={1}
+                value={datasetsEach}
+                onChange={(e) => setDatasetsEach(Number(e.target.value))}
+                className="estimate-range mt-6 w-full cursor-pointer"
+              />
+              {/* One tick per value, so the slider reads as the ten choices it is. */}
+              <div aria-hidden="true" className="mt-2 flex justify-between px-[7px]">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-px ${i < datasetsEach ? "bg-star-dim" : "bg-star-ghost"}`}
+                  />
+                ))}
+              </div>
+              <div aria-hidden="true" className="mt-2 flex justify-between font-mono text-[0.6875rem] text-star-faint">
+                <span>1</span>
+                <span>5</span>
+                <span>10</span>
+              </div>
 
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <div className="mt-10 flex items-baseline justify-between">
+                <p className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase">
+                  Sources
+                </p>
+                <p className="font-mono text-[0.75rem] text-star-faint">
+                  {selected.length} of {SOURCES.length} on
+                </p>
+              </div>
+              <ul className="mt-3 border-t border-line">
                 {SOURCES.map((source) => {
                   const active = selected.includes(source.id);
                   return (
-                    <button
-                      key={source.id}
-                      type="button"
-                      onClick={() => toggle(source.id)}
-                      aria-pressed={active}
-                      className={`group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-all duration-200 ${
-                        active
-                          ? "border-slate/35 bg-slate/8 text-ink"
-                          : "border-rule bg-paper-raised text-ink-faint hover:border-rule-strong hover:text-ink-dim"
-                      }`}
-                    >
-                      <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-sm transition-colors ${
-                          active
-                            ? "bg-slate"
-                            : "bg-ink-faint/40 group-hover:bg-ink-faint"
-                        }`}
-                      />
-                      <span className="flex-1 truncate">{source.label}</span>
-                      <span className="font-mono text-[0.6875rem] text-ink-faint tabular-nums">
-                        {rateLabel(source.id)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-9">
-                <div className="flex items-baseline justify-between">
-                  <label htmlFor="volume" className="eyebrow text-ink-faint">
-                    Datasets per source
-                  </label>
-                  <span className="font-mono text-xs text-ink-dim">
-                    {datasetsEach}×
-                  </span>
-                </div>
-                <input
-                  id="volume"
-                  type="range"
-                  min={1}
-                  max={10}
-                  step={1}
-                  value={datasetsEach}
-                  onChange={(e) => setDatasetsEach(Number(e.target.value))}
-                  className="mt-4 h-1 w-full cursor-pointer appearance-none rounded-full bg-paper-sunken accent-slate"
-                />
-              </div>
-
-              <div className="mt-9">
-                <p className="eyebrow text-ink-faint">Paid out as</p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {PAYOUTS.map((method) => {
-                    const active = payout === method.id;
-                    return (
+                    <li key={source.id} className="border-b border-line">
                       <button
-                        key={method.id}
                         type="button"
-                        disabled={!method.ready}
-                        onClick={() => setPayout(method.id)}
-                        aria-pressed={active}
-                        className={`rounded-lg border p-3 text-left transition-colors duration-200 ${
-                          !method.ready
-                            ? "cursor-not-allowed border-rule bg-paper-raised opacity-55"
-                            : active
-                              ? "border-slate/35 bg-slate/8"
-                              : "border-rule bg-paper-raised hover:border-rule-strong"
-                        }`}
+                        role="switch"
+                        aria-checked={active}
+                        onClick={() => toggle(source.id)}
+                        className="group flex w-full items-center gap-3.5 py-2.5 text-left"
                       >
                         <span
-                          className={`block text-sm ${active ? "text-ink" : "text-ink-dim"}`}
+                          className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-200 ${
+                            active ? "border-star bg-star" : "border-line-strong bg-night-800"
+                          }`}
                         >
-                          {method.label}
+                          <span
+                            className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-[left,background-color] duration-200 ${
+                              active ? "left-[18px] bg-night" : "left-[2px] bg-star-faint"
+                            }`}
+                          />
                         </span>
-                        <span className="mt-1 block font-mono text-[0.625rem] text-ink-faint">
-                          {method.note}
+                        <span
+                          className={`flex-1 truncate text-sm transition-colors ${
+                            active ? "text-star" : "text-star-faint group-hover:text-star-dim"
+                          }`}
+                        >
+                          {source.label}
+                        </span>
+                        <span className="font-mono text-[0.6875rem] text-star-faint tabular-nums">
+                          {rateLabel(source.id)}
                         </span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Right: the number */}
-            <div className="relative flex flex-col justify-between gap-8 bg-paper-raised p-7 sm:p-9">
-              <div className="relative">
-                <p className="eyebrow text-ink-faint">Estimated payout</p>
-                {priced ? (
-                  <>
-                    <p className="display mt-4 text-5xl font-medium text-ink tabular-nums sm:text-6xl">
-                      {shown.toFixed(2)}
-                      <span className="ml-2 align-middle text-base font-normal text-ink-faint">
-                        XLM
-                      </span>
-                    </p>
-                    <p className="mt-4 font-mono text-xs text-ink-faint">
-                      {selected.length} source
-                      {selected.length === 1 ? "" : "s"} · {datasetsEach}{" "}
-                      dataset{datasetsEach === 1 ? "" : "s"} each
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="display mt-4 text-5xl font-medium text-ink-faint tabular-nums sm:text-6xl">
-                      —
-                    </p>
-                    <p className="mt-4 font-mono text-xs text-ink-faint">
-                      no settled sales to average yet
-                    </p>
-                  </>
-                )}
-
-                {/* Itemised breakdown — shows the number is built, not invented. */}
-                <ul className="mt-8 space-y-px border-t border-rule">
-                  {SOURCES.filter((s) => selected.includes(s.id)).map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center justify-between gap-3 border-b border-rule py-2"
-                    >
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className="h-1 w-1 shrink-0 rounded-sm bg-slate" />
-                        <span className="truncate text-xs text-ink-dim">
-                          {s.label}
-                        </span>
-                      </span>
-                      <span className="shrink-0 font-mono text-xs text-ink-faint tabular-nums">
-                        {avgStroopsBySource[s.id]
-                          ? `${formatXlm(avgStroopsBySource[s.id] * datasetsEach)} XLM`
-                          : "—"}
-                      </span>
                     </li>
-                  ))}
-                </ul>
+                  );
+                })}
+              </ul>
+
+              <p className="mt-6 font-mono text-[0.6875rem] text-star-faint">
+                Paid out in <span className="text-star-dim">USDC</span>, claimed
+                from the payout contract
+              </p>
+            </div>
+
+            {/* Right: the number, and how it's built */}
+            <div className="flex min-w-0 flex-col border-t border-line p-5 pt-7 sm:p-8 lg:border-t-0">
+              <p className="font-mono text-[0.75rem] tracking-[0.08em] text-star-dim uppercase">
+                Estimate · if each sells once
+              </p>
+              {priced ? (
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <p className="text-6xl font-medium tracking-[-0.055em] text-star tabular-nums sm:text-[5.5rem] sm:leading-none">
+                    {shown.toFixed(2)}
+                  </p>
+                  <span className="rounded-full border border-line-strong px-3 py-1 font-mono text-sm text-star-dim">
+                    USDC
+                  </span>
+                </div>
+              ) : (
+                <p className="mt-4 text-6xl font-medium tracking-[-0.055em] text-star-ghost sm:text-[5.5rem] sm:leading-none">
+                  —
+                </p>
+              )}
+              <p className="mt-4 font-mono text-xs text-star-faint">
+                {priced
+                  ? `${selected.length} source${selected.length === 1 ? "" : "s"} · ${datasetsEach} dataset${datasetsEach === 1 ? "" : "s"} each · from testnet sales`
+                  : "no settled sales to average yet"}
+              </p>
+
+              <div className="mt-8 flex-1">
+                {priced && selected.length > 0 ? (
+                  <EarningsChart
+                    unit="USDC"
+                    format={(n) => n.toFixed(2)}
+                    parts={SOURCES.filter((s) => selected.includes(s.id)).map((s) => ({
+                      id: s.id,
+                      label: s.short,
+                      value: toUsdc((avgStroopsBySource[s.id] ?? 0) * datasetsEach),
+                    }))}
+                  />
+                ) : (
+                  <p className="flex h-full min-h-48 items-center justify-center rounded-lg border border-dashed border-line text-center text-sm text-pretty text-star-faint">
+                    {selected.length === 0
+                      ? "Share nothing and you earn nothing. That's exactly what you're doing today, just without the payout."
+                      : "Nothing to build from until a category has sold."}
+                  </p>
+                )}
               </div>
 
-              <div className="relative space-y-4">
-                <p className="text-sm text-pretty text-ink-dim">
-                  {selected.length === 0
-                    ? "Share nothing and you earn nothing. That's exactly what you're doing today, just without the payout."
-                    : "Rare data earns more than common data. A dashcam clip from a rainy roundabout is worth more to a robotics team than another hour of scrolling."}
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
+                <p className="font-mono text-[0.6875rem] text-star-faint">
+                  <span className="hidden sm:inline">Hover a column · ruled in tenths of the total</span>
+                  <span className="sm:hidden">Ruled in tenths of the total</span>
                 </p>
-                <Link
-                  href="/dashboard"
-                  className="inline-flex w-full items-center justify-center rounded-lg bg-slate-deep px-5 py-3 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate"
-                >
-                  Claim your payout
-                </Link>
+                <PillLink href="/dashboard">Claim your payout</PillLink>
               </div>
             </div>
-          </div>
+          </Plate>
         </Reveal>
       </div>
     </section>

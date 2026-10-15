@@ -121,7 +121,7 @@ export function ActivityChart({
 
         {hovered && hovered.count > 0 && (
           <div
-            className="pointer-events-none absolute -top-2 z-10 rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-xs whitespace-nowrap shadow-lg shadow-ink/10"
+            className="pointer-events-none absolute -top-2 z-10 rounded-lg border border-ink-800 bg-ink-950 px-3 py-2 text-xs whitespace-nowrap shadow-lg shadow-black/50"
             style={{
               left: `${((hover! + 0.5) / buckets.length) * 100}%`,
               transform: `translateX(${shift})`,
@@ -155,29 +155,34 @@ export function ActivityChart({
       </div>
 
       {/* The same numbers as text, for screen readers. */}
-      <table className="sr-only">
-        <caption>
-          Data contributed per {unit}, last {period} days
-        </caption>
-        <thead>
-          <tr>
-            <th>Starting</th>
-            <th>Bytes</th>
-            <th>Uploads</th>
-          </tr>
-        </thead>
-        <tbody>
-          {buckets.map((b, i) => (
-            <tr key={i}>
-              <td>
-                {unit === "hour" ? formatHour(b.from) : formatDate(iso(b.from))}
-              </td>
-              <td>{formatBytes(b.bytes)}</td>
-              <td>{b.count}</td>
+      {/* sr-only on the wrapper, not the table: a table will not shrink
+          below its content, so it ignored the 1px box and widened a
+          320px page. */}
+      <div className="sr-only">
+        <table>
+          <caption>
+            Data contributed per {unit}, last {period} days
+          </caption>
+          <thead>
+            <tr>
+              <th>Starting</th>
+              <th>Bytes</th>
+              <th>Uploads</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {buckets.map((b, i) => (
+              <tr key={i}>
+                <td>
+                  {unit === "hour" ? formatHour(b.from) : formatDate(iso(b.from))}
+                </td>
+                <td>{formatBytes(b.bytes)}</td>
+                <td>{b.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

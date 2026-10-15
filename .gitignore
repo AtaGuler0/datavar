@@ -47,3 +47,10 @@ next-env.d.ts
 # internal docs — only README ships
 *.md
 !README.md
+
+# redesign notes and references
+/design
+
+# local tooling and side projects
+/.claude
+/promo-video

@@ -73,10 +73,12 @@ export function StatCard({
 }) {
   return (
     <Card>
-      <p className="text-xs text-ink-dim">{label}</p>
+      <p className="font-mono text-[0.6875rem] tracking-[0.1em] text-star-faint uppercase">
+        {label}
+      </p>
 
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-[1.75rem] font-semibold leading-none text-ink">
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <p className="text-[2rem] leading-none font-medium tracking-[-0.045em] text-star tabular-nums">
           {value}
         </p>
         {spark && <Sparkline points={spark} />}

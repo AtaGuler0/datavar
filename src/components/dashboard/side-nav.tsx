@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "../logo";
+import { RailGroup, RailWorkspace, railItem } from "../app-shell";
 import { truncateAddress } from "@/lib/stellar/config";
 import { CONTRIBUTOR_NAV, isSectionActive } from "./nav-config";
 import { useWallet } from "./wallet-provider";
@@ -63,7 +63,7 @@ export function SidebarWallet() {
   const { address, status, connect, disconnect, canSign } = useWallet();
 
   if (status === "loading") {
-    return <div className="h-11 animate-pulse rounded-xl bg-paper-sunken" />;
+    return <div className="h-10 animate-pulse rounded-[12px] bg-night-800" />;
   }
 
   if (!address) {
@@ -72,7 +72,7 @@ export function SidebarWallet() {
         type="button"
         onClick={connect}
         disabled={status === "connecting"}
-        className="inline-flex w-full items-center justify-center rounded-xl bg-slate-deep px-4 py-2.5 text-sm font-medium text-paper transition-colors duration-200 hover:bg-slate disabled:opacity-70"
+        className="inline-flex h-10 w-full items-center justify-center rounded-[12px] bg-star px-4 text-sm font-medium text-night transition-colors duration-200 hover:bg-white disabled:opacity-70"
       >
         {status === "connecting" ? "Opening…" : "Sign in"}
       </button>
@@ -80,7 +80,7 @@ export function SidebarWallet() {
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-rule bg-paper px-3 py-2.5">
+    <div className="flex items-center justify-between gap-2 rounded-[12px] border border-line bg-night-850 px-3 py-2.5">
       <span className="min-w-0 truncate font-mono text-xs tabular-nums text-ink">
         {truncateAddress(address)}
         {/* Signed in through Google, with no wallet attached here. Said in the
@@ -119,66 +119,48 @@ export function SidebarWallet() {
 }
 
 /**
- * The desktop rail: logo up top, icon nav in the middle, testnet notice and
- * the wallet block at the foot. The active section is the enterprise block
- * in miniature — ink-950 pill, chalk text.
+ * The desktop rail, straight on the night ground beside the panel: the
+ * workspace at the top, the sections as a group, and at the foot the way to
+ * the docs, the operator link for wallets that have one, and the wallet.
  */
 export function SideNav() {
   const pathname = usePathname();
   const { session } = useWallet();
 
   return (
-    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-rule bg-paper md:flex">
-      <div className="px-6 pt-6">
-        <Link href="/" aria-label="Datavar home">
-          <Logo />
-        </Link>
-      </div>
+    <aside className="hidden h-full w-60 shrink-0 flex-col px-3 pt-3 pb-3 md:flex">
+      <RailWorkspace side="contributor" />
 
-      <p className="mt-8 px-6 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
-        Contributor
-      </p>
-      <ul className="mt-2 flex flex-col gap-0.5 px-3">
-        {CONTRIBUTOR_NAV.map((section) => {
-          const active = isSectionActive(section.href, pathname);
-          return (
-            <li key={section.href}>
-              <Link
-                href={section.href}
-                aria-current={active ? "page" : undefined}
-                className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-ink-950 text-chalk"
-                    : "text-ink-dim hover:bg-paper-sunken/60 hover:text-ink"
-                }`}
-              >
-                <SectionIcon
+      <nav aria-label="Sections" className="mt-6">
+        <RailGroup side="contributor">
+          {CONTRIBUTOR_NAV.map((section) => {
+            const active = isSectionActive(section.href, pathname);
+            const item = railItem(active);
+            return (
+              <li key={section.href}>
+                <Link
                   href={section.href}
-                  className={
-                    active
-                      ? "text-chalk-dim"
-                      : "text-ink-faint transition-colors group-hover:text-ink-dim"
-                  }
-                />
-                {section.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+                  aria-current={active ? "page" : undefined}
+                  className={item.link}
+                >
+                  <SectionIcon href={section.href} className={item.icon} />
+                  {section.label}
+                </Link>
+              </li>
+            );
+          })}
+        </RailGroup>
+      </nav>
 
-      <div className="mt-auto flex flex-col gap-2.5 px-3 pb-5">
+      <div className="mt-auto flex flex-col gap-1">
         {/* The way through to the operator side, for the wallets that have
             one. Everyone else never learns the panel exists — and could not
             get in if they did, since the claim comes from a signed session. */}
         {session?.admin && (
-          <Link
-            href="/admin"
-            className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink-dim transition-colors hover:text-ink"
-          >
+          <Link href="/admin" className={railItem(false).link}>
             <svg
               viewBox="0 0 16 16"
-              className="h-4 w-4 shrink-0 text-ink-faint transition-colors group-hover:text-ink-dim"
+              className={`h-4 w-4 shrink-0 ${railItem(false).icon}`}
               fill="none"
               stroke="currentColor"
               strokeWidth="1.5"
@@ -189,15 +171,18 @@ export function SideNav() {
             Operator panel
           </Link>
         )}
-        <div className="rounded-xl border border-rule bg-paper-raised/70 p-3.5">
-          <p className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-ink-faint">
-            Stellar testnet
-          </p>
-          <p className="mt-1.5 text-xs text-pretty text-ink-dim">
-            No real funds move yet. Payouts settle in test XLM.
-          </p>
+        <Link
+          href="/docs/how-it-works"
+          className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-sm text-star-dim transition-colors hover:bg-night-800 hover:text-star"
+        >
+          How it works
+          <span aria-hidden="true" className="text-star-faint transition-transform group-hover:translate-x-0.5">
+            →
+          </span>
+        </Link>
+        <div className="mt-2">
+          <SidebarWallet />
         </div>
-        <SidebarWallet />
       </div>
     </aside>
   );
@@ -220,7 +205,7 @@ export function MobileMenu({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div
       id="dashboard-menu"
-      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-paper px-4 pt-4 pb-8 md:hidden"
+      className="fixed inset-0 top-14 z-30 overflow-y-auto overscroll-contain bg-night px-4 pt-4 pb-8 md:hidden"
     >
       <p className="px-1 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-ink-faint">
         Contributor
@@ -235,7 +220,7 @@ export function MobileMenu({ onNavigate }: { onNavigate: () => void }) {
                 onClick={onNavigate}
                 aria-current={active ? "page" : undefined}
                 className={`flex items-start gap-3 rounded-xl px-3 py-3.5 transition-colors ${
-                  active ? "bg-ink-950" : "hover:bg-paper-sunken/60"
+                  active ? "bg-night-700" : "hover:bg-night-800"
                 }`}
               >
                 <SectionIcon
