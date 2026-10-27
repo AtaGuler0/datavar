@@ -417,3 +417,36 @@ fn only_the_admin_changes_settings() {
     assert!(h.licence.try_set_fee(&0).is_err());
     assert!(h.licence.try_set_hold(&0).is_err());
 }
+
+#[test]
+fn an_upgrade_waits_a_week_after_it_is_proposed() {
+    let h = setup();
+    let wasm_hash = BytesN::<32>::random(&h.env);
+
+    assert_eq!(
+        h.licence.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    let ready_at = h.licence.propose_upgrade(&wasm_hash);
+    assert_eq!(ready_at, START + UPGRADE_DELAY);
+
+    h.env.ledger().set_timestamp(ready_at - 1);
+    assert_eq!(
+        h.licence.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotReady))
+    );
+
+    h.licence.cancel_upgrade();
+    h.env.ledger().set_timestamp(ready_at);
+    assert_eq!(
+        h.licence.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    // Proposed again and waited out, every check passes, and what stops it is
+    // the host: no code with this random hash was ever uploaded.
+    let ready_at = h.licence.propose_upgrade(&wasm_hash);
+    h.env.ledger().set_timestamp(ready_at);
+    assert!(matches!(h.licence.try_upgrade(&wasm_hash), Err(Err(_))));
+}

@@ -62,6 +62,11 @@ const MAX_BATCH: u32 = 50;
 /// of people running the product, not a directory.
 const MAX_OPERATORS: u32 = 10;
 
+/// How long proposed code waits before `upgrade` will apply it. For that week
+/// the new code's hash is on the ledger, so a contributor who doesn't trust it
+/// can claim their balance before it runs.
+pub const UPGRADE_DELAY: u64 = 7 * 24 * 60 * 60;
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -86,6 +91,10 @@ pub enum Error {
     NotOperator = 7,
     /// More operators than `MAX_OPERATORS`. Remove one first.
     TooManyOperators = 8,
+    /// No upgrade to that code has been proposed.
+    UpgradeNotProposed = 9,
+    /// The proposed upgrade's `UPGRADE_DELAY` has not passed yet.
+    UpgradeNotReady = 10,
 }
 
 /// One line of a batch: pay this contributor this much, for this sale.
@@ -98,6 +107,15 @@ pub struct Credit {
     /// Identifies the sale being settled — SHA-256 of the sale id. The contract
     /// treats it as opaque; all it does is refuse to see the same one twice.
     pub reference: BytesN<32>,
+}
+
+/// Code the admin has announced, and the earliest moment it can replace this
+/// contract's.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingUpgrade {
+    pub wasm_hash: BytesN<32>,
+    pub ready_at: u64,
 }
 
 #[contracttype]
@@ -117,6 +135,7 @@ enum DataKey {
     Owed,
     Balance(Address),
     Reference(BytesN<32>),
+    PendingUpgrade,
 }
 
 #[contractevent]
@@ -160,6 +179,25 @@ pub struct OperatorAdded {
 pub struct OperatorRemoved {
     #[topic]
     pub operator: Address,
+}
+
+#[contractevent]
+pub struct UpgradeProposed {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
+    pub ready_at: u64,
+}
+
+#[contractevent]
+pub struct UpgradeCancelled {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
+}
+
+#[contractevent]
+pub struct Upgraded {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
 }
 
 #[contract]
@@ -398,13 +436,67 @@ impl Payout {
         OperatorRemoved { operator }.publish(env);
     }
 
-    /// Swap the contract's code. Present from the first deployment for the same
-    /// reason it is in the consent contract: retrofitting it means a new address
-    /// and a migration of every balance.
-    pub fn upgrade(env: &Env, new_wasm_hash: BytesN<32>) {
+    /// Announce new code. `upgrade` applies it once `UPGRADE_DELAY` has passed
+    /// and not before. Proposing again replaces the pending code and restarts
+    /// the clock. Returns the moment it becomes applicable.
+    pub fn propose_upgrade(env: &Env, new_wasm_hash: BytesN<32>) -> u64 {
         Self::admin(env).require_auth();
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        let ready_at = env.ledger().timestamp() + UPGRADE_DELAY;
+        let pending = PendingUpgrade {
+            wasm_hash: new_wasm_hash.clone(),
+            ready_at,
+        };
+        env.storage().instance().set(&DataKey::PendingUpgrade, &pending);
         Self::bump_instance(env);
+
+        UpgradeProposed {
+            wasm_hash: new_wasm_hash,
+            ready_at,
+        }
+        .publish(env);
+        ready_at
+    }
+
+    /// Drop the pending upgrade.
+    pub fn cancel_upgrade(env: &Env) -> Result<(), Error> {
+        Self::admin(env).require_auth();
+        let pending = Self::pending_upgrade(env).ok_or(Error::UpgradeNotProposed)?;
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+        Self::bump_instance(env);
+
+        UpgradeCancelled {
+            wasm_hash: pending.wasm_hash,
+        }
+        .publish(env);
+        Ok(())
+    }
+
+    pub fn pending_upgrade(env: &Env) -> Option<PendingUpgrade> {
+        env.storage().instance().get(&DataKey::PendingUpgrade)
+    }
+
+    /// Swap the contract's code for the proposed code once its delay is up.
+    /// Present from the first deployment for the same reason it is in the
+    /// consent contract: retrofitting it means a new address and a migration of
+    /// every balance.
+    pub fn upgrade(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        Self::admin(env).require_auth();
+        let pending = Self::pending_upgrade(env).ok_or(Error::UpgradeNotProposed)?;
+        if pending.wasm_hash != new_wasm_hash {
+            return Err(Error::UpgradeNotProposed);
+        }
+        if env.ledger().timestamp() < pending.ready_at {
+            return Err(Error::UpgradeNotReady);
+        }
+
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+        Self::bump_instance(env);
+        Upgraded {
+            wasm_hash: new_wasm_hash.clone(),
+        }
+        .publish(env);
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
     }
 
     pub fn set_admin(env: &Env, new_admin: Address) {

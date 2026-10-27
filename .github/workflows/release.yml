@@ -1,0 +1,61 @@
+# Builds the three contracts on GitHub when a v* tag is pushed, publishes each
+# wasm as a release with a build attestation, and reports its hash to Stellar
+# Expert. A deployed contract whose wasm hash matches one of these releases
+# shows as verified source on stellar.expert.
+#
+# The reusable workflow is pinned to a commit so a change upstream can't change
+# what our releases are built with.
+name: Release contracts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: write
+  attestations: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test
+
+  consent:
+    needs: test
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@6b16426dd3a61715ddddf83a2df322a6371fe071
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Datavar consent receipts"
+      relative_path: contracts
+      package: consent
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  payout:
+    needs: test
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@6b16426dd3a61715ddddf83a2df322a6371fe071
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Datavar payout vault"
+      relative_path: contracts
+      package: payout
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}
+
+  licence:
+    needs: test
+    uses: stellar-expert/soroban-build-workflow/.github/workflows/release.yml@6b16426dd3a61715ddddf83a2df322a6371fe071
+    with:
+      release_name: ${{ github.ref_name }}
+      release_description: "Datavar licence escrow"
+      relative_path: contracts
+      package: licence
+    secrets:
+      release_token: ${{ secrets.GITHUB_TOKEN }}

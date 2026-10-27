@@ -423,6 +423,113 @@ fn upgrading_is_gated_on_the_admin() {
 }
 
 #[test]
+fn an_upgrade_waits_a_week_after_it_is_proposed() {
+    let h = setup();
+    let wasm_hash = BytesN::<32>::random(&h.env);
+
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    let ready_at = h.client.propose_upgrade(&wasm_hash);
+    assert_eq!(ready_at, NOW + UPGRADE_DELAY);
+    let expected = UpgradeProposed {
+        wasm_hash: wasm_hash.clone(),
+        ready_at,
+    };
+    assert_eq!(
+        h.env.events().all(),
+        [expected.to_xdr(&h.env, &h.contract_id)]
+    );
+    assert_eq!(
+        h.client.pending_upgrade(),
+        Some(PendingUpgrade {
+            wasm_hash: wasm_hash.clone(),
+            ready_at
+        })
+    );
+
+    h.env.ledger().set_timestamp(ready_at - 1);
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotReady))
+    );
+    assert_eq!(
+        h.client.try_upgrade(&BytesN::random(&h.env)),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    // Past the delay every check passes, and what stops it is the host: no code
+    // with this random hash was ever uploaded.
+    h.env.ledger().set_timestamp(ready_at);
+    assert!(matches!(h.client.try_upgrade(&wasm_hash), Err(Err(_))));
+}
+
+#[test]
+fn a_cancelled_upgrade_cannot_be_applied() {
+    let h = setup();
+    let wasm_hash = BytesN::<32>::random(&h.env);
+    let ready_at = h.client.propose_upgrade(&wasm_hash);
+
+    h.client.cancel_upgrade();
+
+    assert_eq!(h.client.pending_upgrade(), None);
+    h.env.ledger().set_timestamp(ready_at);
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+    assert_eq!(
+        h.client.try_cancel_upgrade(),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+}
+
+#[test]
+fn proposing_again_restarts_the_clock() {
+    let h = setup();
+    let first = BytesN::<32>::random(&h.env);
+    let second = BytesN::<32>::random(&h.env);
+    h.client.propose_upgrade(&first);
+
+    h.env.ledger().set_timestamp(NOW + 6 * DAY);
+    let ready_at = h.client.propose_upgrade(&second);
+
+    assert_eq!(ready_at, NOW + 6 * DAY + UPGRADE_DELAY);
+    h.env.ledger().set_timestamp(NOW + UPGRADE_DELAY);
+    assert_eq!(
+        h.client.try_upgrade(&first),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+    assert_eq!(
+        h.client.try_upgrade(&second),
+        Err(Ok(Error::UpgradeNotReady))
+    );
+}
+
+#[test]
+fn only_the_admin_can_propose_an_upgrade() {
+    let h = setup();
+    let stranger = Address::generate(&h.env);
+    let wasm_hash = BytesN::<32>::random(&h.env);
+
+    let attempt = h
+        .client
+        .mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &h.contract_id,
+                fn_name: "propose_upgrade",
+                args: (wasm_hash.clone(),).into_val(&h.env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_propose_upgrade(&wasm_hash);
+    assert!(attempt.is_err());
+}
+
+#[test]
 fn the_admin_cannot_grant_on_someone_elses_behalf() {
     let env = Env::default();
     env.ledger().set_timestamp(NOW);

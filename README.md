@@ -9,9 +9,22 @@ The protocol is three Soroban contracts, all in
 consent contract that holds receipts as ledger state, and a payout vault that
 holds contributor earnings until the contributor signs to move them out. The
 third, a licence contract, is written and tested but not deployed. The three
-have 66 tests between them (consent 19, payout 28, licence 19). The buy side
+have 72 tests between them (consent 23, payout 29, licence 20). The buy side
 runs on the two deployed contracts; see [the marketplace](#the-marketplace)
 below.
+
+| Contract | Source | Testnet id |
+|---|---|---|
+| Consent receipts | [`contracts/consent`](contracts/contracts/consent) | [`CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI`](https://stellar.expert/explorer/testnet/contract/CBBSNMX74QCDBYJ3MECQTVBAQQ52NYJWLI5B7JUEESHHSPAGAJAJTLQI) |
+| Payout vault, XLM | [`contracts/payout`](contracts/contracts/payout) | [`CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL`](https://stellar.expert/explorer/testnet/contract/CCHFCOYRZF2UZPLG5Y2YYHFAFNTWALQEV7R3SBWCPE6FKX2USXOYQPOL) |
+| Payout vault, USDC | [`contracts/payout`](contracts/contracts/payout) | [`CDPL2GASC24NPIYSME4KRL3HV2UXTQTW65NTKITTNMBDMXR342QSD4P2`](https://stellar.expert/explorer/testnet/contract/CDPL2GASC24NPIYSME4KRL3HV2UXTQTW65NTKITTNMBDMXR342QSD4P2) |
+| Licence escrow | [`contracts/licence`](contracts/contracts/licence) | not deployed |
+
+Pushing a `v*` tag builds all three on GitHub Actions
+([`release.yml`](.github/workflows/release.yml)) and publishes each wasm as a
+release with a build attestation. A deployed contract running one of those
+builds shows as verified source on stellar.expert, and its wasm hash can be
+checked against the release.
 
 ## Why a protocol
 
@@ -33,8 +46,9 @@ interface, and how to query it yourself are in
 [`contracts/README.md`](contracts/README.md).
 
 To check the numbers we report, [`metrics/compute.mjs`](metrics/README.md)
-computes on-chain metrics from contract events alone and leaves out the 120
-wallets our load-test bot generated (listed in `metrics/excluded-wallets.txt`).
+computes on-chain metrics from contract events alone and leaves out our own
+wallets: the team's and the ones our load-test bot generated (listed in
+`metrics/excluded-wallets.txt`).
 
 ## The marketplace
 

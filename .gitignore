@@ -54,3 +54,6 @@ next-env.d.ts
 # local tooling and side projects
 /.claude
 /promo-video
+
+# blog images and video, served from Supabase Storage rather than the repo
+/blog-media

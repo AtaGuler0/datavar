@@ -2,7 +2,7 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, BytesN as _, Events as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, BytesN as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke},
     vec, Event, IntoVal,
 };
 
@@ -619,6 +619,39 @@ fn upgrading_is_gated_on_the_admin() {
         .try_upgrade(&wasm_hash);
 
     assert!(attempt.is_err());
+}
+
+#[test]
+fn an_upgrade_waits_a_week_after_it_is_proposed() {
+    let h = setup();
+    let wasm_hash = BytesN::<32>::random(&h.env);
+
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    let ready_at = h.client.propose_upgrade(&wasm_hash);
+    assert_eq!(ready_at, 0 + UPGRADE_DELAY);
+
+    h.env.ledger().set_timestamp(ready_at - 1);
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotReady))
+    );
+
+    h.client.cancel_upgrade();
+    h.env.ledger().set_timestamp(ready_at);
+    assert_eq!(
+        h.client.try_upgrade(&wasm_hash),
+        Err(Ok(Error::UpgradeNotProposed))
+    );
+
+    // Proposed again and waited out, every check passes, and what stops it is
+    // the host: no code with this random hash was ever uploaded.
+    let ready_at = h.client.propose_upgrade(&wasm_hash);
+    h.env.ledger().set_timestamp(ready_at);
+    assert!(matches!(h.client.try_upgrade(&wasm_hash), Err(Err(_))));
 }
 
 #[test]

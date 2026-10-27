@@ -14,6 +14,13 @@ export const STELLAR = {
 } as const;
 
 /**
+ * Everything on testnet is demo data: our own tests and our load-test bot,
+ * paid for in coins with no value. Pages that show listings, prices or sales
+ * say so wherever this is true.
+ */
+export const IS_DEMO = STELLAR.network === "TESTNET";
+
+/**
  * The consent receipt contract — where a grant stops being a row we own and
  * becomes ledger state anyone can check. Public by nature: an address is meant
  * to be read, and the whole argument for putting consent on-chain is that

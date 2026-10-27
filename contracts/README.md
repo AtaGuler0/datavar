@@ -23,6 +23,8 @@ The contract enforces two rules:
 - Consent always ends. `grant` refuses an expiry that is not in the future.
 - Only the contributor can withdraw it. The buyer and the admin can't. The
   admin key can upgrade the code and hand that right on, and nothing else.
+- New code waits a week. The admin proposes it, the hash is on the ledger for
+  seven days, and only then can `upgrade` apply it.
 
 ## Layout
 
@@ -54,7 +56,10 @@ contracts/
 | `receipt(id) -> Receipt` | anyone | The full terms; errors on an unknown id |
 | `receipt_ids(contributor)` / `receipt_count(contributor)` | anyone | The contributor's index |
 | `receipts_of(contributor, start, limit)` | anyone | One page of receipts, which is what the dashboard reads |
-| `upgrade(new_wasm_hash)` | admin, signed | Swaps the code |
+| `propose_upgrade(new_wasm_hash)` | admin, signed | Announces new code; returns when it can be applied, seven days on |
+| `pending_upgrade()` | anyone | The announced hash and when it can be applied, or nothing |
+| `cancel_upgrade()` | admin, signed | Drops the announced code |
+| `upgrade(new_wasm_hash)` | admin, signed | Swaps in the announced code, and only once its seven days have passed |
 | `set_admin(new_admin)` | admin, signed | Hands over that right |
 
 `dataset_hash` is the SHA-256 that the upload flow computes in the browser
@@ -62,16 +67,47 @@ before the file leaves the device. The receipt commits to the exact bytes
 without containing them.
 
 `upgrade` has been there since the first deployment. Adding it later would have
-meant a new address and a migration.
+meant a new address and a migration. The seven-day wait came later: every
+proposal emits `upgrade_proposed` with the new code's hash, so anyone relying on
+the contract can read that code before it runs. The same wait applies in the
+payout and licence contracts, where it gives a contributor a week to claim a
+balance before code they don't trust holds it.
 
 ## Working on it
 
 ```bash
-cargo test              # 66 tests across the three contracts, no network needed
+cargo test              # 72 tests across the three contracts, no network needed
 cargo fmt --all
 cargo clippy --all-targets
 stellar contract build  # → target/wasm32v1-none/release/{consent,payout,licence}.wasm
 ```
+
+## Releasing and upgrading
+
+A `v*` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml):
+`cargo test`, then Stellar Expert's
+[soroban-build-workflow](https://github.com/stellar-expert/soroban-build-workflow)
+builds each contract, publishes the wasm as a GitHub release with a build
+attestation, and reports its hash so the deployed contract shows as verified
+source. The package versions in each `Cargo.toml` should match the tag.
+
+To move a deployed contract onto a release, upload that release's wasm and
+propose its hash; seven days later, apply it:
+
+```bash
+stellar contract upload --wasm consent_v0.1.0.wasm \
+  --source datavar-admin --network testnet          # prints the hash
+
+stellar contract invoke --id <contract-id> --source datavar-admin --network testnet \
+  -- propose_upgrade --new_wasm_hash <hash>
+
+# seven days later
+stellar contract invoke --id <contract-id> --source datavar-admin --network testnet \
+  -- upgrade --new_wasm_hash <hash>
+```
+
+A contract still on code from before the wait existed has a one-step
+`upgrade` and moves straight to the release; from then on every upgrade waits.
 
 ## Deploying
 
@@ -153,7 +189,7 @@ Each has a test:
 | `funded()` / `owed()` / `surplus()` | anyone | What it holds, owes, and has spare |
 | `withdraw(to, amount)` | admin, signed | Takes back surplus only |
 | `add_operator(operator)` / `remove_operator(operator)` | admin, signed | Changes who may credit |
-| `upgrade(new_wasm_hash)` / `set_admin(new_admin)` | admin, signed | As in the consent contract |
+| `propose_upgrade` / `pending_upgrade` / `cancel_upgrade` / `upgrade` / `set_admin` | as in the consent contract | Seven days between proposing code and applying it |
 
 The token is fixed at deployment. Ours is the native XLM SAC, but the contract
 doesn't assume that. There is no way to change the token, because doing so
@@ -242,7 +278,7 @@ address, so it has to be added to the vault's operator set after deployment.
 | `count()` / `config()` | anyone | Licences issued; consent, vault, token, treasury, fee and hold |
 | `set_fee(fee_bps)` / `set_hold(secs)` | admin, signed | Changes terms for new purchases only. Ceilings: 30% and 90 days |
 | `set_treasury(address)` | admin, signed | Where fees go |
-| `upgrade` / `set_admin` | admin, signed | As in the other contracts |
+| `propose_upgrade` / `pending_upgrade` / `cancel_upgrade` / `upgrade` / `set_admin` | as in the other contracts | Seven days between proposing code and applying it |
 
 ## Deploying
 

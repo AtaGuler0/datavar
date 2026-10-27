@@ -1,7 +1,7 @@
 "use client";
 
 import { formatBytes, formatDate } from "@/lib/format";
-import { formatAmount, type PayAsset } from "@/lib/stellar/config";
+import { formatAmount, IS_DEMO, type PayAsset } from "@/lib/stellar/config";
 import { sourceLabel } from "@/lib/supabase/datasets";
 import {
   formatGroupOf,
@@ -78,6 +78,11 @@ export function ListingCard({
               >
                 · {listing.scan_status === "clean" ? "checked" : "unchecked"}
               </span>
+              {IS_DEMO && (
+                <span title="Testnet data from our own tests. Not a real contributor's listing.">
+                  · demo
+                </span>
+              )}
             </p>
           </div>
         </div>

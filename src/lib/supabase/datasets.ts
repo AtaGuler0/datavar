@@ -24,6 +24,21 @@ export function sourceLabel(id: string): string {
 }
 
 /**
+ * Voice recordings are not offered on the marketplace. A voice is enough to
+ * clone the person it belongs to, and a consent receipt can't take that back
+ * once a buyer has the file. Filed under "Voice samples" or uploaded as audio,
+ * either one counts.
+ */
+export function isVoiceRecording(
+  dataset: Pick<Dataset, "source_type" | "content_type">,
+): boolean {
+  return (
+    dataset.source_type === "voice" ||
+    (dataset.content_type ?? "").toLowerCase().startsWith("audio/")
+  );
+}
+
+/**
  * Extensions a stored file may keep, covering what the source categories
  * actually produce: exports and archives, photos, audio and video from dashcam
  * and voice contributions, and the odd database file a phone hands you.

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { WalletButton } from "@/components/dashboard/wallet-button";
 import { Logo } from "@/components/logo";
+import { IS_DEMO } from "@/lib/stellar/config";
 
 /**
  * The marketplace's own header.
@@ -42,6 +43,14 @@ export function MarketChrome() {
         <span className="hidden font-mono text-[0.75rem] tracking-[0.12em] text-star-faint uppercase sm:inline">
           Marketplace
         </span>
+        {IS_DEMO && (
+          <span
+            title="Stellar testnet. Every listing, price and sale here is test data, and no real money moves."
+            className="shrink-0 rounded border border-line-strong px-1.5 py-0.5 font-mono text-[0.625rem] tracking-[0.12em] text-star-dim uppercase"
+          >
+            Demo
+          </span>
+        )}
 
         <nav className="order-last -mx-4 flex w-[calc(100%+2rem)] items-center gap-6 overflow-x-auto px-4 pb-3 sm:order-none sm:mx-0 sm:ml-6 sm:w-auto sm:min-w-0 sm:overflow-visible sm:px-0 sm:pb-0">
           {LINKS.map((link) => {

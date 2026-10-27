@@ -18,14 +18,14 @@
  *   M6  revocation rate           Revoked / Granted, and median time to revoke
  *   M7  weekly active contributors distinct wallets with a Granted, per week
  *
- * Wallets in metrics/excluded-wallets.txt (our load-test bot) are dropped from
- * every metric.
+ * Wallets in metrics/excluded-wallets.txt (the team's and our load-test bot's)
+ * are dropped from every metric.
  *
  * Usage:
  *   node metrics/compute.mjs                       # whole history, markdown
  *   node metrics/compute.mjs --from=2026-09-01 --to=2026-12-01
  *   node metrics/compute.mjs --json
- *   node metrics/compute.mjs --no-exclude          # include the bot wallets
+ *   node metrics/compute.mjs --no-exclude          # include our own wallets
  *
  * Contract ids default to the testnet deployment and can be overridden with
  * --consent=, --payout=, --payout-usdc=, --licence=, --licence-usdc=, or the
@@ -390,7 +390,7 @@ function markdown(m) {
   const lines = [];
   lines.push(`# Datavar metrics (${m.network})`);
   lines.push("");
-  lines.push(`Window: ${m.window.from} to ${m.window.to}. ${m.excludedWallets} load-test wallets excluded.`);
+  lines.push(`Window: ${m.window.from} to ${m.window.to}. ${m.excludedWallets} of our own wallets excluded.`);
   lines.push("");
   lines.push("| Metric | XLM | USDC |");
   lines.push("|---|---|---|");

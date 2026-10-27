@@ -74,7 +74,7 @@ function PanelHeader({ side }: { side: Side }) {
         <span className="truncate text-star">{current?.label ?? "Overview"}</span>
       </nav>
       <span className="shrink-0 font-mono text-[0.6875rem] tracking-[0.08em] text-star-faint uppercase">
-        Stellar testnet
+        Demo data · Stellar testnet
       </span>
     </header>
   );

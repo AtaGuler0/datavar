@@ -24,6 +24,7 @@ import {
 import type { ConsentReceipt } from "@/lib/stellar/consent";
 import {
   downloadOwnDataset,
+  isVoiceRecording,
   listDatasets,
   recordScan,
   sourceLabel,
@@ -386,6 +387,8 @@ function LifecycleRow({
   const listed =
     MARKET_ADDRESS.length > 0 &&
     activeReceipts.some((receipt) => receipt.buyer === MARKET_ADDRESS);
+  const voice = isVoiceRecording(dataset);
+  const listable = dataset.quality !== "flagged" && !voice;
 
   /**
    * The contract holds one balance per wallet, so this claims everything in it,
@@ -569,8 +572,10 @@ function LifecycleRow({
           <p className="text-xs text-pretty text-ink-faint">
             {dataset.quality === "flagged"
               ? "Not listed, and it can't be: the catalogue leaves out anything the upload check held back"
-              : "Not listed. Buyers can only find datasets whose consent names the marketplace"}
-            {dataset.quality !== "flagged" && dataset.price_stroops !== null && (
+              : voice
+                ? "Not listed, and it can't be: voice recordings aren't offered on the marketplace"
+                : "Not listed. Buyers can only find datasets whose consent names the marketplace"}
+            {listable && dataset.price_stroops !== null && (
               <>
                 , and this one would list at{" "}
                 {formatAmount(dataset.price_stroops, "XLM")} XLM
@@ -583,7 +588,7 @@ function LifecycleRow({
           </p>
         )}
 
-        {!listed && dataset.quality !== "flagged" && MARKET_ADDRESS.length > 0 && (
+        {!listed && listable && MARKET_ADDRESS.length > 0 && (
           <button
             type="button"
             onClick={() => setListing((open) => !open)}

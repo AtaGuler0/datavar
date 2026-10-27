@@ -43,6 +43,10 @@ const MAX_PURPOSE_LEN: u32 = 200;
 const MAX_RECEIPTS_PER_CONTRIBUTOR: u32 = 1_000;
 /// Largest page `receipts_of` will return in one call.
 const MAX_PAGE: u32 = 50;
+/// How long proposed code waits before `upgrade` will apply it. For that week
+/// the new code's hash is on the ledger, so anyone who relies on these receipts
+/// can read the code before it runs.
+pub const UPGRADE_DELAY: u64 = 7 * 24 * 60 * 60;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -61,6 +65,10 @@ pub enum Error {
     IndexFull = 5,
     /// A page request larger than `MAX_PAGE`.
     PageTooLarge = 6,
+    /// No upgrade to that code has been proposed.
+    UpgradeNotProposed = 7,
+    /// The proposed upgrade's `UPGRADE_DELAY` has not passed yet.
+    UpgradeNotReady = 8,
 }
 
 /// A single consent record. `revoked_at` is `None` while the consent stands, and
@@ -82,6 +90,15 @@ pub struct Receipt {
     pub revoked_at: Option<u64>,
 }
 
+/// Code the admin has announced, and the earliest moment it can replace this
+/// contract's.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingUpgrade {
+    pub wasm_hash: BytesN<32>,
+    pub ready_at: u64,
+}
+
 #[contracttype]
 enum DataKey {
     Admin,
@@ -89,6 +106,7 @@ enum DataKey {
     Receipt(u64),
     /// Receipt ids belonging to one contributor, in grant order.
     Index(Address),
+    PendingUpgrade,
 }
 
 #[contractevent]
@@ -109,6 +127,25 @@ pub struct Revoked {
     pub contributor: Address,
     pub id: u64,
     pub revoked_at: u64,
+}
+
+#[contractevent]
+pub struct UpgradeProposed {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
+    pub ready_at: u64,
+}
+
+#[contractevent]
+pub struct UpgradeCancelled {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
+}
+
+#[contractevent]
+pub struct Upgraded {
+    #[topic]
+    pub wasm_hash: BytesN<32>,
 }
 
 #[contract]
@@ -290,13 +327,67 @@ impl Consent {
         Ok(page)
     }
 
-    /// Swap the contract's code. Present from the first deployment on purpose —
-    /// retrofitting an upgrade path means a new address and a migration every
-    /// time the contract changes.
-    pub fn upgrade(env: &Env, new_wasm_hash: BytesN<32>) {
+    /// Announce new code. `upgrade` applies it once `UPGRADE_DELAY` has passed
+    /// and not before. Proposing again replaces the pending code and restarts
+    /// the clock. Returns the moment it becomes applicable.
+    pub fn propose_upgrade(env: &Env, new_wasm_hash: BytesN<32>) -> u64 {
         Self::admin(env).require_auth();
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        let ready_at = env.ledger().timestamp() + UPGRADE_DELAY;
+        let pending = PendingUpgrade {
+            wasm_hash: new_wasm_hash.clone(),
+            ready_at,
+        };
+        env.storage().instance().set(&DataKey::PendingUpgrade, &pending);
         Self::bump_instance(env);
+
+        UpgradeProposed {
+            wasm_hash: new_wasm_hash,
+            ready_at,
+        }
+        .publish(env);
+        ready_at
+    }
+
+    /// Drop the pending upgrade.
+    pub fn cancel_upgrade(env: &Env) -> Result<(), Error> {
+        Self::admin(env).require_auth();
+        let pending = Self::pending_upgrade(env).ok_or(Error::UpgradeNotProposed)?;
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+        Self::bump_instance(env);
+
+        UpgradeCancelled {
+            wasm_hash: pending.wasm_hash,
+        }
+        .publish(env);
+        Ok(())
+    }
+
+    pub fn pending_upgrade(env: &Env) -> Option<PendingUpgrade> {
+        env.storage().instance().get(&DataKey::PendingUpgrade)
+    }
+
+    /// Swap the contract's code for the proposed code once its delay is up.
+    /// Present from the first deployment on purpose — retrofitting an upgrade
+    /// path means a new address and a migration every time the contract
+    /// changes.
+    pub fn upgrade(env: &Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        Self::admin(env).require_auth();
+        let pending = Self::pending_upgrade(env).ok_or(Error::UpgradeNotProposed)?;
+        if pending.wasm_hash != new_wasm_hash {
+            return Err(Error::UpgradeNotProposed);
+        }
+        if env.ledger().timestamp() < pending.ready_at {
+            return Err(Error::UpgradeNotReady);
+        }
+
+        env.storage().instance().remove(&DataKey::PendingUpgrade);
+        Self::bump_instance(env);
+        Upgraded {
+            wasm_hash: new_wasm_hash.clone(),
+        }
+        .publish(env);
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
     }
 
     /// Hand the upgrade right to someone else.

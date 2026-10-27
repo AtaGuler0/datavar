@@ -8,7 +8,7 @@ same result.
 node metrics/compute.mjs                               # whole history, markdown
 node metrics/compute.mjs --from=2026-11-01 --to=2027-01-01
 node metrics/compute.mjs --json
-node metrics/compute.mjs --no-exclude                  # include our bot wallets
+node metrics/compute.mjs --no-exclude                  # include our own wallets
 ```
 
 It needs `@stellar/stellar-sdk` from this repo's `node_modules` to decode event
@@ -29,6 +29,7 @@ matching `NEXT_PUBLIC_*` variables.
 | M6 Revocation rate | `Revoked` / `Granted` |
 | M7 Weekly active contributors | Distinct `Granted` wallets per ISO week |
 
-`excluded-wallets.txt` lists the 120 wallets our load-test bot generated on
+`excluded-wallets.txt` lists the wallets that are ours: the team's admin,
+operator and treasury wallets, and every wallet our load-test bot generated on
 testnet. Every event naming one of them is dropped unless you pass
 `--no-exclude`.
